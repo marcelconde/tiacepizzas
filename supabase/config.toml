@@ -1,0 +1,18 @@
+project_id = "tiacepizzas"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+site_url = "https://tiacepizzas.com.br"
+additional_redirect_urls = ["https://tiacepizzas.com.br/admin", "http://localhost:5173/admin"]
+# Ninguém se cadastra sozinho: usuários do painel são criados pela administradora.
+enable_signup = false
+minimum_password_length = 8
+
+[functions.fiscal]
+verify_jwt = true
+
+[functions.admin-usuarios]
+verify_jwt = true

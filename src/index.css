@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+
+  /* molho de tomate */
+  --color-molho-50: #fdf3f1;
+  --color-molho-100: #fbe4df;
+  --color-molho-200: #f7c9bf;
+  --color-molho-300: #f0a293;
+  --color-molho-400: #e56f5a;
+  --color-molho-500: #d6492f;
+  --color-molho-600: #c0351d;
+  --color-molho-700: #a02a17;
+  --color-molho-800: #842617;
+  --color-molho-900: #6e2418;
+
+  /* massa */
+  --color-massa-50: #fdfaf5;
+  --color-massa-100: #faf3e7;
+  --color-massa-200: #f3e5cc;
+  --color-massa-300: #e9d0a6;
+  --color-massa-400: #dcb377;
+
+  /* forno a lenha */
+  --color-forno-500: #6b4f40;
+  --color-forno-600: #5a4033;
+  --color-forno-700: #4a3428;
+  --color-forno-800: #36251c;
+  --color-forno-900: #261912;
+
+  --color-manjericao-100: #e3efdf;
+  --color-manjericao-500: #4d8f47;
+  --color-manjericao-600: #3f7a3a;
+  --color-manjericao-700: #2f5f2c;
+
+  --color-queijo-300: #f6cf74;
+  --color-queijo-400: #f0b93f;
+  --color-queijo-500: #e0a021;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 8rem;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-forno-900);
+  background: var(--color-massa-50);
+  -webkit-font-smoothing: antialiased;
+}
+
+button:not(:disabled),
+[role="button"],
+summary,
+label[for],
+select {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-molho-500);
+  outline-offset: 2px;
+}
+
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* rolagem horizontal sem a barra aparente (abas e categorias) */
+.sem-barra {
+  scrollbar-width: none;
+}
+.sem-barra::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.animar-subir {
+  animation: subir 0.2s ease-out;
+}
+
+@keyframes pulsar-novo {
+  50% {
+    box-shadow: 0 0 0 6px rgb(240 185 63 / 0.35);
+  }
+}
+.pulsar-novo {
+  animation: pulsar-novo 1.6s ease-in-out infinite;
+}
