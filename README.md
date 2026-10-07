@@ -104,10 +104,15 @@ emite a nota e imprime sem ninguém clicar — basta o painel estar aberto.
 
 ```bash
 npm install
-cp .env.example .env.local   # preencha com os dados do projeto Supabase
-npm run dev                  # http://localhost:5173
+npm run dev:local            # site + banco de teste em memória, sem tocar nos dados reais
 npm run test:db              # testa migrações e regras do banco num Postgres em memória
 npm run build
 ```
+
+`npm run dev:local` abre o site em http://localhost:5173 com o cardápio de exemplo e um usuário administrador de teste
+(`dona@teste.local` / `teste1234`). Os dados somem ao encerrar. Esse modo não tem tempo real (o painel atualiza a cada
+45 s), fotos nem as funções de servidor (nota fiscal e criação de usuários).
+
+Para desenvolver contra o banco de verdade: `cp .env.example .env.local`, preencha com os dados do projeto Supabase e use `npm run dev`.
 
 Mudou o banco? Crie um novo arquivo em `supabase/migrations/`, rode `npm run test:db` e depois `npx supabase db push`.
