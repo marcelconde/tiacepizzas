@@ -7,6 +7,7 @@ Site de pedidos e sistema de gestão da pizzaria, em [tiacepizzas.com.br](https:
 - **Aplicativo do entregador** (`/entregador`) — entregas do motoboy, rota, WhatsApp do cliente, registro de entrega ou problema e envio da localização.
 
 O **manual de uso**, com capturas de todas as telas, é gerado por `npm run manual` em `docs/manual-tia-ce-pizzas.pdf`.
+O **vídeo-tutorial** narrado, que percorre todas as telas, é gerado por `npm run video` em `docs/video-tia-ce-pizzas.mp4`.
 
 ## Como é montado
 
@@ -133,6 +134,7 @@ npm run dev:demo      # o mesmo, com um mês de pedidos, clientes e despesas fic
 npm run test:db       # migrações e regras do banco (acesso por função, preço, estoque, caixa…)
 npm run test:e2e      # usa o sistema pelas telas, num Chrome sem janela, e confere o banco
 npm run manual        # refaz as capturas de tela e o PDF do manual
+npm run video         # regrava o vídeo-tutorial narrado (cerca de meia hora; só no macOS)
 npm run build
 ```
 
@@ -141,10 +143,14 @@ encerrar). Há um usuário de teste por função — administradora, financeiro,
 com a senha no começo de `scripts/dev-local.mjs`; "Continuar com Google" entra como uma cliente fictícia. Esse modo
 não tem tempo real (o painel atualiza a cada 45 s) nem nota fiscal.
 
-`test:e2e` e `manual` usam o Google Chrome instalado (`CHROME=/caminho` para outro local) e sobem o próprio ambiente em
-portas separadas, sem atrapalhar um `dev:local` aberto.
+`test:e2e`, `manual` e `video` usam o Google Chrome instalado (`CHROME=/caminho` para outro local) e sobem o próprio
+ambiente em portas separadas, sem atrapalhar um `dev:local` aberto.
+
+O vídeo é gravado em tempo real seguindo `scripts/video/roteiro.mjs` (o que é dito e o que acontece na tela), com a voz
+"Luciana" do macOS, e montado com legendas por `scripts/video/montar.swift` — sem ffmpeg. `npm run video -- --so=3,4`
+grava só alguns capítulos, para conferir um ajuste.
 
 Para desenvolver contra o banco de verdade: `cp .env.example .env.local`, preencha com os dados do projeto Supabase e use `npm run dev`.
 
 Mudou o banco? Crie um novo arquivo em `supabase/migrations/`, rode `npm run test:db` e depois `npx supabase db push`.
-Mudou uma tela? Rode `npm run manual` para o manual acompanhar.
+Mudou uma tela? Rode `npm run manual` (e, se o roteiro for afetado, `npm run video`) para a documentação acompanhar.

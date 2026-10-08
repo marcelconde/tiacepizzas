@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -121,6 +122,8 @@ export function Contador({ valor, onChange, min = 0 }: { valor: number; onChange
 }
 
 // ---------------------------------------------------------------- estrutura
+const janelasAbertas: object[] = []
+
 export function Modal({
   aberto,
   titulo,
@@ -136,17 +139,26 @@ export function Modal({
   rodape?: ReactNode
   largura?: string
 }) {
+  const fechar = useRef(onFechar)
+  fechar.current = onFechar
   useEffect(() => {
     if (!aberto) return
-    const tecla = (e: KeyboardEvent) => e.key === 'Escape' && onFechar()
+    // Com uma janela sobre a outra (ex.: "Cancelar pedido" sobre os detalhes), Esc fecha só a de cima.
+    const eu = {}
+    janelasAbertas.push(eu)
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && janelasAbertas.at(-1) === eu) fechar.current()
+    }
     document.addEventListener('keydown', tecla)
     const anterior = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', tecla)
+      // sai da pilha só depois do evento atual: a janela de baixo não pode se achar "a de cima" no mesmo Esc
+      setTimeout(() => janelasAbertas.splice(janelasAbertas.indexOf(eu), 1))
       document.body.style.overflow = anterior
     }
-  }, [aberto, onFechar])
+  }, [aberto])
 
   if (!aberto) return null
   return (
@@ -256,12 +268,12 @@ export function AvisoProvider({ children }: { children: ReactNode }) {
   return (
     <AvisoContexto.Provider value={api}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4">
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex flex-col items-center gap-2 px-4 md:bottom-4">
         {avisos.map((a) => (
           <div
             key={a.id}
             className={cx(
-              'animar-subir pointer-events-auto flex max-w-md items-start gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg',
+              'animar-subir flex max-w-md items-start gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg',
               a.tipo === 'erro' ? 'bg-red-700' : 'bg-forno-800',
             )}
           >

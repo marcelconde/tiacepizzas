@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, Ban, ChefHat, Copy, ExternalLink, FileText, MessageCircle, Printer, Undo2 } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Carregando, Erro, Modal, Selecao, Selo, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
@@ -51,6 +51,11 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
     [pedidoId],
   )
   const { dados: entregadores } = useConsulta<Entregador[]>(() => supabase.from('entregadores').select('*').eq('ativo', true).order('nome'), [])
+  // ao trocar de pedido (ou fechar), nenhuma confirmação de cancelar/reembolsar pode ficar aberta do pedido anterior
+  useEffect(() => {
+    setAcao(null)
+    setMotivo('')
+  }, [pedidoId])
 
   if (!pedidoId) return null
 

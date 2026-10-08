@@ -12,7 +12,8 @@
     "typecheck": "tsc -b",
     "test:db": "node scripts/test-db.mjs",
     "test:e2e": "node scripts/test-e2e.mjs",
-    "manual": "node scripts/manual/gerar.mjs"
+    "manual": "node scripts/manual/gerar.mjs",
+    "video": "node scripts/video/gerar.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
