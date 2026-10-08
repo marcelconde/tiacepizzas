@@ -2,10 +2,12 @@
 // guarda os quadros da tela com o instante de cada um, gera a narração com a voz do macOS e escreve o
 // manifesto que o montar.swift transforma em MP4. Não depende de ffmpeg.
 import puppeteer from 'puppeteer-core'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { createInterface } from 'node:readline'
+import { fileURLToPath } from 'node:url'
 
 // O vídeo sai em 1920×1080: a tela gravada em cima e uma faixa de legenda embaixo.
 export const LARGURA = 1920, ALTURA = 1080, FAIXA = 96
@@ -13,9 +15,12 @@ const ESCALA = 1.5
 export const TELA_PC = { width: LARGURA / ESCALA, height: (ALTURA - FAIXA) / ESCALA }
 export const TELA_CELULAR = { width: 390, height: (ALTURA - FAIXA) / ESCALA }
 const telas = new WeakMap() // página → { cdp, width, height }
-const TAXA = 22050 // Hz da narração
-const VOZ = process.env.VOZ ?? 'Luciana'
-const RITMO = process.env.RITMO ?? '182' // palavras por minuto
+const TAXA = 44100 // Hz da narração
+// Voz da narração: a voz neural da Siri instalada no Mac ("Voz 2", em Ajustes > Acessibilidade > Conteúdo Falado).
+// Se ela não existir, cai na voz "Luciana" do comando say, que é mais robótica.
+const VOZ = process.env.VOZ ?? 'com.apple.siri.natural.Sandra'
+const VELOCIDADE = process.env.VELOCIDADE ?? '0.5' // 0 a 1; 0,5 é o ritmo normal
+const VOZ_RESERVA = 'Luciana', RITMO_RESERVA = '182' // palavras por minuto
 
 export const dormir = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -107,9 +112,34 @@ export async function foraDoVideo(acao) {
 }
 
 // ------------------------------------------------------------------ narração e legendas
-function voz(texto) {
-  const arquivo = join(g.vozes, createHash('sha1').update(`${VOZ}|${RITMO}|${texto}`).digest('hex').slice(0, 16) + '.wav')
-  if (!existsSync(arquivo)) execFileSync('say', ['-v', VOZ, '-r', RITMO, `--data-format=LEI16@${TAXA}`, '-o', arquivo, texto])
+let servidorVoz // processo que sintetiza as falas (scripts/video/voz.swift), aberto na primeira fala
+function abrirServidorVoz() {
+  const proc = spawn('swift', ['-swift-version', '5', '-suppress-warnings', join(dirname(fileURLToPath(import.meta.url)), 'voz.swift'), VOZ, VELOCIDADE], { stdio: ['pipe', 'pipe', 'ignore'] })
+  const linhas = createInterface({ input: proc.stdout })[Symbol.asyncIterator]()
+  const proxima = () => Promise.race([linhas.next().then((r) => (r.done ? 'sem-voz' : r.value)), new Promise((r) => setTimeout(r, 120000, 'erro sem resposta'))])
+  return { proc, proxima, pronto: proxima().then((l) => l.startsWith('pronto')) }
+}
+async function sintetizar(texto, arquivo) {
+  servidorVoz ??= abrirServidorVoz()
+  if (await servidorVoz.pronto) {
+    const bruto = arquivo.replace(/\.wav$/, '.caf')
+    servidorVoz.proc.stdin.write(JSON.stringify({ texto, saida: bruto }) + '\n')
+    const resposta = await servidorVoz.proxima()
+    if (resposta.startsWith('ok')) {
+      execFileSync('afconvert', ['-f', 'WAVE', '-d', `LEI16@${TAXA}`, '-c', '1', bruto, arquivo])
+      rmSync(bruto)
+      return
+    }
+    g.problemas.push(`voz: ${resposta} em "${texto.slice(0, 40)}…" (usei a voz de reserva)`)
+  } else if (!g.avisouVoz) {
+    g.avisouVoz = true
+    console.log(`   (a voz "${VOZ}" não está instalada neste Mac: usando "${VOZ_RESERVA}")`)
+  }
+  execFileSync('say', ['-v', VOZ_RESERVA, '-r', RITMO_RESERVA, `--data-format=LEI16@${TAXA}`, '-o', arquivo, texto])
+}
+async function voz(texto) {
+  const arquivo = join(g.vozes, createHash('sha1').update(`${VOZ}|${VELOCIDADE}|${TAXA}|${texto}`).digest('hex').slice(0, 16) + '.wav')
+  if (!existsSync(arquivo)) await sintetizar(texto, arquivo)
   const b = readFileSync(arquivo)
   let i = 12 // pula "RIFF....WAVE" e procura o bloco de dados
   while (i < b.length - 8 && b.toString('latin1', i, i + 4) !== 'data') i += 8 + b.readUInt32LE(i + 4)
@@ -147,7 +177,7 @@ function legendar(texto, inicio, dur) {
  */
 export async function cena(texto, acao, { fala, depois = 0.45 } = {}) {
   await pausar()
-  const v = voz(fala ?? texto)
+  const v = await voz(fala ?? texto)
   await retomar()
   const inicio = agora()
   g.falas.push({ inicio, pcm: v.pcm })
@@ -169,6 +199,7 @@ export async function encerrar() {
   const duracao = Number((agora() + 0.4).toFixed(3))
   g.fim = true
   await g.laco
+  servidorVoz?.proc.kill()
   // a narração inteira numa trilha só, cada fala no seu instante
   const trilha = Buffer.alloc(Math.ceil(duracao * TAXA) * 2)
   for (const f of g.falas) f.pcm.copy(trilha, Math.round(f.inicio * TAXA) * 2, 0, Math.min(f.pcm.length, trilha.length - Math.round(f.inicio * TAXA) * 2))
@@ -177,7 +208,7 @@ export async function encerrar() {
   cab.writeUInt16LE(1, 20); cab.writeUInt16LE(1, 22); cab.writeUInt32LE(TAXA, 24); cab.writeUInt32LE(TAXA * 2, 28)
   cab.writeUInt16LE(2, 32); cab.writeUInt16LE(16, 34); cab.write('data', 36); cab.writeUInt32LE(trilha.length, 40)
   writeFileSync(join(g.pasta, 'narracao.wav'), Buffer.concat([cab, trilha]))
-  execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac@44100', '-b', '64000', join(g.pasta, 'narracao.wav'), join(g.pasta, 'narracao.m4a')])
+  execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', '-b', '80000', join(g.pasta, 'narracao.wav'), join(g.pasta, 'narracao.m4a')])
   rmSync(join(g.pasta, 'narracao.wav'))
   writeFileSync(join(g.pasta, 'manifesto.json'), JSON.stringify({ largura: LARGURA, altura: ALTURA, faixa: FAIXA, duracao, quadros: g.quadros, legendas: g.legendas, audio: 'narracao.m4a' }))
   return { duracao, quadros: g.quadros.length, falas: g.falas.length }

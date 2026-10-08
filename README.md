@@ -146,8 +146,9 @@ não tem tempo real (o painel atualiza a cada 45 s) nem nota fiscal.
 `test:e2e`, `manual` e `video` usam o Google Chrome instalado (`CHROME=/caminho` para outro local) e sobem o próprio
 ambiente em portas separadas, sem atrapalhar um `dev:local` aberto.
 
-O vídeo é gravado em tempo real seguindo `scripts/video/roteiro.mjs` (o que é dito e o que acontece na tela), com a voz
-"Luciana" do macOS, e montado com legendas por `scripts/video/montar.swift` — sem ffmpeg. `npm run video -- --so=3,4`
+O vídeo é gravado em tempo real seguindo `scripts/video/roteiro.mjs` (o que é dito e o que acontece na tela), narrado
+pela voz neural da Siri instalada no Mac ("Voz 2" em português; sem ela, cai na voz "Luciana", mais robótica — veja
+`scripts/video/voz.swift`), e montado com legendas por `scripts/video/montar.swift` — sem ffmpeg. `npm run video -- --so=3,4`
 grava só alguns capítulos, para conferir um ajuste.
 
 Para desenvolver contra o banco de verdade: `cp .env.example .env.local`, preencha com os dados do projeto Supabase e use `npm run dev`.
