@@ -1,13 +1,16 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { Suspense, lazy, useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Copy, MessageCircle } from 'lucide-react'
 import { Botao, Carregando, Entrada, Erro, cx } from '../components/ui'
-import { PAGAMENTO, brl, dataHora, hora } from '../lib/formato'
+import { useAuth } from '../lib/auth'
+import { PAGAMENTO, brl, dataHora, haQuanto, hora } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { FormaPagamento, StatusPedido, TipoPedido } from '../lib/tipos'
 import { pedidosSalvos } from './Checkout'
-import { linkWhatsApp } from './SiteLayout'
+import { linkWhatsApp, mensagemPedido } from './SiteLayout'
+
+const Mapa = lazy(() => import('../components/Mapa'))
 
 interface Acompanhamento {
   numero: number
@@ -23,6 +26,7 @@ interface Acompanhamento {
   forma_pagamento: FormaPagamento
   troco_para: number | null
   pago: boolean
+  pago_em: string | null
   previsao_em: string | null
   criado_em: string
   confirmado_em: string | null
@@ -31,32 +35,56 @@ interface Acompanhamento {
   saiu_em: string | null
   entregue_em: string | null
   motivo_cancelamento: string | null
+  motivo_reembolso: string | null
+  problema_entrega: string | null
   entregador: string | null
+  motoboy: { lat: number; lng: number; em: string } | null
+  loja: { lat: number; lng: number } | null
   itens: { nome: string; quantidade: number; total: number; adicionais: { nome: string }[]; observacoes: string | null }[]
 }
 
-function etapas(p: Acompanhamento) {
-  const lista: { status: StatusPedido; titulo: string; texto: string; quando: string | null }[] = [
-    { status: 'novo', titulo: 'Pedido enviado', texto: 'Aguardando a pizzaria confirmar.', quando: p.criado_em },
-    { status: 'confirmado', titulo: 'Pedido confirmado', texto: 'Já está na fila da cozinha.', quando: p.confirmado_em },
-    { status: 'em_preparo', titulo: 'Em preparo', texto: 'Sua pizza está sendo montada e vai para o forno.', quando: p.preparo_em },
-    {
-      status: 'pronto',
-      titulo: p.tipo === 'entrega' ? 'Pronto, aguardando entregador' : 'Pronto para retirada',
-      texto: p.tipo === 'entrega' ? 'Saiu do forno e já vai ser despachado.' : 'Pode vir buscar, está quentinho!',
-      quando: p.pronto_em,
-    },
+interface Etapa {
+  id: string
+  titulo: string
+  texto: string
+  quando: string | null
+  feito: boolean
+}
+
+function etapas(p: Acompanhamento): Etapa[] {
+  const ordem: StatusPedido[] = ['novo', 'confirmado', 'em_preparo', 'pronto', 'saiu_entrega', 'entregue']
+  // problema na entrega: o pedido continua "na rua" até ser resolvido
+  const atual = ordem.indexOf(p.status === 'problema_entrega' ? 'saiu_entrega' : p.status)
+  const passo = (status: StatusPedido, titulo: string, texto: string, quando: string | null): Etapa => ({
+    id: status, titulo, texto, quando, feito: ordem.indexOf(status) <= atual,
+  })
+  const lista = [
+    passo('novo', 'Pedido recebido', 'Aguardando a pizzaria confirmar.', p.criado_em),
+    passo('confirmado', 'Pedido confirmado', 'Já está na fila da cozinha.', p.confirmado_em),
+    passo('em_preparo', 'Em preparação', 'Sua pizza está sendo montada e vai para o forno.', p.preparo_em),
+    passo(
+      'pronto',
+      p.tipo === 'entrega' ? 'Pronto, aguardando entregador' : 'Pronto para retirada',
+      p.tipo === 'entrega' ? 'Saiu do forno e já vai ser despachado.' : 'Pode vir buscar, está quentinho!',
+      p.pronto_em,
+    ),
+    ...(p.tipo === 'entrega' ? [passo('saiu_entrega', 'Saiu para entrega', p.entregador ? `${p.entregador} está a caminho.` : 'O entregador está a caminho.', p.saiu_em)] : []),
+    passo('entregue', p.tipo === 'entrega' ? 'Pedido entregue' : 'Pedido retirado', 'Bom apetite!', p.entregue_em),
   ]
-  if (p.tipo === 'entrega') {
-    lista.push({ status: 'saiu_entrega', titulo: 'Saiu para entrega', texto: p.entregador ? `${p.entregador} está a caminho.` : 'O entregador está a caminho.', quando: p.saiu_em })
+  // o pagamento entra na linha do tempo no momento em que foi confirmado
+  const pagamento: Etapa = {
+    id: 'pagamento', titulo: 'Pagamento confirmado', quando: p.pago_em, feito: p.pago,
+    texto: p.pago ? 'Recebemos o seu pagamento.' : `Pagamento ${p.tipo === 'entrega' ? 'na entrega' : 'na retirada'}.`,
   }
-  lista.push({ status: 'entregue', titulo: p.tipo === 'entrega' ? 'Entregue' : 'Retirado', texto: 'Bom apetite!', quando: p.entregue_em })
+  const antesDe = p.pago && p.pago_em ? lista.findIndex((e) => !e.quando || e.quando > p.pago_em!) : lista.length - 1
+  lista.splice(antesDe < 0 ? lista.length : Math.max(1, antesDe), 0, pagamento)
   return lista
 }
 
 function Buscar() {
   const [codigo, setCodigo] = useState('')
   const navegar = useNavigate()
+  const { sessao } = useAuth()
   const recentes = pedidosSalvos()
   const enviar = (e: FormEvent) => {
     e.preventDefault()
@@ -67,16 +95,23 @@ function Buscar() {
       <h1 className="font-display text-4xl font-bold">Acompanhar pedido</h1>
       <p className="mt-2 text-stone-600">Digite o código que apareceu quando você finalizou o pedido.</p>
       <form onSubmit={enviar} className="mt-6 flex gap-2">
-        <Entrada aria-label="Código do pedido" placeholder="Ex.: K7M2QX4P" className="tracking-widest uppercase" maxLength={8} value={codigo} onChange={(e) => setCodigo(e.target.value)} />
-        <Botao type="submit">Acompanhar</Botao>
+        <Entrada aria-label="Código do pedido" placeholder="Ex.: K7M2QX4P" className="h-11 tracking-widest uppercase" maxLength={8} value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        <Botao type="submit" className="h-11">
+          Acompanhar
+        </Botao>
       </form>
+      {sessao && (
+        <Link to="/conta" className="mt-4 inline-block text-sm font-semibold text-molho-700 hover:underline">
+          Ver todos os pedidos da minha conta →
+        </Link>
+      )}
       {recentes.length > 0 && (
         <div className="mt-10">
-          <h2 className="font-display text-xl font-semibold">Seus últimos pedidos</h2>
+          <h2 className="font-display text-xl font-semibold">Pedidos feitos neste aparelho</h2>
           <ul className="mt-3 divide-y divide-massa-200 rounded-xl border border-massa-200 bg-white">
             {recentes.map((r) => (
               <li key={r.codigo}>
-                <Link to={`/pedido?c=${r.codigo}`} className="flex items-center justify-between px-4 py-3 text-sm hover:bg-massa-50">
+                <Link to={`/pedido?c=${r.codigo}`} className="flex min-h-12 items-center justify-between px-4 py-3 text-sm hover:bg-massa-50">
                   <span className="font-semibold">Pedido #{r.numero}</span>
                   <span className="text-stone-500">{dataHora(r.criado_em)}</span>
                 </Link>
@@ -98,7 +133,8 @@ export default function Acompanhar() {
   const [erro, setErro] = useState('')
   const [copiado, setCopiado] = useState(false)
 
-  const finalizado = pedido?.status === 'entregue' || pedido?.status === 'cancelado'
+  const finalizado = pedido != null && ['entregue', 'cancelado', 'reembolsado'].includes(pedido.status)
+  const naRua = pedido?.status === 'saiu_entrega'
   useEffect(() => {
     if (!codigo) return
     let vivo = true
@@ -116,12 +152,13 @@ export default function Acompanhar() {
     }
     buscar()
     if (finalizado) return
-    const t = setInterval(buscar, 15_000)
+    // com o pedido na rua a posição do motoboy é consultada com mais frequência
+    const t = setInterval(buscar, naRua ? 8_000 : 15_000)
     return () => {
       vivo = false
       clearInterval(t)
     }
-  }, [codigo, finalizado])
+  }, [codigo, finalizado, naRua])
 
   if (!codigo) return <Buscar />
   if (estado === 'carregando') return <Carregando texto="Buscando seu pedido…" />
@@ -139,66 +176,90 @@ export default function Acompanhar() {
   }
 
   const passos = etapas(pedido)
+  const atual = passos.reduce((ultimo, e, i) => (e.feito ? i : ultimo), 0)
+  const encerradoSemEntrega = pedido.status === 'cancelado' || pedido.status === 'reembolsado'
   const titulos: Record<StatusPedido, string> = {
     novo: `Recebemos seu pedido, ${pedido.nome}!`,
     confirmado: `Pedido confirmado, ${pedido.nome}!`,
     em_preparo: `${pedido.nome}, sua pizza está no forno`,
     pronto: pedido.tipo === 'entrega' ? 'Prontinho! Já vai sair para entrega' : `Pode vir buscar, ${pedido.nome}!`,
     saiu_entrega: `${pedido.nome}, seu pedido está a caminho`,
+    problema_entrega: 'Tivemos um problema na entrega',
     entregue: `Bom apetite, ${pedido.nome}!`,
     cancelado: 'Pedido cancelado',
+    reembolsado: 'Pedido reembolsado',
   }
-  const atual = passos.findIndex((e) => e.status === pedido.status)
-  const cancelado = pedido.status === 'cancelado'
-  const whats = linkWhatsApp(config?.whatsapp, `Olá! Sobre o pedido #${pedido.numero} (${pedido.codigo})`)
-  const pix = pedido.forma_pagamento === 'pix' && !pedido.pago && !cancelado ? config?.chave_pix : null
+  const whats = linkWhatsApp(config?.whatsapp, mensagemPedido(pedido.numero))
+  const pix = pedido.forma_pagamento === 'pix' && !pedido.pago && !encerradoSemEntrega ? config?.chave_pix : null
+  const marcadores = [
+    ...(pedido.loja ? [{ id: 'loja', ponto: { lat: Number(pedido.loja.lat), lng: Number(pedido.loja.lng) }, tipo: 'loja' as const, rotulo: config?.nome_loja }] : []),
+    ...(pedido.motoboy ? [{ id: 'motoboy', ponto: { lat: Number(pedido.motoboy.lat), lng: Number(pedido.motoboy.lng) }, tipo: 'motoboy' as const, rotulo: pedido.entregador ?? 'Entregador' }] : []),
+  ]
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
       <p className="text-sm font-semibold text-molho-700">
         Pedido #{pedido.numero} · código {pedido.codigo}
       </p>
-      <h1 className="mt-1 font-display text-4xl font-bold text-balance">
-        {titulos[pedido.status]}
-      </h1>
+      <h1 className="mt-1 font-display text-4xl font-bold text-balance">{titulos[pedido.status]}</h1>
       {!finalizado && pedido.previsao_em && (
         <p className="mt-2 text-stone-600">
           Previsão de {pedido.tipo === 'entrega' ? 'entrega' : 'retirada'}: <b className="text-forno-900">por volta das {hora(pedido.previsao_em)}</b>
         </p>
       )}
 
-      {cancelado ? (
+      {pedido.status === 'problema_entrega' && (
         <div className="mt-6">
           <Erro>
-            {pedido.motivo_cancelamento ? `Motivo: ${pedido.motivo_cancelamento}` : 'Este pedido foi cancelado.'} Qualquer dúvida, fale com a gente.
+            {pedido.problema_entrega ?? 'O entregador não conseguiu concluir a entrega.'} Fale com a gente para resolvermos rapidinho.
+          </Erro>
+        </div>
+      )}
+
+      {encerradoSemEntrega ? (
+        <div className="mt-6">
+          <Erro>
+            {pedido.status === 'reembolsado'
+              ? `O valor deste pedido foi devolvido.${pedido.motivo_reembolso ? ` Motivo: ${pedido.motivo_reembolso}.` : ''}`
+              : pedido.motivo_cancelamento
+                ? `Motivo: ${pedido.motivo_cancelamento}.`
+                : 'Este pedido foi cancelado.'}{' '}
+            Qualquer dúvida, fale com a gente.
           </Erro>
         </div>
       ) : (
-        <ol className="mt-8">
-          {passos.map((e, i) => {
-            const feito = i <= atual
-            return (
-              <li key={e.status} className="relative flex gap-4 pb-7 last:pb-0">
+        <>
+          {pedido.motoboy && marcadores.length > 0 && (
+            <section className="mt-6">
+              <Suspense fallback={null}>
+                <Mapa marcadores={marcadores} className="h-64" />
+              </Suspense>
+              <p className="mt-1 text-xs text-stone-500">Posição aproximada do entregador, atualizada há {haQuanto(pedido.motoboy.em)}.</p>
+            </section>
+          )}
+          <ol className="mt-8">
+            {passos.map((e, i) => (
+              <li key={e.id} className="relative flex gap-4 pb-7 last:pb-0">
                 {i < passos.length - 1 && <span className={cx('absolute top-8 left-[15px] h-full w-0.5', i < atual ? 'bg-manjericao-500' : 'bg-stone-200')} />}
                 <span
                   className={cx(
                     'z-10 grid size-8 shrink-0 place-items-center rounded-full border-2',
-                    feito ? 'border-manjericao-600 bg-manjericao-600 text-white' : 'border-stone-300 bg-white',
+                    e.feito ? 'border-manjericao-600 bg-manjericao-600 text-white' : 'border-stone-300 bg-white',
                     i === atual && !finalizado && 'pulsar-novo',
                   )}
                 >
-                  {feito && <Check className="size-4" />}
+                  {e.feito && <Check className="size-4" />}
                 </span>
-                <div className={cx(!feito && 'opacity-50')}>
+                <div className={cx(!e.feito && 'opacity-50')}>
                   <p className="font-semibold text-forno-900">
-                    {e.titulo} {feito && e.quando && <span className="ml-1 text-sm font-normal text-stone-500 tabular-nums">{hora(e.quando)}</span>}
+                    {e.titulo} {e.feito && e.quando && <span className="ml-1 text-sm font-normal text-stone-500 tabular-nums">{hora(e.quando)}</span>}
                   </p>
-                  {i === atual && <p className="text-sm text-stone-600">{e.texto}</p>}
+                  {(i === atual || (e.id === 'pagamento' && !e.feito)) && <p className="text-sm text-stone-600">{e.texto}</p>}
                 </div>
               </li>
-            )
-          })}
-        </ol>
+            ))}
+          </ol>
+        </>
       )}
 
       {pix && (
@@ -266,8 +327,8 @@ export default function Acompanhar() {
       </section>
 
       {whats && (
-        <a href={whats} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-2 font-semibold text-manjericao-700 hover:underline">
-          <MessageCircle className="size-5" /> Falar com a pizzaria no WhatsApp
+        <a href={whats} target="_blank" rel="noreferrer" className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-lg bg-manjericao-600 px-5 font-semibold text-white hover:bg-manjericao-700">
+          <MessageCircle className="size-5" /> Falar sobre este pedido no WhatsApp
         </a>
       )}
     </div>

@@ -51,7 +51,7 @@ begin
   -- escrita (e leitura, quando a tabela não é pública) por módulo
   for r in
     select * from (values
-      ('configuracoes', $c$pode('configuracoes')$c$),
+      ('configuracoes', $c$pode('configuracoes') or pode('entregas')$c$), -- a tela de Entregas grava o modo e o ponto da loja
       ('site_conteudo', $c$pode('conteudo')$c$),
       ('banners', $c$pode('conteudo')$c$),
       ('promocoes', $c$pode('conteudo')$c$),

@@ -1,11 +1,12 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Download, MessageCircle, Plus, Search, Trash2 } from 'lucide-react'
-import { AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Selo, Tabela, Vazio, useAviso } from '../components/ui'
+import { AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Tabela, Vazio, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
-import { STATUS, baixarCsv, brl, dataCurta, dataHora, enderecoTexto, soDigitos, telefone } from '../lib/formato'
+import { baixarCsv, brl, dataCurta, enderecoTexto, soDigitos, telefone } from '../lib/formato'
 import { mensagemErro, supabase } from '../lib/supabase'
-import type { Cliente, Endereco, Pedido } from '../lib/tipos'
+import type { Cliente, Endereco } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
+import { ComprasDoCliente } from './Analises'
 import { DetalhePedido } from './DetalhePedido'
 
 const DIA = 86_400_000
@@ -24,12 +25,9 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
   const [c, setC] = useState(cliente)
   const [salvando, setSalvando] = useState(false)
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null)
+  const [versaoCompras, setVersaoCompras] = useState(0)
   const novo = !cliente.id
 
-  const { dados: pedidos, recarregar: recarregarPedidos } = useConsulta<Pedido[]>(
-    () => (novo ? Promise.resolve({ data: [], error: null }) : supabase.from('pedidos').select('*').eq('cliente_id', cliente.id!).order('criado_em', { ascending: false }).limit(50)),
-    [cliente.id],
-  )
   const { dados: enderecos, recarregar: recarregarEnderecos } = useConsulta<Endereco[]>(
     () => (novo ? Promise.resolve({ data: [], error: null }) : supabase.from('enderecos').select('*').eq('cliente_id', cliente.id!).order('criado_em')),
     [cliente.id],
@@ -40,7 +38,7 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
     setSalvando(true)
     const valores = {
       nome: c.nome?.trim(),
-      telefone: soDigitos(c.telefone),
+      telefone: soDigitos(c.telefone) || null,
       email: c.email?.trim() || null,
       cpf: soDigitos(c.cpf) || null,
       nascimento: c.nascimento || null,
@@ -73,7 +71,7 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
             <Entrada required {...campo('nome')} />
           </Campo>
           <Campo rotulo="Telefone com DDD">
-            <Entrada required type="tel" minLength={10} {...campo('telefone')} />
+            <Entrada type="tel" minLength={10} {...campo('telefone')} />
           </Campo>
           <Campo rotulo="E-mail">
             <Entrada type="email" {...campo('email')} />
@@ -123,27 +121,12 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
               <p className="text-sm text-stone-500">Nenhum endereço salvo — eles são guardados automaticamente a cada entrega.</p>
             )}
 
-            <h3 className="mt-6 mb-2 font-semibold">Histórico de pedidos</h3>
-            {pedidos?.length ? (
-              <Tabela colunas={['Nº', 'Data', 'Status', 'Total']}>
-                {pedidos.map((p) => (
-                  <tr key={p.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setPedidoAberto(p.id)}>
-                    <td className="font-semibold">#{p.numero}</td>
-                    <td className="tabular-nums">{dataHora(p.criado_em)}</td>
-                    <td>
-                      <Selo className={STATUS[p.status].cor}>{STATUS[p.status].rotulo}</Selo>
-                    </td>
-                    <td className="tabular-nums">{brl(p.total)}</td>
-                  </tr>
-                ))}
-              </Tabela>
-            ) : (
-              <p className="text-sm text-stone-500">Ainda não fez pedidos.</p>
-            )}
+            <h3 className="mt-6 mb-2 font-semibold">Compras</h3>
+            <ComprasDoCliente key={versaoCompras} clienteId={cliente.id!} onAbrirPedido={setPedidoAberto} />
           </>
         )}
       </Modal>
-      <DetalhePedido pedidoId={pedidoAberto} onFechar={() => setPedidoAberto(null)} onMudou={recarregarPedidos} />
+      <DetalhePedido pedidoId={pedidoAberto} onFechar={() => setPedidoAberto(null)} onMudou={() => setVersaoCompras((v) => v + 1)} />
     </>
   )
 }
@@ -157,13 +140,29 @@ export default function Clientes() {
     [],
   )
 
+  // "#1234" ou só o número do pedido: encontra o cliente daquele pedido
+  const [doPedido, setDoPedido] = useState<string | null>(null)
+  useEffect(() => {
+    const n = /^#?\d{4,6}$/.test(busca.trim()) ? Number(soDigitos(busca)) : 0
+    if (!n) return setDoPedido(null)
+    let vivo = true
+    supabase.from('pedidos').select('cliente_id').eq('numero', n).maybeSingle().then(({ data }) => vivo && setDoPedido(data?.cliente_id ?? null))
+    return () => {
+      vivo = false
+    }
+  }, [busca])
+
   const linhas = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     const digitos = soDigitos(busca)
     return (dados ?? [])
       .filter(SEGMENTOS[segmento].filtro)
-      .filter((c) => !termo || c.nome.toLowerCase().includes(termo) || (digitos.length > 2 && c.telefone.includes(digitos)))
-  }, [dados, busca, segmento])
+      .filter(
+        (c) =>
+          !termo || c.id === doPedido || c.nome.toLowerCase().includes(termo) || (c.email ?? '').toLowerCase().includes(termo) ||
+          (digitos.length > 2 && (c.telefone ?? '').includes(digitos)),
+      )
+  }, [dados, busca, segmento, doPedido])
 
   const exportar = () =>
     baixarCsv(
@@ -190,9 +189,9 @@ export default function Clientes() {
       }
     >
       <div className="mb-3 flex flex-wrap gap-2">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="pointer-events-none absolute top-3 left-3 size-4 text-stone-400" />
-          <Entrada type="search" aria-label="Buscar cliente" placeholder="Nome ou telefone" className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Entrada type="search" aria-label="Buscar cliente" placeholder="Nome, telefone, e-mail ou nº do pedido" className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         <Selecao aria-label="Segmento" className="w-auto" value={segmento} onChange={(e) => setSegmento(e.target.value as keyof typeof SEGMENTOS)}>
           {Object.entries(SEGMENTOS).map(([id, s]) => (
@@ -210,13 +209,18 @@ export default function Clientes() {
       ) : linhas.length === 0 ? (
         <Vazio titulo="Nenhum cliente encontrado" texto="Os clientes são cadastrados automaticamente a cada pedido com telefone." />
       ) : (
-        <Tabela colunas={['Cliente', 'Telefone', 'Pedidos', 'Total gasto', 'Último pedido', 'Cliente desde']}>
+        <Tabela colunas={['Cliente', 'Telefone', 'Pedidos', 'Total gasto', 'Ticket médio', 'Último pedido', 'Cliente desde']}>
           {linhas.slice(0, 300).map((c) => (
             <tr key={c.id} className="cursor-pointer hover:bg-stone-50" onClick={() => setFicha(c)}>
-              <td className="font-semibold">{c.nome}</td>
+              <td className="font-semibold">
+                {c.nome}
+                {c.usuario_id && <span className="ml-1.5 rounded-full bg-sky-100 px-1.5 py-0.5 text-xs font-semibold text-sky-900">conta</span>}
+                {c.email && <span className="block text-xs font-normal text-stone-500">{c.email}</span>}
+              </td>
               <td className="whitespace-nowrap tabular-nums">{telefone(c.telefone)}</td>
               <td className="tabular-nums">{c.total_pedidos}</td>
               <td className="tabular-nums">{brl(c.total_gasto)}</td>
+              <td className="tabular-nums">{Number(c.total_pedidos) > 0 ? brl(Number(c.total_gasto) / Number(c.total_pedidos)) : '—'}</td>
               <td className="tabular-nums">{dataCurta(c.ultimo_pedido_em) || '—'}</td>
               <td className="tabular-nums">{dataCurta(c.criado_em)}</td>
             </tr>

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Bike, Store } from 'lucide-react'
-import { Botao, Carregando, Erro, Vazio, cx, useAviso } from '../components/ui'
+import { Botao, Carregando, Erro, Selo, Vazio, cx, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { TIPO, haQuanto } from '../lib/formato'
+import { useLoja } from '../lib/loja'
 import { mudarStatus } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Pedido } from '../lib/tipos'
-import { Pagina, useAdmin, usePedidosAoVivo } from './AdminLayout'
+import { ATRASO, Pagina, nivelAtraso, useAdmin, usePedidosAoVivo } from './AdminLayout'
 
 /** Tela da cozinha: só o que precisa ser feito, em letras grandes. */
 export default function Cozinha() {
   const aviso = useAviso()
+  const { config } = useLoja()
   const { sincronizar } = useAdmin()
   const [ocupado, setOcupado] = useState('')
   const [, setRelogio] = useState(0)
@@ -47,8 +49,9 @@ export default function Cozinha() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {dados.map((p) => {
             const preparando = p.status === 'em_preparo'
+            const atraso = nivelAtraso(p.status_em, config)
             return (
-              <article key={p.id} className={cx('flex flex-col rounded-2xl border-2 bg-white p-4', preparando ? 'border-orange-400' : 'border-sky-400')}>
+              <article key={p.id} className={cx('flex flex-col rounded-2xl border-2 bg-white p-4', atraso ? ATRASO[atraso].borda : preparando ? 'border-orange-400' : 'border-sky-400')}>
                 <header className="flex items-center justify-between">
                   <span className="text-2xl font-bold">#{p.numero}</span>
                   <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-stone-600">
@@ -56,6 +59,13 @@ export default function Cozinha() {
                     {TIPO[p.tipo]} · {haQuanto(p.confirmado_em ?? p.criado_em)}
                   </span>
                 </header>
+                {atraso && (
+                  <p className="mt-2">
+                    <Selo className={ATRASO[atraso].cor}>
+                      {ATRASO[atraso].rotulo} · {haQuanto(p.status_em)} nesta etapa
+                    </Selo>
+                  </p>
+                )}
                 <ul className="mt-3 flex-1 space-y-3">
                   {(p.pedido_itens ?? [])
                     .slice()

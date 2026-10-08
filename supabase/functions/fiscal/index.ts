@@ -234,8 +234,13 @@ Deno.serve(async (req) => {
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer /i, '')
     const { data: usuario } = await admin.auth.getUser(jwt)
     if (!usuario?.user) throw new Falha('Sessão inválida. Entre novamente.', 401)
-    const { data: perfil } = await admin.from('perfis').select('ativo').eq('id', usuario.user.id).maybeSingle()
+    const { data: perfil } = await admin.from('perfis').select('ativo, papel').eq('id', usuario.user.id).maybeSingle()
     if (!perfil?.ativo) throw new Falha('Acesso negado', 403)
+    if (perfil.papel !== 'admin') {
+      // mesma regra do painel: precisa ter a tela de Pedidos ou a Fiscal liberada
+      const { data: liberado } = await admin.from('permissoes').select('modulo').eq('papel', perfil.papel).in('modulo', ['pedidos', 'fiscal'])
+      if (!liberado?.length) throw new Falha('Acesso negado', 403)
+    }
 
     const corpo = await req.json()
     if (corpo.acao === 'emitir') return json(await emitir(admin, corpo.pedido_id))

@@ -6,10 +6,26 @@ sql_paths = ["./seed.sql"]
 
 [auth]
 site_url = "https://tiacepizzas.com.br"
-additional_redirect_urls = ["https://tiacepizzas.com.br/admin", "http://localhost:5173/admin"]
-# Ninguém se cadastra sozinho: usuários do painel são criados pela administradora.
-enable_signup = false
+additional_redirect_urls = ["https://tiacepizzas.com.br/**", "http://localhost:5173/**"]
+# Clientes entram com Google/Facebook; ninguém se cadastra por e-mail e senha
+# (os usuários do painel são criados pela administradora).
+enable_signup = true
 minimum_password_length = 8
+
+[auth.email]
+enable_signup = false
+
+# Entrada social dos clientes. Preencha as credenciais em Authentication > Providers no painel do Supabase
+# (ou defina as variáveis abaixo antes de rodar "supabase config push").
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
+[auth.external.facebook]
+enabled = false
+client_id = "env(FACEBOOK_CLIENT_ID)"
+secret = "env(FACEBOOK_CLIENT_SECRET)"
 
 [functions.fiscal]
 verify_jwt = true

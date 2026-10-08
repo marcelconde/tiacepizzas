@@ -14,6 +14,16 @@ import { AlertCircle, CheckCircle2, Loader2, Minus, Plus, X } from 'lucide-react
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
 
+// Quando quem usa o componente passa largura, altura ou alinhamento, a classe padrão do mesmo grupo sai:
+// duas classes do mesmo grupo no elemento deixariam o resultado à mercê da ordem do CSS gerado.
+const GRUPOS = [/^w-/, /^h-/, /^justify-/]
+function mesclar(base: string, extra?: string) {
+  if (!extra) return base
+  const extras = extra.split(/\s+/).filter(Boolean)
+  const grupos = GRUPOS.filter((g) => extras.some((e) => g.test(e)))
+  return [...base.split(/\s+/).filter((c) => !grupos.some((g) => g.test(c))), ...extras].join(' ')
+}
+
 // ---------------------------------------------------------------- botões
 const variantes = {
   primario: 'bg-molho-600 text-white hover:bg-molho-700 shadow-sm',
@@ -36,10 +46,12 @@ export function Botao({ variante = 'primario', tamanho = 'm', carregando, classN
       type="button"
       {...resto}
       disabled={disabled || carregando}
-      className={cx(
-        'inline-flex shrink-0 items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-        variantes[variante],
-        tamanhos[tamanho],
+      className={mesclar(
+        cx(
+          'inline-flex shrink-0 items-center justify-center rounded-lg font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+          variantes[variante],
+          tamanhos[tamanho],
+        ),
         className,
       )}
     >
@@ -50,10 +62,8 @@ export function Botao({ variante = 'primario', tamanho = 'm', carregando, classN
 }
 
 // ---------------------------------------------------------------- formulários
-// largura total por padrão; quem passa uma classe de largura (w-auto, w-40…) assume o controle
-const largura = (classe?: string) => (/(^|\s)w-/.test(classe ?? '') ? '' : 'w-full')
 const baseCampo =
-  'rounded-lg border border-stone-300 bg-white px-3 text-sm text-forno-900 placeholder:text-stone-400 focus:border-molho-500 focus:outline-none focus:ring-2 focus:ring-molho-500/20 disabled:bg-stone-100'
+  'w-full rounded-lg border border-stone-300 bg-white px-3 text-sm text-forno-900 placeholder:text-stone-400 focus:border-molho-500 focus:outline-none focus:ring-2 focus:ring-molho-500/20 disabled:bg-stone-100'
 
 export function Campo({ rotulo, dica, children, className }: { rotulo: string; dica?: string; children: ReactNode; className?: string }) {
   return (
@@ -66,15 +76,15 @@ export function Campo({ rotulo, dica, children, className }: { rotulo: string; d
 }
 
 export const Entrada = ({ className, ...p }: InputHTMLAttributes<HTMLInputElement>) => (
-  <input {...p} className={cx(baseCampo, largura(className), 'h-10', className)} />
+  <input {...p} className={mesclar(`${baseCampo} h-10`, className)} />
 )
 
 export const Selecao = ({ className, ...p }: SelectHTMLAttributes<HTMLSelectElement>) => (
-  <select {...p} className={cx(baseCampo, largura(className), 'h-10', className)} />
+  <select {...p} className={mesclar(`${baseCampo} h-10`, className)} />
 )
 
 export const AreaTexto = ({ className, ...p }: TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <textarea rows={2} {...p} className={cx(baseCampo, largura(className), 'py-2', className)} />
+  <textarea rows={2} {...p} className={mesclar(`${baseCampo} py-2`, className)} />
 )
 
 export function Alternar({ ativo, onChange, rotulo, disabled }: { ativo: boolean; onChange: (v: boolean) => void; rotulo?: string; disabled?: boolean }) {

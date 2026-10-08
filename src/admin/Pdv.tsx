@@ -102,6 +102,7 @@ export default function Pdv() {
     setEnviando(true)
     const { data, error } = await supabase.rpc('criar_pedido', {
       p: {
+        painel: true,
         tipo,
         origem,
         cliente: { nome: nome.trim() || 'Cliente balcão', telefone },
@@ -166,7 +167,7 @@ export default function Pdv() {
                   <span className="block font-semibold">{p.nome}</span>
                   <span className="text-stone-500 tabular-nums">
                     {usaTamanhos && 'a partir de '}
-                    {brl(precoInicial(p, usaTamanhos))}
+                    {brl(precoInicial(catalogo, p, usaTamanhos)?.promo)}
                   </span>
                 </button>
               )
@@ -229,14 +230,26 @@ export default function Pdv() {
                 <Entrada aria-label="Referência" placeholder="Referência" value={end.referencia} onChange={(e) => setEnd({ ...end, referencia: e.target.value })} />
               </div>
               <div className="grid grid-cols-[1fr_6rem] gap-2">
-                <Selecao required aria-label="Bairro" value={end.bairro_id} onChange={(e) => { setEnd({ ...end, bairro_id: e.target.value }); setTaxa('') }}>
-                  <option value="">Bairro…</option>
-                  {catalogo.bairros.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.nome} — {brl(b.taxa_entrega)}
-                    </option>
-                  ))}
-                </Selecao>
+                {config?.modo_entrega === 'distancia' ? (
+                  // por distância: a atendente escolhe a faixa conforme o endereço informado ao telefone
+                  <Selecao required aria-label="Faixa de distância" value={taxa} onChange={(e) => setTaxa(e.target.value)}>
+                    <option value="">Distância…</option>
+                    {catalogo.faixas.map((f) => (
+                      <option key={f.id} value={String(f.taxa)}>
+                        até {String(f.ate_km).replace('.', ',')} km — {brl(f.taxa)}
+                      </option>
+                    ))}
+                  </Selecao>
+                ) : (
+                  <Selecao required aria-label="Bairro" value={end.bairro_id} onChange={(e) => { setEnd({ ...end, bairro_id: e.target.value }); setTaxa('') }}>
+                    <option value="">Bairro…</option>
+                    {catalogo.bairros.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.nome} — {brl(b.taxa_entrega)}
+                      </option>
+                    ))}
+                  </Selecao>
+                )}
                 <Entrada aria-label="Taxa de entrega" inputMode="decimal" placeholder={bairro ? String(bairro.taxa_entrega) : 'Taxa'} value={taxa} onChange={(e) => setTaxa(e.target.value)} />
               </div>
             </div>

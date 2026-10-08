@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CircleAlert, CircleCheck, CircleMinus } from 'lucide-react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Cartao, cx } from '../components/ui'
+import type { Meta } from '../lib/tipos'
 
 // Uma série só por gráfico: uma cor para tudo. O texto usa tinta neutra, nunca a cor da série.
 const SERIE = '#2a78d6'
@@ -17,14 +18,56 @@ export interface Ponto {
 
 const compacto = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFractionDigits: 1 })
 
-export function Indicador({ rotulo, valor, anterior, atual, detalhe, subirEhBom = true }: { rotulo: string; valor: string; anterior?: number; atual?: number; detalhe?: ReactNode; subirEhBom?: boolean }) {
+export type Nivel = 'bom' | 'medio' | 'ruim'
+
+/** Classifica um valor conforme a meta definida em Configurações → Metas. */
+export function classificar(valor: number | null | undefined, meta: Meta | undefined): Nivel | null {
+  if (valor == null || !meta || !Number.isFinite(Number(valor))) return null
+  const v = Number(valor)
+  if (meta.menor_melhor) return v <= Number(meta.bom) ? 'bom' : v >= Number(meta.ruim) ? 'ruim' : 'medio'
+  return v >= Number(meta.bom) ? 'bom' : v < Number(meta.ruim) ? 'ruim' : 'medio'
+}
+
+// cores de situação (reservadas: nunca usadas como cor de série) sempre acompanhadas de ícone e texto
+const NIVEIS: Record<Nivel, { rotulo: string; cor: string; icone: typeof CircleCheck }> = {
+  bom: { rotulo: 'Bom', cor: '#0a7d0a', icone: CircleCheck },
+  medio: { rotulo: 'Médio', cor: '#9a6700', icone: CircleMinus },
+  ruim: { rotulo: 'Ruim', cor: '#d03b3b', icone: CircleAlert },
+}
+
+export function Semaforo({ nivel, texto }: { nivel: Nivel | null; texto?: string }) {
+  if (!nivel) return null
+  const n = NIVEIS[nivel]
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap text-forno-800">
+      <n.icone className="size-4" style={{ color: n.cor }} aria-hidden />
+      {texto ?? n.rotulo}
+    </span>
+  )
+}
+
+export function Indicador({
+  rotulo, valor, anterior, atual, detalhe, subirEhBom = true, nivel, nivelTexto,
+}: {
+  rotulo: string
+  valor: string
+  anterior?: number
+  atual?: number
+  detalhe?: ReactNode
+  subirEhBom?: boolean
+  nivel?: Nivel | null
+  nivelTexto?: string
+}) {
   const variacao = anterior != null && atual != null && anterior > 0 ? ((atual - anterior) / anterior) * 100 : null
   const subiu = (variacao ?? 0) >= 0
   return (
     <Cartao className="p-4">
-      <p className="text-sm text-stone-500">{rotulo}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-stone-500">{rotulo}</p>
+        <Semaforo nivel={nivel ?? null} />
+      </div>
       <p className="mt-1 text-2xl font-semibold">{valor}</p>
-      <p className="mt-1 flex min-h-5 items-center gap-1 text-xs text-stone-500">
+      <p className="mt-1 flex min-h-5 flex-wrap items-center gap-x-1 text-xs text-stone-500">
         {variacao != null && (
           <span className={cx('inline-flex items-center font-semibold', subiu === subirEhBom ? 'text-emerald-700' : 'text-red-700')}>
             {subiu ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
@@ -32,6 +75,7 @@ export function Indicador({ rotulo, valor, anterior, atual, detalhe, subirEhBom 
           </span>
         )}
         {variacao != null ? 'vs. período anterior' : detalhe}
+        {nivelTexto && <span className="basis-full">{nivelTexto}</span>}
       </p>
     </Cartao>
   )

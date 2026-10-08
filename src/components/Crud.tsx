@@ -1,13 +1,14 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { ImagePlus, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useConsulta } from '../lib/dados'
+import { enviarImagem } from '../lib/imagens'
 import { mensagemErro, supabase } from '../lib/supabase'
 import { Alternar, AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Tabela, Vazio, cx, useAviso } from './ui'
 
 export interface CampoCrud {
   nome: string
   rotulo: string
-  tipo?: 'texto' | 'numero' | 'moeda' | 'booleano' | 'selecao' | 'area' | 'data'
+  tipo?: 'texto' | 'numero' | 'moeda' | 'booleano' | 'selecao' | 'area' | 'data' | 'hora' | 'imagem'
   opcoes?: { valor: string; rotulo: string }[]
   obrigatorio?: boolean
   padrao?: unknown
@@ -149,6 +150,31 @@ export function Crud<T extends { id: string }>({
                   </div>
                 )
               }
+              if (c.tipo === 'imagem') {
+                return (
+                  <div key={c.nome} className="flex items-center gap-3 sm:col-span-2">
+                    {valor ? <img src={String(valor)} alt="" className="h-16 w-28 rounded-lg object-cover" /> : null}
+                    <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-stone-300 px-4 text-sm font-semibold hover:bg-stone-50">
+                      <ImagePlus className="size-4" /> {valor ? 'Trocar imagem' : c.rotulo}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const arquivo = e.target.files?.[0]
+                          if (arquivo) enviarImagem(arquivo).then(mudar, (erro) => aviso.erro(mensagemErro(erro)))
+                        }}
+                      />
+                    </label>
+                    {valor ? (
+                      <Botao variante="sutil" onClick={() => mudar(null)}>
+                        Remover
+                      </Botao>
+                    ) : null}
+                    {c.dica && <span className="text-xs text-stone-500">{c.dica}</span>}
+                  </div>
+                )
+              }
               return (
                 <Campo key={c.nome} rotulo={c.rotulo} dica={c.dica} className={classe}>
                   {c.tipo === 'selecao' ? (
@@ -165,7 +191,7 @@ export function Crud<T extends { id: string }>({
                   ) : (
                     <Entrada
                       required={c.obrigatorio}
-                      type={c.tipo === 'data' ? 'date' : c.tipo === 'numero' || c.tipo === 'moeda' ? 'number' : 'text'}
+                      type={c.tipo === 'data' ? 'date' : c.tipo === 'hora' ? 'time' : c.tipo === 'numero' || c.tipo === 'moeda' ? 'number' : 'text'}
                       step={c.tipo === 'moeda' ? '0.01' : c.tipo === 'numero' ? 'any' : undefined}
                       min={c.tipo === 'moeda' ? 0 : undefined}
                       inputMode={c.tipo === 'numero' || c.tipo === 'moeda' ? 'decimal' : undefined}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AtSign, Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2 } from 'lucide-react'
+import { AtSign, Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2, UserRound } from 'lucide-react'
 import { Logo } from '../components/Logo'
 import { Botao, Contador, Erro, Modal, cx } from '../components/ui'
+import { useAuth } from '../lib/auth'
 import { useCarrinho } from '../lib/carrinho'
 import { DIAS_SEMANA, brl, soDigitos, telefone } from '../lib/formato'
 import { useLoja } from '../lib/loja'
@@ -10,11 +11,14 @@ import { useLoja } from '../lib/loja'
 export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
   numero ? `https://wa.me/55${soDigitos(numero)}${texto ? `?text=${encodeURIComponent(texto)}` : ''}` : null
 
+/** Mensagem que já identifica o pedido para a equipe. */
+export const mensagemPedido = (numero: number) => `Olá, gostaria de falar sobre o pedido #${numero}.`
+
 export function SeloAberta() {
   const { aberta } = useLoja()
   if (aberta == null) return null
   return (
-    <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', aberta ? 'bg-manjericao-100 text-manjericao-700' : 'bg-stone-200 text-stone-700')}>
+    <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap', aberta ? 'bg-manjericao-100 text-manjericao-700' : 'bg-stone-200 text-stone-700')}>
       <span className={cx('size-2 rounded-full', aberta ? 'bg-manjericao-500' : 'bg-stone-500')} />
       {aberta ? 'Aberto agora' : 'Fechado agora'}
     </span>
@@ -26,6 +30,7 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
   const { config, aberta: lojaAberta } = useLoja()
   const navegar = useNavigate()
   const falta = Math.max(0, Number(config?.pedido_minimo ?? 0) - subtotal)
+  const whats = linkWhatsApp(config?.whatsapp, 'Olá! Preciso de ajuda com o meu pedido.')
 
   return (
     <Modal
@@ -71,10 +76,15 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
               <Contador valor={i.quantidade} onChange={(q) => alterarQuantidade(i.uid, q)} />
             </li>
           ))}
-          <li className="pt-3">
+          <li className="flex items-center justify-between pt-3">
             <button type="button" onClick={limpar} className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-red-700">
               <Trash2 className="size-4" /> Esvaziar sacola
             </button>
+            {whats && (
+              <a href={whats} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-manjericao-700 hover:underline">
+                <MessageCircle className="size-4" /> Pedir ajuda
+              </a>
+            )}
           </li>
         </ul>
       )}
@@ -83,19 +93,28 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
 }
 
 export default function SiteLayout() {
-  const { config, erro } = useLoja()
+  const { config, conteudo, erro } = useLoja()
+  const { sessao } = useAuth()
   const { quantidade, subtotal } = useCarrinho()
   const [sacola, setSacola] = useState(false)
   const { pathname } = useLocation()
   const noCheckout = pathname.startsWith('/checkout')
   const whats = linkWhatsApp(config?.whatsapp, 'Olá! Vim pelo site.')
+  const temLogin = config?.login_google || config?.login_facebook
 
   useEffect(() => {
     window.scrollTo(0, 0) // em navegadores novos scrollTo devolve uma Promise: não pode ser o retorno do efeito
   }, [pathname])
 
   const link = ({ isActive }: { isActive: boolean }) =>
-    cx('rounded-lg px-3 py-2 text-sm font-semibold', isActive ? 'text-molho-700' : 'text-forno-700 hover:text-molho-700')
+    cx('rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap', isActive ? 'text-molho-700' : 'text-forno-700 hover:text-molho-700')
+  const conta = (sessao || temLogin) && (
+    <NavLink to={sessao ? '/conta' : '/entrar'} className={link}>
+      <span className="inline-flex items-center gap-1.5">
+        <UserRound className="size-4" /> {sessao ? 'Minha conta' : 'Entrar'}
+      </span>
+    </NavLink>
+  )
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -103,17 +122,18 @@ export default function SiteLayout() {
       <header className="sticky top-0 z-40 border-b border-massa-200 bg-massa-50/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-2 px-4">
           <Link to="/" aria-label="Tia Cê Pizzas — início" className="mr-auto">
-            <Logo />
+            <Logo url={conteudo?.logo_url} />
           </Link>
-          <nav className="hidden items-center sm:flex">
+          <nav className="hidden items-center md:flex">
             <NavLink to="/cardapio" className={link}>
               Cardápio
             </NavLink>
             <NavLink to="/pedido" className={link}>
               Acompanhar pedido
             </NavLink>
+            {conta}
           </nav>
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <SeloAberta />
           </div>
           {!noCheckout && (
@@ -124,14 +144,15 @@ export default function SiteLayout() {
             </Botao>
           )}
         </div>
-        <nav className="flex items-center justify-between gap-1 border-t border-massa-200 px-1 sm:hidden">
+        <nav className="sem-barra flex items-center gap-1 overflow-x-auto border-t border-massa-200 px-1 md:hidden">
           <NavLink to="/cardapio" className={link}>
             Cardápio
           </NavLink>
           <NavLink to="/pedido" className={link}>
-            Acompanhar pedido
+            Acompanhar
           </NavLink>
-          <span className="pr-3">
+          {conta}
+          <span className="ml-auto pr-3">
             <SeloAberta />
           </span>
         </nav>
@@ -158,7 +179,7 @@ export default function SiteLayout() {
       </main>
 
       {quantidade > 0 && !noCheckout && (
-        <div className="sticky bottom-0 z-30 border-t border-massa-200 bg-massa-50/95 p-3 backdrop-blur sm:hidden">
+        <div className="sticky bottom-0 z-30 border-t border-massa-200 bg-massa-50/95 p-3 backdrop-blur md:hidden">
           <Botao tamanho="g" className="w-full" onClick={() => setSacola(true)}>
             <span className="flex w-full justify-between">
               <span>Ver sacola ({quantidade})</span>
@@ -166,6 +187,19 @@ export default function SiteLayout() {
             </span>
           </Botao>
         </div>
+      )}
+
+      {whats && !noCheckout && (
+        <a
+          href={whats}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Falar com a pizzaria no WhatsApp"
+          title="Falar no WhatsApp"
+          className={cx('fixed right-4 z-30 grid size-14 place-items-center rounded-full bg-manjericao-600 text-white shadow-lg transition-transform hover:scale-105', quantidade > 0 ? 'bottom-24 md:bottom-5' : 'bottom-5')}
+        >
+          <MessageCircle className="size-7" />
+        </a>
       )}
 
       <footer className="bg-forno-900 text-massa-200">
@@ -220,6 +254,10 @@ export default function SiteLayout() {
           © {new Date().getFullYear()} Tia Cê Pizzas ·{' '}
           <Link to="/admin" className="hover:text-white">
             Área da equipe
+          </Link>{' '}
+          ·{' '}
+          <Link to="/entregador" className="hover:text-white">
+            Entregadores
           </Link>
         </div>
       </footer>

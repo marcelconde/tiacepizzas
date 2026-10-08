@@ -1,0 +1,16 @@
+{
+  "name": "Tia Cê Pizzas",
+  "short_name": "Tia Cê",
+  "description": "Peça sua pizza e acompanhe o pedido.",
+  "start_url": "/cardapio",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdfaf5",
+  "theme_color": "#c0351d",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icone-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

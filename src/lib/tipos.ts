@@ -1,8 +1,15 @@
-export type StatusPedido = 'novo' | 'confirmado' | 'em_preparo' | 'pronto' | 'saiu_entrega' | 'entregue' | 'cancelado'
+export type StatusPedido =
+  | 'novo' | 'confirmado' | 'em_preparo' | 'pronto' | 'saiu_entrega' | 'problema_entrega' | 'entregue' | 'cancelado' | 'reembolsado'
 export type TipoPedido = 'entrega' | 'retirada' | 'balcao'
 export type OrigemPedido = 'site' | 'balcao' | 'telefone' | 'whatsapp' | 'ifood'
 export type FormaPagamento = 'dinheiro' | 'pix' | 'credito' | 'debito' | 'vale_refeicao'
-export type Papel = 'admin' | 'atendente' | 'cozinha'
+export type Papel = 'admin' | 'atendente' | 'cozinha' | 'financeiro' | 'motoboy'
+
+export interface Meta {
+  ruim: number
+  bom: number
+  menor_melhor?: boolean
+}
 
 export interface Horario {
   aberto: boolean
@@ -35,6 +42,85 @@ export interface Configuracoes {
   chave_pix: string | null
   mensagem_aviso: string | null
   impressao: { largura: 58 | 80; auto: boolean; via_cozinha: boolean }
+  modo_entrega: 'bairro' | 'distancia'
+  loja_lat: number | null
+  loja_lng: number | null
+  rastreio_motoboy: boolean
+  exigir_login: boolean
+  login_google: boolean
+  login_facebook: boolean
+  alertas_pedido: { atencao: number; atrasado: number; critico: number }
+  metas: Record<string, Meta>
+  categorias_despesa: string[]
+}
+
+export interface Nutricional {
+  porcao?: string
+  calorias?: number | string
+  carboidratos?: number | string
+  proteinas?: number | string
+  gorduras?: number | string
+  sodio?: number | string
+  alergenicos?: string
+}
+
+export interface Promocao {
+  id: string
+  nome: string
+  descricao: string | null
+  tipo: 'percentual' | 'valor' | 'preco'
+  valor: number
+  tamanho_id: string | null
+  selo: string
+  destaque: boolean
+  imagem_url: string | null
+  data_inicio?: string | null
+  data_fim: string | null
+  hora_inicio?: string | null
+  hora_fim: string | null
+  dias_semana?: number[] | null
+  ativo?: boolean
+  produtos: string[]
+}
+
+export type PosicaoBanner = 'inicio_topo' | 'inicio_meio' | 'cardapio_topo' | 'cardapio_entre_categorias' | 'cardapio_produtos' | 'cardapio_fim'
+export type Tamanho3 = 'pequeno' | 'medio' | 'grande'
+
+export interface Banner {
+  id: string
+  titulo: string
+  subtitulo: string | null
+  imagem_url: string | null
+  cor: 'molho' | 'forno' | 'queijo' | 'manjericao'
+  link: string | null
+  botao: string | null
+  posicao: PosicaoBanner
+  categoria_id: string | null
+  tamanho: Tamanho3
+  ordem: number
+  ativo: boolean
+  data_inicio: string | null
+  data_fim: string | null
+}
+
+export type SecaoId = 'hero' | 'banners' | 'promocoes' | 'destaques' | 'como_funciona'
+
+export interface SiteConteudo {
+  logo_url: string | null
+  hero: { titulo: string; destaque: string; subtitulo: string; imagem_url: string | null }
+  secoes: { id: SecaoId; ativo: boolean; tamanho: Tamanho3 }[]
+  destaques_titulo: string
+  promocoes_titulo: string
+  passos: { titulo: string; texto: string }[]
+  produto: { foto: boolean; descricao: boolean; ingredientes: boolean; nutricional: boolean; observacoes: boolean; complementos: boolean }
+}
+
+export interface FaixaEntrega {
+  id: string
+  ate_km: number
+  taxa: number
+  tempo_extra_min: number
+  ativo: boolean
 }
 
 export interface ConfigFiscal {
@@ -86,6 +172,8 @@ export interface Produto {
   ncm: string | null
   cfop: string | null
   csosn: string | null
+  ingredientes: string | null
+  nutricional: Nutricional | null
   produto_precos: { tamanho_id: string; preco: number }[]
 }
 
@@ -117,16 +205,19 @@ export interface Endereco {
   cidade?: string | null
   uf?: string | null
   referencia?: string | null
+  lat?: number | null
+  lng?: number | null
 }
 
 export interface Cliente {
   id: string
   nome: string
-  telefone: string
+  telefone: string | null
   email: string | null
   cpf: string | null
   nascimento: string | null
   observacoes: string | null
+  usuario_id?: string | null
   criado_em: string
   total_pedidos?: number
   total_gasto?: number
@@ -139,6 +230,8 @@ export interface Entregador {
   telefone: string | null
   valor_por_entrega: number
   ativo: boolean
+  usuario_id: string | null
+  posicao_em: string | null
 }
 
 export interface ItemPedido {
@@ -199,6 +292,12 @@ export interface Pedido {
   cpf_nota: string | null
   observacoes: string | null
   entregador_id: string | null
+  distancia_km: number | null
+  problema_entrega: string | null
+  motivo_reembolso: string | null
+  reembolsado_em: string | null
+  status_em: string
+  pago_em: string | null
   previsao_em: string | null
   criado_em: string
   confirmado_em: string | null

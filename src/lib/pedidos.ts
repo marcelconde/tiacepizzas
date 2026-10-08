@@ -20,6 +20,8 @@ export function proximoPasso(p: Pick<Pedido, 'status' | 'tipo'>): { status: Stat
         : { status: 'entregue', rotulo: 'Entregar e receber' }
     case 'saiu_entrega':
       return { status: 'entregue', rotulo: 'Entregue e recebido' }
+    case 'problema_entrega':
+      return { status: 'saiu_entrega', rotulo: 'Tentar entregar de novo' }
     default:
       return null
   }

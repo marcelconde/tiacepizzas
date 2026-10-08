@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { isoDia } from './formato'
 import { configurado, mensagemErro, supabase } from './supabase'
-import type { Adicional, Bairro, Categoria, Configuracoes, Produto, Tamanho } from './tipos'
+import type { Adicional, Bairro, Banner, Categoria, Configuracoes, FaixaEntrega, PosicaoBanner, Produto, Promocao, SiteConteudo, Tamanho } from './tipos'
 
 export interface Catalogo {
   categorias: Categoria[]
@@ -8,10 +9,14 @@ export interface Catalogo {
   produtos: Produto[]
   adicionais: Adicional[]
   bairros: Bairro[]
+  faixas: FaixaEntrega[]
+  promocoes: Promocao[]
+  banners: Banner[]
 }
 
 interface Loja {
   config: Configuracoes | null
+  conteudo: SiteConteudo | null
   catalogo: Catalogo
   aberta: boolean | null
   carregando: boolean
@@ -19,20 +24,21 @@ interface Loja {
   recarregar: () => Promise<void>
 }
 
-const vazio: Catalogo = { categorias: [], tamanhos: [], produtos: [], adicionais: [], bairros: [] }
-const Contexto = createContext<Loja>({ config: null, catalogo: vazio, aberta: null, carregando: true, erro: null, recarregar: async () => {} })
+const vazio: Catalogo = { categorias: [], tamanhos: [], produtos: [], adicionais: [], bairros: [], faixas: [], promocoes: [], banners: [] }
+const Contexto = createContext<Loja>({ config: null, conteudo: null, catalogo: vazio, aberta: null, carregando: true, erro: null, recarregar: async () => {} })
+
+// Preço, disponibilidade e promoções mudam durante o expediente: nada disso fica guardado no aparelho,
+// e o cardápio é buscado de novo a cada 2 minutos e sempre que a pessoa volta para a aba.
+const INTERVALO = 120_000
 
 export function LojaProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<Configuracoes | null>(null)
+  const [conteudo, setConteudo] = useState<SiteConteudo | null>(null)
   const [catalogo, setCatalogo] = useState<Catalogo>(vazio)
   const [aberta, setAberta] = useState<boolean | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
-
-  const verAberta = useCallback(async () => {
-    const { data } = await supabase.rpc('loja_aberta')
-    if (typeof data === 'boolean') setAberta(data)
-  }, [])
+  const ultima = useRef(0)
 
   const recarregar = useCallback(async () => {
     if (!configurado) {
@@ -40,60 +46,104 @@ export function LojaProvider({ children }: { children: ReactNode }) {
       setCarregando(false)
       return
     }
-    const [cfg, cat, tam, prod, adi, bai] = await Promise.all([
+    ultima.current = Date.now()
+    const [cfg, site, cat, tam, prod, adi, bai, fai, ban, promo, ab] = await Promise.all([
       supabase.from('configuracoes').select('*').single(),
+      supabase.from('site_conteudo').select('dados').single(),
       supabase.from('categorias').select('*').eq('ativo', true).order('ordem'),
       supabase.from('tamanhos').select('*').eq('ativo', true).order('ordem'),
       supabase.from('produtos').select('*, produto_precos(tamanho_id, preco)').eq('ativo', true).order('ordem').order('nome'),
       supabase.from('adicionais').select('*').eq('ativo', true).order('ordem'),
       supabase.from('bairros').select('*').eq('ativo', true).order('nome'),
+      supabase.from('faixas_entrega').select('*').eq('ativo', true).order('ate_km'),
+      supabase.from('banners').select('*').eq('ativo', true).order('ordem'),
+      supabase.rpc('promocoes_vigentes'),
+      supabase.rpc('loja_aberta'),
     ])
-    const falha = [cfg, cat, tam, prod, adi, bai].find((r) => r.error)?.error
+    const falha = [cfg, site, cat, tam, prod, adi, bai, fai, ban, promo].find((r) => r.error)?.error
     if (falha) setErro(mensagemErro(falha))
     else {
+      const hoje = isoDia()
       setErro(null)
       setConfig(cfg.data as Configuracoes)
+      setConteudo((site.data as { dados: SiteConteudo }).dados)
       setCatalogo({
         categorias: cat.data as Categoria[],
         tamanhos: tam.data as Tamanho[],
         produtos: prod.data as Produto[],
         adicionais: adi.data as Adicional[],
         bairros: bai.data as Bairro[],
+        faixas: fai.data as FaixaEntrega[],
+        banners: (ban.data as Banner[]).filter((b) => (!b.data_inicio || b.data_inicio <= hoje) && (!b.data_fim || b.data_fim >= hoje)),
+        promocoes: (promo.data ?? []) as Promocao[],
       })
     }
-    await verAberta()
+    if (typeof ab.data === 'boolean') setAberta(ab.data)
     setCarregando(false)
-  }, [verAberta])
+  }, [])
 
   useEffect(() => {
     recarregar()
     if (!configurado) return
-    const t = setInterval(verAberta, 60_000)
-    return () => clearInterval(t)
-  }, [recarregar, verAberta])
+    const seVelho = () => {
+      if (document.visibilityState === 'visible' && Date.now() - ultima.current > 30_000) recarregar()
+    }
+    const t = setInterval(() => document.visibilityState === 'visible' && recarregar(), INTERVALO)
+    document.addEventListener('visibilitychange', seVelho)
+    window.addEventListener('focus', seVelho)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', seVelho)
+      window.removeEventListener('focus', seVelho)
+    }
+  }, [recarregar])
 
   const valor = useMemo(
-    () => ({ config, catalogo, aberta, carregando, erro, recarregar }),
-    [config, catalogo, aberta, carregando, erro, recarregar],
+    () => ({ config, conteudo, catalogo, aberta, carregando, erro, recarregar }),
+    [config, conteudo, catalogo, aberta, carregando, erro, recarregar],
   )
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }
 
 export const useLoja = () => useContext(Contexto)
 
-export const precoNoTamanho = (p: Produto, tamanhoId: string) =>
-  p.produto_precos.find((x) => x.tamanho_id === tamanhoId)?.preco ?? null
+export const bannersEm = (c: Catalogo, posicao: PosicaoBanner, categoriaId?: string) =>
+  c.banners.filter((b) => b.posicao === posicao && (categoriaId === undefined || b.categoria_id === categoriaId))
 
-/** Menor preço do produto, para o "a partir de" do cardápio. */
-export function precoInicial(p: Produto, usaTamanhos: boolean) {
-  if (!usaTamanhos) return p.preco
-  const precos = p.produto_precos.map((x) => Number(x.preco))
-  return precos.length ? Math.min(...precos) : null
+/** Preço de tabela do produto no tamanho. */
+export const precoNoTamanho = (p: Produto, tamanhoId: string) => {
+  const v = p.produto_precos.find((x) => x.tamanho_id === tamanhoId)?.preco
+  return v == null ? null : Number(v)
 }
 
-/** Mesmo cálculo do servidor: maior preço entre os sabores (ou a média, conforme a configuração). */
-export function precoPizza(sabores: Produto[], tamanhoId: string, regra: 'maior' | 'media') {
-  const precos = sabores.map((s) => Number(precoNoTamanho(s, tamanhoId) ?? 0))
+/** Promoções vigentes que valem para o produto (e, se informado, para o tamanho). */
+export const promocoesDo = (c: Catalogo, produtoId: string, tamanhoId?: string | null) =>
+  c.promocoes.filter((pr) => pr.produtos.includes(produtoId) && (tamanhoId === undefined || !pr.tamanho_id || pr.tamanho_id === tamanhoId))
+
+/** Mesmo cálculo do servidor: o menor entre o preço de tabela e as promoções vigentes. */
+export function precoComPromocao(c: Catalogo, produtoId: string, tamanhoId: string | null, preco: number) {
+  let melhor = preco
+  for (const pr of promocoesDo(c, produtoId, tamanhoId)) {
+    const v = pr.tipo === 'percentual' ? Math.round(preco * (100 - Number(pr.valor))) / 100 : pr.tipo === 'valor' ? Math.max(preco - Number(pr.valor), 0) : Number(pr.valor)
+    if (v < melhor) melhor = v
+  }
+  return melhor
+}
+
+/** Menor preço do produto ("a partir de"), de tabela e com promoção. */
+export function precoInicial(c: Catalogo, p: Produto, usaTamanhos: boolean) {
+  const opcoes = usaTamanhos
+    ? p.produto_precos.map((x) => ({ tabela: Number(x.preco), promo: precoComPromocao(c, p.id, x.tamanho_id, Number(x.preco)) }))
+    : p.preco != null
+      ? [{ tabela: Number(p.preco), promo: precoComPromocao(c, p.id, null, Number(p.preco)) }]
+      : []
+  if (!opcoes.length) return null
+  return opcoes.reduce((a, b) => (b.promo < a.promo ? b : a))
+}
+
+/** Mesmo cálculo do servidor: maior preço entre os sabores (ou a média), já com as promoções de cada um. */
+export function precoPizza(c: Catalogo, sabores: Produto[], tamanhoId: string, regra: 'maior' | 'media') {
+  const precos = sabores.map((s) => precoComPromocao(c, s.id, tamanhoId, precoNoTamanho(s, tamanhoId) ?? 0))
   if (!precos.length) return 0
   if (regra === 'media') return Math.round((precos.reduce((a, b) => a + b, 0) / precos.length) * 100) / 100
   return Math.max(...precos)

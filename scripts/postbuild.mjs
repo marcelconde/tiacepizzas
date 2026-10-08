@@ -6,8 +6,8 @@ import { join } from 'node:path'
 
 const dist = 'dist'
 const rotas = [
-  'cardapio', 'checkout', 'pedido', 'admin',
-  ...['painel', 'pedidos', 'pdv', 'cozinha', 'clientes', 'cardapio', 'estoque', 'caixa', 'entregas', 'financeiro', 'fiscal', 'configuracoes'].map((r) => `admin/${r}`),
+  'cardapio', 'checkout', 'pedido', 'entrar', 'conta', 'entregador', 'admin',
+  ...['painel', 'pedidos', 'pdv', 'cozinha', 'clientes', 'cardapio', 'estoque', 'caixa', 'entregas', 'financeiro', 'fiscal', 'configuracoes', 'analises', 'conteudo', 'auditoria'].map((r) => `admin/${r}`),
 ]
 
 for (const rota of rotas) {

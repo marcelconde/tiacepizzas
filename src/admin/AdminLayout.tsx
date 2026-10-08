@@ -1,28 +1,81 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
-  BarChart3, Bike, BookOpen, ChefHat, ClipboardList, FileText, KeyRound, LogOut, Menu, Package, PlusCircle, Settings,
-  Users, Volume2, VolumeX, Wallet, Wallet2, X, type LucideIcon,
+  BarChart3, Bike, BookOpen, ChefHat, ClipboardList, FileText, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
+  PlusCircle, Settings, Users, Volume2, VolumeX, Wallet, Wallet2, Wifi, WifiOff, X, type LucideIcon,
 } from 'lucide-react'
+import { Login, Moldura } from '../components/Login'
 import { Logo } from '../components/Logo'
-import { Botao, Campo, Carregando, Entrada, Erro, Modal, cx, useAviso } from '../components/ui'
+import { Botao, Campo, Carregando, Entrada, Modal, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
+import { PAPEIS } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { aceitarPedido } from '../lib/pedidos'
-import { configurado, mensagemErro, supabase } from '../lib/supabase'
-import type { ConfigFiscal, Papel } from '../lib/tipos'
+import { mensagemErro, supabase } from '../lib/supabase'
+import type { ConfigFiscal, Configuracoes } from '../lib/tipos'
+
+// ------------------------------------------------------------------ módulos e menu
+export type Modulo =
+  | 'painel' | 'pedidos' | 'cozinha' | 'clientes' | 'cardapio' | 'estoque' | 'caixa' | 'entregas' | 'financeiro' | 'analises'
+  | 'conteudo' | 'fiscal' | 'auditoria' | 'configuracoes'
+
+interface ItemMenu {
+  para: string
+  rotulo: string
+  icone: LucideIcon
+  modulo: Modulo
+}
+export const MENU: ItemMenu[] = [
+  { para: '/admin/painel', rotulo: 'Painel', icone: BarChart3, modulo: 'painel' },
+  { para: '/admin/pedidos', rotulo: 'Pedidos', icone: ClipboardList, modulo: 'pedidos' },
+  { para: '/admin/pdv', rotulo: 'Novo pedido', icone: PlusCircle, modulo: 'pedidos' },
+  { para: '/admin/cozinha', rotulo: 'Cozinha', icone: ChefHat, modulo: 'cozinha' },
+  { para: '/admin/clientes', rotulo: 'Clientes', icone: Users, modulo: 'clientes' },
+  { para: '/admin/cardapio', rotulo: 'Cardápio', icone: BookOpen, modulo: 'cardapio' },
+  { para: '/admin/conteudo', rotulo: 'Site e promoções', icone: LayoutTemplate, modulo: 'conteudo' },
+  { para: '/admin/estoque', rotulo: 'Estoque', icone: Package, modulo: 'estoque' },
+  { para: '/admin/caixa', rotulo: 'Caixa', icone: Wallet, modulo: 'caixa' },
+  { para: '/admin/entregas', rotulo: 'Entregas', icone: Bike, modulo: 'entregas' },
+  { para: '/admin/financeiro', rotulo: 'Financeiro', icone: Wallet2, modulo: 'financeiro' },
+  { para: '/admin/analises', rotulo: 'Análises', icone: LineChart, modulo: 'analises' },
+  { para: '/admin/fiscal', rotulo: 'Fiscal', icone: FileText, modulo: 'fiscal' },
+  { para: '/admin/auditoria', rotulo: 'Auditoria', icone: History, modulo: 'auditoria' },
+  { para: '/admin/configuracoes', rotulo: 'Configurações', icone: Settings, modulo: 'configuracoes' },
+]
+
+/** Nomes dos módulos na tela de permissões (um por linha da matriz). */
+export const MODULOS: { id: Modulo; rotulo: string; descricao: string }[] = [
+  { id: 'painel', rotulo: 'Painel', descricao: 'Indicadores e gráficos de faturamento' },
+  { id: 'pedidos', rotulo: 'Pedidos', descricao: 'Quadro de pedidos, histórico e novo pedido' },
+  { id: 'cozinha', rotulo: 'Cozinha', descricao: 'Tela de preparo' },
+  { id: 'clientes', rotulo: 'Clientes', descricao: 'Cadastro e histórico de clientes' },
+  { id: 'cardapio', rotulo: 'Cardápio', descricao: 'Produtos, preços e ficha técnica' },
+  { id: 'conteudo', rotulo: 'Site e promoções', descricao: 'Banners, textos, promoções e cupons' },
+  { id: 'estoque', rotulo: 'Estoque', descricao: 'Insumos, entradas e perdas' },
+  { id: 'caixa', rotulo: 'Caixa', descricao: 'Abertura, sangria e fechamento' },
+  { id: 'entregas', rotulo: 'Entregas', descricao: 'Área de entrega, taxas e entregadores' },
+  { id: 'financeiro', rotulo: 'Financeiro', descricao: 'Despesas, resultado e relatórios' },
+  { id: 'analises', rotulo: 'Análises', descricao: 'Rankings de clientes e produtos' },
+  { id: 'fiscal', rotulo: 'Fiscal', descricao: 'Notas fiscais e configuração' },
+  { id: 'auditoria', rotulo: 'Auditoria', descricao: 'Registro de alterações' },
+  { id: 'configuracoes', rotulo: 'Configurações', descricao: 'Loja, horários, metas e impressão' },
+]
 
 // ------------------------------------------------------------------ contexto do painel
 interface Admin {
   fiscal: ConfigFiscal | null
   recarregarFiscal: () => Promise<void>
   novos: number
+  pode: (modulo: Modulo) => boolean
+  ehAdmin: boolean
   /** Avisa a tela sempre que algum pedido mudar (tempo real, com reforço periódico). */
   aoMudarPedidos: (fn: () => void) => () => void
   /** Atualiza contadores e telas na hora, sem esperar o tempo real (use depois de alterar um pedido). */
   sincronizar: () => void
 }
-const Contexto = createContext<Admin>({ fiscal: null, recarregarFiscal: async () => {}, novos: 0, aoMudarPedidos: () => () => {}, sincronizar: () => {} })
+const Contexto = createContext<Admin>({
+  fiscal: null, recarregarFiscal: async () => {}, novos: 0, pode: () => false, ehAdmin: false, aoMudarPedidos: () => () => {}, sincronizar: () => {},
+})
 export const useAdmin = () => useContext(Contexto)
 
 /** Recarrega a tela quando os pedidos mudam. */
@@ -31,6 +84,21 @@ export function usePedidosAoVivo(fn: () => void) {
   const atual = useRef(fn)
   atual.current = fn
   useEffect(() => aoMudarPedidos(() => atual.current()), [aoMudarPedidos])
+}
+
+export type NivelAtraso = 'atencao' | 'atrasado' | 'critico'
+export const ATRASO: Record<NivelAtraso, { rotulo: string; cor: string; borda: string }> = {
+  atencao: { rotulo: 'Atenção', cor: 'bg-amber-100 text-amber-900', borda: 'border-amber-400' },
+  atrasado: { rotulo: 'Atrasado', cor: 'bg-orange-200 text-orange-950', borda: 'border-orange-500' },
+  critico: { rotulo: 'Crítico', cor: 'bg-red-600 text-white', borda: 'border-red-600' },
+}
+
+/** Há quanto tempo o pedido está parado na mesma etapa, conforme os limites de Configurações → Pedidos. */
+export function nivelAtraso(statusEm: string, config: Configuracoes | null): NivelAtraso | null {
+  const a = config?.alertas_pedido
+  if (!a) return null
+  const min = (Date.now() - new Date(statusEm).getTime()) / 60000
+  return min >= a.critico ? 'critico' : min >= a.atrasado ? 'atrasado' : min >= a.atencao ? 'atencao' : null
 }
 
 function tocarAlerta() {
@@ -50,101 +118,6 @@ function tocarAlerta() {
   } catch {
     /* navegador bloqueou o áudio antes de qualquer clique */
   }
-}
-
-// ------------------------------------------------------------------ menu
-interface ItemMenu {
-  para: string
-  rotulo: string
-  icone: LucideIcon
-  papeis: Papel[]
-}
-const MENU: ItemMenu[] = [
-  { para: '/admin/painel', rotulo: 'Painel', icone: BarChart3, papeis: ['admin'] },
-  { para: '/admin/pedidos', rotulo: 'Pedidos', icone: ClipboardList, papeis: ['admin', 'atendente'] },
-  { para: '/admin/pdv', rotulo: 'Novo pedido', icone: PlusCircle, papeis: ['admin', 'atendente'] },
-  { para: '/admin/cozinha', rotulo: 'Cozinha', icone: ChefHat, papeis: ['admin', 'atendente', 'cozinha'] },
-  { para: '/admin/clientes', rotulo: 'Clientes', icone: Users, papeis: ['admin', 'atendente'] },
-  { para: '/admin/cardapio', rotulo: 'Cardápio', icone: BookOpen, papeis: ['admin', 'atendente'] },
-  { para: '/admin/estoque', rotulo: 'Estoque', icone: Package, papeis: ['admin', 'atendente'] },
-  { para: '/admin/caixa', rotulo: 'Caixa', icone: Wallet, papeis: ['admin', 'atendente'] },
-  { para: '/admin/entregas', rotulo: 'Entregas', icone: Bike, papeis: ['admin', 'atendente'] },
-  { para: '/admin/financeiro', rotulo: 'Financeiro', icone: Wallet2, papeis: ['admin'] },
-  { para: '/admin/fiscal', rotulo: 'Fiscal', icone: FileText, papeis: ['admin'] },
-  { para: '/admin/configuracoes', rotulo: 'Configurações', icone: Settings, papeis: ['admin'] },
-]
-
-export const inicioDoPapel = (papel: Papel) => MENU.find((m) => m.papeis.includes(papel))!.para
-
-// ------------------------------------------------------------------ telas de acesso
-function Moldura({ children }: { children: ReactNode }) {
-  return (
-    <div className="grid min-h-dvh place-items-center bg-forno-900 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <div className="mb-6 flex justify-center">
-          <Logo />
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Login() {
-  const [email, setEmail] = useState('')
-  const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
-  const [info, setInfo] = useState('')
-  const [enviando, setEnviando] = useState(false)
-
-  async function entrar(e: FormEvent) {
-    e.preventDefault()
-    setErro('')
-    setEnviando(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    setEnviando(false)
-    if (error) setErro(mensagemErro(error))
-  }
-
-  async function esqueci() {
-    setErro('')
-    if (!email) return setErro('Digite seu e-mail acima para receber o link de redefinição.')
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}/admin` })
-    if (error) setErro(mensagemErro(error))
-    else setInfo('Enviamos um link para redefinir a senha. Confira seu e-mail.')
-  }
-
-  return (
-    <Moldura>
-      <h1 className="text-center font-display text-2xl font-semibold">Área da equipe</h1>
-      {!configurado && (
-        <div className="mt-4">
-          <Erro>O banco de dados ainda não foi conectado a este site.</Erro>
-        </div>
-      )}
-      <form onSubmit={entrar} className="mt-5 space-y-4">
-        <Campo rotulo="E-mail">
-          <Entrada type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </Campo>
-        <Campo rotulo="Senha">
-          <Entrada type="password" required autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
-        </Campo>
-        {erro && <Erro>{erro}</Erro>}
-        {info && <p className="text-sm text-manjericao-700">{info}</p>}
-        <Botao type="submit" tamanho="g" className="w-full" carregando={enviando}>
-          Entrar
-        </Botao>
-      </form>
-      <div className="mt-4 flex justify-between text-sm">
-        <button type="button" onClick={esqueci} className="font-semibold text-forno-600 hover:underline">
-          Esqueci a senha
-        </button>
-        <Link to="/" className="font-semibold text-forno-600 hover:underline">
-          Voltar ao site
-        </Link>
-      </div>
-    </Moldura>
-  )
 }
 
 function TrocarSenha({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
@@ -182,7 +155,9 @@ export default function AdminLayout() {
   const aviso = useAviso()
   const { pathname } = useLocation()
   const [fiscal, setFiscal] = useState<ConfigFiscal | null>(null)
+  const [modulos, setModulos] = useState<Set<string> | null>(null)
   const [novos, setNovos] = useState(0)
+  const [aoVivo, setAoVivo] = useState(false)
   const [som, setSom] = useState(() => localStorage.getItem('tiace.som') !== 'nao')
   const [menu, setMenu] = useState(false)
   const [trocarSenha, setTrocarSenha] = useState(false)
@@ -190,8 +165,11 @@ export default function AdminLayout() {
   const refs = useRef({ config, fiscal, som })
   refs.current = { config, fiscal, som }
 
-  const ativo = Boolean(perfil?.ativo)
-  const atendimento = ativo && perfil!.papel !== 'cozinha'
+  const interno = Boolean(perfil?.ativo) && perfil!.papel !== 'motoboy'
+  const ehAdmin = interno && perfil!.papel === 'admin'
+  const papel = perfil?.papel
+  const pode = useCallback((m: Modulo) => ehAdmin || Boolean(modulos?.has(m)), [ehAdmin, modulos])
+  const atendimento = pode('pedidos')
 
   const recarregarFiscal = useCallback(async () => {
     const { data } = await supabase.from('config_fiscal').select('*').single()
@@ -208,6 +186,11 @@ export default function AdminLayout() {
     return () => void ouvintes.current.delete(fn)
   }, [])
 
+  const sincronizar = useCallback(() => {
+    contarNovos()
+    ouvintes.current.forEach((fn) => fn())
+  }, [contarNovos])
+
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((evento) => {
       if (evento === 'PASSWORD_RECOVERY') setTrocarSenha(true)
@@ -219,20 +202,25 @@ export default function AdminLayout() {
     setMenu(false)
   }, [pathname])
 
-  const sincronizar = useCallback(() => {
-    contarNovos()
-    ouvintes.current.forEach((fn) => fn())
-  }, [contarNovos])
+  // permissões do papel de quem entrou (o administrador pode tudo)
+  useEffect(() => {
+    if (!interno || !papel) return
+    supabase
+      .from('permissoes')
+      .select('modulo')
+      .eq('papel', papel)
+      .then(({ data }) => setModulos(new Set((data ?? []).map((p) => p.modulo as string))))
+  }, [interno, papel])
 
   useEffect(() => {
-    if (!ativo) return
+    if (!interno || !modulos) return
     recarregarFiscal()
+    if (!atendimento && !pode('cozinha')) return
     contarNovos()
-    const avisar = sincronizar
     const canal = supabase
       .channel('painel-pedidos')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (m) => {
-        avisar()
+        sincronizar()
         const novo = m.new as { id?: string; status?: string; numero?: number }
         if (m.eventType !== 'INSERT' || novo.status !== 'novo' || !atendimento) return
         const { config, fiscal, som } = refs.current
@@ -244,37 +232,55 @@ export default function AdminLayout() {
             .catch((e) => aviso.erro(mensagemErro(e)))
         }
       })
-      .subscribe()
+      .subscribe((estado) => setAoVivo(estado === 'SUBSCRIBED'))
     // reforço caso a conexão em tempo real caia
-    const t = setInterval(avisar, 45_000)
+    const t = setInterval(sincronizar, 45_000)
     return () => {
       clearInterval(t)
       supabase.removeChannel(canal)
     }
-  }, [ativo, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar])
+  }, [interno, modulos, atendimento, pode, aviso, contarNovos, recarregarFiscal, sincronizar])
 
   const valor = useMemo(
-    () => ({ fiscal, recarregarFiscal, novos, aoMudarPedidos, sincronizar }),
-    [fiscal, recarregarFiscal, novos, aoMudarPedidos, sincronizar],
+    () => ({ fiscal, recarregarFiscal, novos, pode, ehAdmin, aoMudarPedidos, sincronizar }),
+    [fiscal, recarregarFiscal, novos, pode, ehAdmin, aoMudarPedidos, sincronizar],
   )
 
   if (carregando) return <Carregando />
-  if (!sessao) return <Login />
+  if (!sessao) return <Login titulo="Área da equipe" voltarPara="/admin" />
+  if (perfil?.ativo && perfil.papel === 'motoboy') return <Navigate to="/entregador" replace />
   if (!perfil?.ativo) {
     return (
       <Moldura>
-        <h1 className="text-center font-display text-2xl font-semibold">Acesso pendente</h1>
-        <p className="mt-2 text-center text-sm text-stone-600">Sua conta ({sessao.user.email}) ainda não foi liberada. Peça para a administradora ativar seu acesso.</p>
+        <h1 className="text-center font-display text-2xl font-semibold">Acesso restrito</h1>
+        <p className="mt-2 text-center text-sm text-stone-600">
+          A conta {sessao.user.email} não faz parte da equipe ou ainda não foi liberada. Peça para a administradora ativar seu acesso.
+        </p>
+        <Botao variante="secundario" className="mt-5 w-full" onClick={sair}>
+          Sair
+        </Botao>
+        <Link to="/" className="mt-3 block text-center text-sm font-semibold text-forno-600 hover:underline">
+          Voltar ao site
+        </Link>
+      </Moldura>
+    )
+  }
+  if (!modulos) return <Carregando />
+
+  const itens = MENU.filter((m) => pode(m.modulo))
+  if (itens.length === 0) {
+    return (
+      <Moldura>
+        <h1 className="text-center font-display text-2xl font-semibold">Sem telas liberadas</h1>
+        <p className="mt-2 text-center text-sm text-stone-600">Sua função ({PAPEIS[perfil.papel]}) ainda não tem nenhuma tela liberada. Fale com a administradora.</p>
         <Botao variante="secundario" className="mt-5 w-full" onClick={sair}>
           Sair
         </Botao>
       </Moldura>
     )
   }
-
-  const itens = MENU.filter((m) => m.papeis.includes(perfil.papel))
   const permitido = itens.some((m) => pathname.startsWith(m.para))
-  if (pathname === '/admin' || pathname === '/admin/' || !permitido) return <Navigate to={inicioDoPapel(perfil.papel)} replace />
+  if (pathname === '/admin' || pathname === '/admin/' || !permitido) return <Navigate to={itens[0].para} replace />
 
   const alternarSom = () => {
     const v = !som
@@ -325,7 +331,15 @@ export default function AdminLayout() {
           </nav>
           <div className="border-t border-white/10 p-3 text-sm">
             <p className="truncate font-semibold text-white">{perfil.nome}</p>
-            <p className="truncate text-xs text-massa-400 capitalize">{perfil.papel}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs text-massa-400">
+              {PAPEIS[perfil.papel]}
+              {(atendimento || pode('cozinha')) && (
+                <span className="ml-auto inline-flex items-center gap-1" title={aoVivo ? 'Pedidos chegam na hora' : 'Sem tempo real: a tela se atualiza a cada 45 segundos'}>
+                  {aoVivo ? <Wifi className="size-3.5 text-manjericao-500" /> : <WifiOff className="size-3.5 text-queijo-400" />}
+                  {aoVivo ? 'ao vivo' : 'a cada 45 s'}
+                </span>
+              )}
+            </p>
             <div className="mt-2 flex gap-1">
               <button type="button" title={som ? 'Desligar som de novos pedidos' : 'Ligar som de novos pedidos'} aria-label="Som de novos pedidos" aria-pressed={som} onClick={alternarSom} className="rounded-lg p-2 hover:bg-white/10">
                 {som ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}

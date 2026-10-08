@@ -6,7 +6,8 @@ import { useConsulta } from '../lib/dados'
 import { brl } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
-import type { Adicional, Categoria, Insumo, Produto, Tamanho } from '../lib/tipos'
+import { enviarImagem } from '../lib/imagens'
+import type { Adicional, Categoria, Insumo, Nutricional, Produto, Tamanho } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
 
 // ------------------------------------------------------------------ ficha técnica
@@ -117,14 +118,19 @@ function FormProduto({ produto, categorias, tamanhos, onFechar, onSalvo }: { pro
 
   async function enviarFoto(arquivo: File | undefined) {
     if (!arquivo) return
-    if (arquivo.size > 3 * 1024 * 1024) return aviso.erro('A foto deve ter no máximo 3 MB.')
     setEnviandoFoto(true)
-    const caminho = `${crypto.randomUUID()}.${arquivo.name.split('.').pop()?.toLowerCase() ?? 'jpg'}`
-    const { error } = await supabase.storage.from('produtos').upload(caminho, arquivo, { cacheControl: '31536000' })
+    try {
+      const imagem_url = await enviarImagem(arquivo)
+      setP((v) => ({ ...v, imagem_url }))
+    } catch (e) {
+      aviso.erro(mensagemErro(e))
+    }
     setEnviandoFoto(false)
-    if (error) return aviso.erro(mensagemErro(error))
-    setP((v) => ({ ...v, imagem_url: supabase.storage.from('produtos').getPublicUrl(caminho).data.publicUrl }))
   }
+  const nutri = (campo: keyof Nutricional) => ({
+    value: String(p.nutricional?.[campo] ?? ''),
+    onChange: (e: { target: { value: string } }) => setP((v) => ({ ...v, nutricional: { ...(v.nutricional ?? {}), [campo]: e.target.value } })),
+  })
 
   async function salvar(e: FormEvent) {
     e.preventDefault()
@@ -142,6 +148,8 @@ function FormProduto({ produto, categorias, tamanhos, onFechar, onSalvo }: { pro
       ncm: p.ncm?.trim() || null,
       cfop: p.cfop?.trim() || null,
       csosn: p.csosn?.trim() || null,
+      ingredientes: p.ingredientes?.trim() || null,
+      nutricional: p.nutricional && Object.values(p.nutricional).some((v) => String(v ?? '').trim() !== '') ? p.nutricional : null,
     }
     const r = p.id
       ? await supabase.from('produtos').update(valores).eq('id', p.id).select('id').single()
@@ -219,6 +227,37 @@ function FormProduto({ produto, categorias, tamanhos, onFechar, onSalvo }: { pro
           <Alternar ativo={p.destaque ?? false} onChange={(v) => setP({ ...p, destaque: v })} rotulo="Destaque na capa" />
           <Alternar ativo={p.ativo ?? true} onChange={(v) => setP({ ...p, ativo: v })} rotulo="Aparece no cardápio" />
         </div>
+
+        <Campo rotulo="Ingredientes" className="sm:col-span-2" dica="Aparece na tela de detalhes do produto.">
+          <AreaTexto value={p.ingredientes ?? ''} onChange={(e) => setP({ ...p, ingredientes: e.target.value })} />
+        </Campo>
+
+        <details className="rounded-lg border border-stone-200 px-3 py-2 sm:col-span-2" open={Boolean(p.nutricional)}>
+          <summary className="text-sm font-semibold">Informações nutricionais (opcional)</summary>
+          <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Campo rotulo="Porção">
+              <Entrada placeholder="1 fatia (120 g)" {...nutri('porcao')} />
+            </Campo>
+            <Campo rotulo="Calorias (kcal)">
+              <Entrada inputMode="decimal" {...nutri('calorias')} />
+            </Campo>
+            <Campo rotulo="Carboidratos (g)">
+              <Entrada inputMode="decimal" {...nutri('carboidratos')} />
+            </Campo>
+            <Campo rotulo="Proteínas (g)">
+              <Entrada inputMode="decimal" {...nutri('proteinas')} />
+            </Campo>
+            <Campo rotulo="Gorduras (g)">
+              <Entrada inputMode="decimal" {...nutri('gorduras')} />
+            </Campo>
+            <Campo rotulo="Sódio (mg)">
+              <Entrada inputMode="decimal" {...nutri('sodio')} />
+            </Campo>
+            <Campo rotulo="Alergênicos" className="col-span-2 sm:col-span-3">
+              <Entrada placeholder="Contém glúten e leite." {...nutri('alergenicos')} />
+            </Campo>
+          </div>
+        </details>
 
         <details className="rounded-lg border border-stone-200 px-3 py-2 sm:col-span-2">
           <summary className="text-sm font-semibold">Dados fiscais (opcional)</summary>

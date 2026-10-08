@@ -9,7 +9,7 @@ const cors = {
 const json = (corpo: unknown, status = 200) =>
   new Response(JSON.stringify(corpo), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
-const PAPEIS = ['admin', 'atendente', 'cozinha']
+const PAPEIS = ['admin', 'financeiro', 'atendente', 'cozinha', 'motoboy']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
     if (!PAPEIS.includes(papel)) return json({ erro: 'Função inválida.' }, 400)
 
     // papel e liberação vão em app_metadata, que só o servidor grava; o gatilho do banco cria o perfil
+    // (e, para motoboy, o cadastro de entregador ligado ao login)
     const { data, error } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password: senha,

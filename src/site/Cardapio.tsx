@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
-import { MontarItem } from '../components/MontarItem'
+import { Fragment, useMemo, useState } from 'react'
+import { Plus, Search, Tag } from 'lucide-react'
+import { Banners } from '../components/Banners'
+import { MontarItem, Preco } from '../components/MontarItem'
 import { Carregando, Entrada, Vazio, cx, useAviso } from '../components/ui'
 import { useCarrinho } from '../lib/carrinho'
-import { brl } from '../lib/formato'
-import { precoInicial, useLoja } from '../lib/loja'
+import { bannersEm, precoInicial, promocoesDo, useLoja } from '../lib/loja'
 import type { Produto } from '../lib/tipos'
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -22,7 +22,7 @@ export default function Cardapio() {
       .map((c) => ({
         categoria: c,
         produtos: catalogo.produtos.filter(
-          (p) => p.categoria_id === c.id && (!termo || semAcento(`${p.nome} ${p.descricao ?? ''}`).includes(termo)),
+          (p) => p.categoria_id === c.id && (!termo || semAcento(`${p.nome} ${p.descricao ?? ''} ${p.ingredientes ?? ''}`).includes(termo)),
         ),
       }))
       .filter((s) => s.produtos.length > 0)
@@ -30,6 +30,51 @@ export default function Cardapio() {
 
   if (carregando) return <Carregando texto="Abrindo o cardápio…" />
   if (erro) return null
+
+  const cartao = (p: Produto, usaTamanhos: boolean) => {
+    const preco = precoInicial(catalogo, p, usaTamanhos)
+    const promo = promocoesDo(catalogo, p.id)[0]
+    return (
+      <button
+        key={p.id}
+        type="button"
+        disabled={!p.disponivel}
+        onClick={() => setMontando(p)}
+        className={cx('group flex min-h-28 items-stretch gap-4 rounded-2xl border border-massa-200 bg-white p-4 text-left transition-shadow', p.disponivel ? 'hover:shadow-md' : 'opacity-60')}
+      >
+        <div className="flex min-w-0 flex-1 flex-col">
+          {promo && p.disponivel && (
+            <span className="mb-1 inline-flex w-fit items-center gap-1 rounded-full bg-queijo-400 px-2 py-0.5 text-xs font-bold text-forno-900">
+              <Tag className="size-3" /> {promo.selo}
+            </span>
+          )}
+          <span className="font-display text-lg font-semibold text-forno-900">{p.nome}</span>
+          {p.descricao && <span className="mt-0.5 line-clamp-2 text-sm text-stone-600">{p.descricao}</span>}
+          <span className="mt-auto pt-3 text-sm text-stone-500">
+            {!p.disponivel ? (
+              <b className="text-stone-600">Indisponível hoje</b>
+            ) : (
+              preco && (
+                <>
+                  {usaTamanhos && 'a partir de '}
+                  <Preco tabela={preco.tabela} promo={preco.promo} className="text-base font-bold text-molho-700" />
+                </>
+              )
+            )}
+          </span>
+        </div>
+        {p.imagem_url ? (
+          <img src={p.imagem_url} alt="" loading="lazy" className="size-24 shrink-0 rounded-xl object-cover" />
+        ) : (
+          p.disponivel && (
+            <span className="grid size-10 shrink-0 place-items-center self-end rounded-full bg-molho-50 text-molho-700 transition-colors group-hover:bg-molho-600 group-hover:text-white">
+              <Plus className="size-5" />
+            </span>
+          )
+        )}
+      </button>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -39,14 +84,16 @@ export default function Cardapio() {
           <p className="mt-1 text-stone-600">Toque em um item para montar do seu jeito.</p>
         </div>
         <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute top-3 left-3 size-4 text-stone-400" />
-          <Entrada type="search" aria-label="Buscar no cardápio" placeholder="Buscar sabor ou ingrediente" className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-stone-400" />
+          <Entrada type="search" aria-label="Buscar no cardápio" placeholder="Buscar sabor ou ingrediente" className="h-11 pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
       </div>
 
-      <nav aria-label="Categorias" className="sem-barra sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-massa-200 bg-massa-50/95 px-4 py-3 backdrop-blur max-sm:top-[6.6rem]">
+      <Banners itens={bannersEm(catalogo, 'cardapio_topo')} className="mt-6" />
+
+      <nav aria-label="Categorias" className="sem-barra sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-massa-200 bg-massa-50/95 px-4 py-3 backdrop-blur max-md:top-[6.6rem]">
         {secoes.map((s) => (
-          <a key={s.categoria.id} href={`#cat-${s.categoria.id}`} className="rounded-full border border-massa-300 bg-white px-4 py-1.5 text-sm font-semibold whitespace-nowrap text-forno-800 hover:border-molho-400 hover:text-molho-700">
+          <a key={s.categoria.id} href={`#cat-${s.categoria.id}`} className="rounded-full border border-massa-300 bg-white px-4 py-2 text-sm font-semibold whitespace-nowrap text-forno-800 hover:border-molho-400 hover:text-molho-700">
             {s.categoria.nome}
           </a>
         ))}
@@ -58,50 +105,27 @@ export default function Cardapio() {
         </div>
       )}
 
-      {secoes.map(({ categoria, produtos }) => (
-        <section key={categoria.id} id={`cat-${categoria.id}`} className="mt-10">
-          <h2 className="font-display text-2xl font-bold">{categoria.nome}</h2>
-          {categoria.descricao && <p className="text-sm text-stone-600">{categoria.descricao}</p>}
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {produtos.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                disabled={!p.disponivel}
-                onClick={() => setMontando(p)}
-                className={cx(
-                  'group flex items-stretch gap-4 rounded-2xl border border-massa-200 bg-white p-4 text-left transition-shadow',
-                  p.disponivel ? 'hover:shadow-md' : 'opacity-60',
-                )}
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="font-display text-lg font-semibold text-forno-900">{p.nome}</span>
-                  {p.descricao && <span className="mt-0.5 line-clamp-2 text-sm text-stone-600">{p.descricao}</span>}
-                  <span className="mt-auto pt-3 text-sm text-stone-500">
-                    {!p.disponivel ? (
-                      <b className="text-stone-600">Indisponível hoje</b>
-                    ) : (
-                      <>
-                        {categoria.usa_tamanhos && 'a partir de '}
-                        <b className="text-base text-molho-700 tabular-nums">{brl(precoInicial(p, categoria.usa_tamanhos))}</b>
-                      </>
-                    )}
-                  </span>
-                </div>
-                {p.imagem_url ? (
-                  <img src={p.imagem_url} alt="" loading="lazy" className="size-24 shrink-0 rounded-xl object-cover" />
-                ) : (
-                  p.disponivel && (
-                    <span className="grid size-9 shrink-0 place-items-center self-end rounded-full bg-molho-50 text-molho-700 transition-colors group-hover:bg-molho-600 group-hover:text-white">
-                      <Plus className="size-5" />
-                    </span>
-                  )
-                )}
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      {secoes.map(({ categoria, produtos }) => {
+        const noMeio = bannersEm(catalogo, 'cardapio_produtos', categoria.id)
+        return (
+          <Fragment key={categoria.id}>
+            <Banners itens={bannersEm(catalogo, 'cardapio_entre_categorias', categoria.id)} className="mt-10" />
+            <section id={`cat-${categoria.id}`} className="mt-10">
+              <h2 className="font-display text-2xl font-bold">{categoria.nome}</h2>
+              {categoria.descricao && <p className="text-sm text-stone-600">{categoria.descricao}</p>}
+              <div className="mt-4 grid gap-3 md:grid-cols-2">{produtos.slice(0, noMeio.length ? 2 : undefined).map((p) => cartao(p, categoria.usa_tamanhos))}</div>
+              {noMeio.length > 0 && (
+                <>
+                  <Banners itens={noMeio} className="my-3" />
+                  <div className="grid gap-3 md:grid-cols-2">{produtos.slice(2).map((p) => cartao(p, categoria.usa_tamanhos))}</div>
+                </>
+              )}
+            </section>
+          </Fragment>
+        )
+      })}
+
+      <Banners itens={bannersEm(catalogo, 'cardapio_fim')} className="mt-10" />
 
       <MontarItem
         produto={montando}

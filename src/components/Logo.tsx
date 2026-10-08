@@ -13,7 +13,9 @@ export function Marca({ className = 'size-9' }: { className?: string }) {
   )
 }
 
-export function Logo({ claro = false }: { claro?: boolean }) {
+export function Logo({ claro = false, url }: { claro?: boolean; url?: string | null }) {
+  // logo enviada pelo painel (Conteúdo → Aparência) substitui a marca padrão
+  if (url) return <img src={url} alt="Tia Cê Pizzas" className="h-10 w-auto max-w-[12rem] object-contain" />
   return (
     <span className="inline-flex items-center gap-2.5">
       <Marca />

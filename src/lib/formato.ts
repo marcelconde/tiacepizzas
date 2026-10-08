@@ -1,4 +1,4 @@
-import type { FormaPagamento, OrigemPedido, StatusPedido, TipoPedido } from './tipos'
+import type { FormaPagamento, OrigemPedido, Papel, StatusPedido, TipoPedido } from './tipos'
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 export const brl = (v: number | null | undefined) => moeda.format(Number(v ?? 0))
@@ -54,8 +54,18 @@ export const STATUS: Record<StatusPedido, { rotulo: string; cor: string }> = {
   em_preparo: { rotulo: 'Em preparo', cor: 'bg-orange-100 text-orange-900' },
   pronto: { rotulo: 'Pronto', cor: 'bg-lime-100 text-lime-900' },
   saiu_entrega: { rotulo: 'Saiu para entrega', cor: 'bg-violet-100 text-violet-900' },
+  problema_entrega: { rotulo: 'Problema na entrega', cor: 'bg-red-100 text-red-900' },
   entregue: { rotulo: 'Entregue', cor: 'bg-emerald-100 text-emerald-900' },
   cancelado: { rotulo: 'Cancelado', cor: 'bg-stone-200 text-stone-700' },
+  reembolsado: { rotulo: 'Reembolsado', cor: 'bg-stone-200 text-stone-700' },
+}
+
+export const PAPEIS: Record<Papel, string> = {
+  admin: 'Administrador',
+  financeiro: 'Financeiro',
+  atendente: 'Atendimento',
+  cozinha: 'Cozinha',
+  motoboy: 'Motoboy',
 }
 
 export const TIPO: Record<TipoPedido, string> = { entrega: 'Entrega', retirada: 'Retirada', balcao: 'Balcão' }
