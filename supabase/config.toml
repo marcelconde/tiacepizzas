@@ -7,19 +7,24 @@ sql_paths = ["./seed.sql"]
 [auth]
 site_url = "https://tiacepizzas.com.br"
 additional_redirect_urls = ["https://tiacepizzas.com.br/**", "http://localhost:5173/**"]
-# Clientes entram com Google/Facebook; ninguém se cadastra por e-mail e senha
-# (os usuários do painel são criados pela administradora).
-enable_signup = true
+# Clientes entram com Google/Facebook e a equipe com e-mail e senha.
+# O provedor de e-mail precisa ficar ligado: no Supabase, desligar o cadastro por e-mail desliga também a entrada.
+# Quem impede o cadastro avulso por e-mail é o banco (migração cadastro_por_email).
+# Fica "false" (ninguém novo entra, só quem a administradora cria) até a entrada com Google/Facebook ser ligada:
+# aí precisa ser "true", senão o primeiro acesso de um cliente é recusado. Depois de mudar: npx supabase config push
+enable_signup = false
 minimum_password_length = 8
 
 [auth.email]
-enable_signup = false
+enable_signup = true
 
 # Entrada social dos clientes (Google e Facebook): ligue em Authentication > Providers no painel do Supabase,
 # com as credenciais criadas no Google Cloud e na Meta. O passo a passo está no README.
 
+# As duas funções conferem a sessão por conta própria (auth.getUser + perfil ativo + permissão),
+# então a checagem de JWT do gateway fica desligada: ela não é confiável com as chaves de assinatura novas (ES256).
 [functions.fiscal]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-usuarios]
-verify_jwt = true
+verify_jwt = false

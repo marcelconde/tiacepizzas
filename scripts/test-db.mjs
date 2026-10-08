@@ -77,6 +77,8 @@ const cozinha = await usuario('cozinha@x.com', { papel: 'cozinha', ativo: true }
 const financeiro = await usuario('fin@x.com', { papel: 'financeiro', ativo: true })
 const motoboy = await usuario('moto@x.com', { papel: 'motoboy', ativo: true }, { nome: 'Carlos Moto' })
 const outroMotoboy = await usuario('moto2@x.com', { papel: 'motoboy', ativo: true }, { nome: 'Outro Moto' })
+// depois que a dona existe, ninguém se cadastra sozinho por e-mail (o papel em user_metadata não vale nada)
+await falha(usuario('intruso@x.com', { provider: 'email' }, { papel: 'admin' }), 'Cadastro por e-mail não é permitido')
 
 const id = async (tabela, nome) => (await um(`select id from ${tabela} where nome = $1`, [nome])).id
 const grande = await id('tamanhos', 'Grande')
