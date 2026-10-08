@@ -186,7 +186,7 @@ function FormProduto({ produto, categorias, tamanhos, onFechar, onSalvo }: { pro
             ))}
           </Selecao>
         </Campo>
-        <Campo rotulo="Descrição / ingredientes" className="sm:col-span-2">
+        <Campo rotulo="Descrição curta (aparece no cardápio)" className="sm:col-span-2">
           <AreaTexto value={p.descricao ?? ''} onChange={(e) => setP({ ...p, descricao: e.target.value })} />
         </Campo>
 

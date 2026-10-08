@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Tia Cê Pizzas — Manual de uso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 15mm 14mm 17mm; }
+  @page :first { margin: 0; }
+  * { box-sizing: border-box; }
+  html { font-family: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 10.2pt; line-height: 1.52; color: #261912; }
+  body { margin: 0; }
+  h1, h2, .capa h1, .capa p.sub { font-family: "Fraunces", Georgia, serif; }
+  h1 { font-size: 23pt; line-height: 1.15; break-before: page; margin: 0 0 6mm; padding-bottom: 3mm; border-bottom: 2.5px solid #c0351d; }
+  h1 .n { color: #c0351d; margin-right: 2mm; }
+  h2 { font-size: 14.5pt; line-height: 1.2; margin: 8mm 0 2mm; break-after: avoid; }
+  h3 { font-size: 10.8pt; margin: 5mm 0 1mm; break-after: avoid; }
+  p { margin: 0 0 2.6mm; orphans: 3; widows: 3; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5.5mm; }
+  li { margin-bottom: 1.2mm; }
+  a { color: #a02a17; text-decoration: none; }
+  b.ui { font-weight: 600; background: #f3e5cc; border-radius: 3px; padding: 0 1.2mm; white-space: nowrap; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 8.8pt; background: #f1efec; border-radius: 3px; padding: 0.3mm 1.2mm; }
+
+  figure { margin: 4mm 0 5mm; break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; max-height: 104mm; border: 1px solid #d6d3d1; border-radius: 6px; }
+  figure.alta img { max-height: 178mm; }
+  figure.media img { max-height: 76mm; }
+  figcaption { font-size: 8.6pt; color: #6b4f40; margin-top: 1.5mm; text-align: center; }
+  .celulares { display: flex; gap: 6mm; justify-content: center; align-items: flex-start; break-inside: avoid; margin: 4mm 0 5mm; }
+  .celulares figure { flex: 0 1 31%; margin: 0; }
+  .celulares img { max-height: 104mm; border: 2px solid #36251c; border-radius: 14px; }
+
+  .dica, .atencao { border-left: 4px solid; padding: 2.5mm 4mm; margin: 4mm 0; border-radius: 0 6px 6px 0; break-inside: avoid; font-size: 9.6pt; }
+  .dica { border-color: #3f7a3a; background: #e9f2e6; }
+  .atencao { border-color: #e0a021; background: #fcf3dc; }
+  .dica > :last-child, .atencao > :last-child { margin-bottom: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 9.3pt; margin: 3mm 0 5mm; break-inside: avoid; }
+  th { text-align: left; background: #36251c; color: #fff; padding: 1.8mm 3mm; font-weight: 600; }
+  td { padding: 1.8mm 3mm; border-bottom: 1px solid #e7e5e4; vertical-align: top; }
+  table.longa { break-inside: auto; }
+  table.longa tr { break-inside: avoid; }
+
+  .capa { height: 297mm; background: #261912; color: #fdfaf5; display: flex; flex-direction: column; justify-content: center; padding: 0 22mm; break-after: page; position: relative; }
+  .capa svg { width: 46mm; height: 46mm; margin-bottom: 12mm; }
+  .capa h1 { font-size: 46pt; border: 0; margin: 0; padding: 0; break-before: auto; color: #fdfaf5; }
+  .capa h1 span { color: #f0b93f; }
+  .capa p.sub { font-size: 20pt; margin: 4mm 0 0; color: #e9d0a6; }
+  .capa p.pe { position: absolute; bottom: 20mm; left: 22mm; right: 22mm; font-size: 9.5pt; color: #dcb377; margin: 0; }
+  .sumario { columns: 2; column-gap: 10mm; padding: 0; list-style: none; margin-top: 4mm; }
+  .sumario li { break-inside: avoid; margin-bottom: 2mm; }
+  .sumario a { color: #261912; }
+  .sumario b { color: #c0351d; display: inline-block; width: 7mm; }
+  .sumario small { display: block; margin-left: 7mm; color: #6b4f40; font-size: 8.4pt; line-height: 1.35; }
+</style>
+</head>
+<body>
+
+<section class="capa">
+  <svg viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="30" fill="#dcb377"/><circle cx="32" cy="32" r="25" fill="#c0351d"/><circle cx="32" cy="32" r="22" fill="#f0b93f"/>
+    <circle cx="23" cy="24" r="5" fill="#a02a17"/><circle cx="41" cy="27" r="5" fill="#a02a17"/><circle cx="29" cy="42" r="5" fill="#a02a17"/>
+    <circle cx="44" cy="42" r="3" fill="#3f7a3a"/><circle cx="33" cy="31" r="2.5" fill="#3f7a3a"/>
+  </svg>
+  <h1>Tia Cê <span>Pizzas</span></h1>
+  <p class="sub">Manual de uso do site e do sistema</p>
+  <p class="pe">Site de pedidos, painel da equipe e aplicativo do entregador · versão de outubro de 2026<br>As telas deste manual foram tiradas no ambiente de demonstração, com clientes, pedidos e valores fictícios.</p>
+</section>
+
+<!-- ============================================================ -->
+<h1 id="como" style="break-before: auto">Como usar este manual</h1>
+<p>Este manual explica, tela por tela, como usar o sistema da Tia Cê Pizzas. Ele foi escrito para quem vai operar a pizzaria no dia a dia, sem precisar entender de programação. Cada capítulo cobre uma parte do sistema e pode ser lido separadamente.</p>
+<p>Nos textos, os nomes de botões e campos aparecem assim: <b class="ui">Aceitar</b>. As caixas verdes trazem dicas; as amarelas, cuidados importantes.</p>
+<div class="atencao"><p><b>O sistema ainda não está no ar para os clientes.</b> Ele está pronto e pode ser explorado no computador com dados fictícios (capítulo 22), mas para funcionar de verdade ainda falta criar a conta do banco de dados, apontar o domínio e cadastrar os dados reais da loja. O que falta está listado no capítulo 22.</p></div>
+
+<h2>Sumário</h2>
+<ol class="sumario">
+  <li><a href="#c1"><b>1</b>Visão geral</a><small>As três partes do sistema, as funções da equipe e o caminho de um pedido</small></li>
+  <li><a href="#c2"><b>2</b>O site, do ponto de vista do cliente</a><small>Cardápio, montagem da pizza, sacola, finalização, acompanhamento e conta</small></li>
+  <li><a href="#c3"><b>3</b>Entrando no painel</a><small>Login, menu, som de pedido novo e senha</small></li>
+  <li><a href="#c4"><b>4</b>Pedidos</a><small>Quadro, alertas de atraso, detalhes, cancelamento, reembolso e histórico</small></li>
+  <li><a href="#c5"><b>5</b>Novo pedido</a><small>Vendas no balcão e pedidos por telefone ou WhatsApp</small></li>
+  <li><a href="#c6"><b>6</b>Cozinha</a><small>A tela de preparo</small></li>
+  <li><a href="#c7"><b>7</b>Clientes</a><small>Busca, ficha e histórico de compras</small></li>
+  <li><a href="#c8"><b>8</b>Cardápio</a><small>Produtos, preços, fotos, informações nutricionais e ficha técnica</small></li>
+  <li><a href="#c9"><b>9</b>Site e promoções</a><small>Página inicial, banners, promoções, cupons e tela do produto</small></li>
+  <li><a href="#c10"><b>10</b>Estoque</a><small>Insumos, compras, perdas e baixa automática</small></li>
+  <li><a href="#c11"><b>11</b>Caixa</a><small>Abertura, sangria, suprimento e fechamento</small></li>
+  <li><a href="#c12"><b>12</b>Entregas</a><small>Taxa por bairro ou por distância, entregadores e acerto</small></li>
+  <li><a href="#c13"><b>13</b>Aplicativo do motoboy</a><small>Entregas atribuídas, rota, problemas e localização</small></li>
+  <li><a href="#c14"><b>14</b>Financeiro</a><small>Entradas, saídas, resultado e relatórios em PDF, Excel e CSV</small></li>
+  <li><a href="#c15"><b>15</b>Painel de indicadores</a><small>Faturamento, metas e gráficos</small></li>
+  <li><a href="#c16"><b>16</b>Análises</a><small>Ranking de produtos e de clientes</small></li>
+  <li><a href="#c17"><b>17</b>Nota fiscal (NFC-e)</a><small>O que é preciso e como ligar</small></li>
+  <li><a href="#c18"><b>18</b>Impressão</a><small>Cupom na impressora térmica</small></li>
+  <li><a href="#c19"><b>19</b>Auditoria</a><small>Quem alterou o quê</small></li>
+  <li><a href="#c20"><b>20</b>Configurações</a><small>Loja, horários, regras de pedido, metas, usuários, permissões e cópia de segurança</small></li>
+  <li><a href="#c21"><b>21</b>Rotina e dúvidas comuns</a><small>Passo a passo do dia e o que fazer quando algo dá errado</small></li>
+  <li><a href="#c22"><b>22</b>Antes de entrar no ar</a><small>O que falta e como testar hoje</small></li>
+</ol>
+
+<!-- ============================================================ -->
+<h1 id="c1"><span class="n">1</span>Visão geral</h1>
+<p>O sistema tem três partes, que conversam entre si o tempo todo:</p>
+<table>
+  <tr><th style="width:27%">Parte</th><th style="width:28%">Endereço</th><th>Para quem e para quê</th></tr>
+  <tr><td><b>Site de pedidos</b></td><td>tiacepizzas.com.br</td><td>O cliente vê o cardápio, monta a pizza, faz o pedido e acompanha a entrega.</td></tr>
+  <tr><td><b>Painel da equipe</b></td><td>tiacepizzas.com.br/admin</td><td>A pizzaria recebe os pedidos, controla cozinha, caixa, estoque, entregas, finanças e o conteúdo do site.</td></tr>
+  <tr><td><b>Aplicativo do entregador</b></td><td>tiacepizzas.com.br/entregador</td><td>O motoboy vê as entregas dele no celular e avisa quando sai, entrega ou tem um problema.</td></tr>
+</table>
+<p>Tudo roda no navegador (Chrome, Safari, Edge), no computador ou no celular. Não há nada para instalar.</p>
+
+<h2>As funções da equipe</h2>
+<p>Cada pessoa entra com o próprio e-mail e senha e tem uma função. A função define quais telas ela enxerga. A tabela mostra o padrão; o administrador pode mudar isso a qualquer momento (capítulo 20, Permissões).</p>
+<table>
+  <tr><th style="width:22%">Função</th><th>O que acessa por padrão</th></tr>
+  <tr><td><b>Administrador</b></td><td>Tudo, inclusive usuários, permissões e configurações.</td></tr>
+  <tr><td><b>Financeiro</b></td><td>Painel de indicadores, pedidos, caixa, financeiro, análises e fiscal.</td></tr>
+  <tr><td><b>Atendimento</b></td><td>Pedidos (inclusive lançar pedidos novos), clientes e a tela da cozinha.</td></tr>
+  <tr><td><b>Cozinha</b></td><td>Só a tela da cozinha.</td></tr>
+  <tr><td><b>Motoboy</b></td><td>Só o aplicativo do entregador, com as entregas atribuídas a ele.</td></tr>
+</table>
+
+<h2>O caminho de um pedido</h2>
+<p>Todo pedido passa pelas mesmas etapas. O cliente vê cada mudança na tela de acompanhamento, e várias coisas acontecem sozinhas:</p>
+<table>
+  <tr><th style="width:24%">Etapa</th><th style="width:33%">Quem muda</th><th>O que o sistema faz sozinho</th></tr>
+  <tr><td><b>Novo</b></td><td>Chega do site</td><td>Toca um aviso sonoro no painel.</td></tr>
+  <tr><td><b>Confirmado</b></td><td>Atendimento clica em Aceitar</td><td>Dá baixa dos ingredientes no estoque, calcula a previsão de entrega, emite a nota e imprime (se ligados).</td></tr>
+  <tr><td><b>Em preparo</b></td><td>Cozinha</td><td>—</td></tr>
+  <tr><td><b>Pronto</b></td><td>Cozinha</td><td>—</td></tr>
+  <tr><td><b>Saiu para entrega</b></td><td>Atendimento ou motoboy</td><td>Mostra o mapa com a posição do motoboy ao cliente.</td></tr>
+  <tr><td><b>Entregue</b></td><td>Atendimento ou motoboy</td><td>Marca como pago e lança a venda no caixa aberto.</td></tr>
+</table>
+<p>Fora do caminho normal existem três situações: <b>Cancelado</b> (devolve o estoque e estorna o caixa), <b>Problema na entrega</b> (o pedido fica destacado até ser resolvido) e <b>Reembolsado</b> (o dinheiro é devolvido depois da entrega). Elas são explicadas no capítulo 4.</p>
+<div class="dica"><p>Pedidos lançados pela própria equipe (balcão, telefone, WhatsApp) já nascem <b>confirmados</b>: não precisam ser aceitos.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c2"><span class="n">2</span>O site, do ponto de vista do cliente</h1>
+<p>Vale conhecer o que o cliente vê, para ajudar quando alguém ligar com dúvida. O site foi pensado primeiro para o celular: botões grandes, poucos passos e a sacola sempre à mão.</p>
+
+<h2>Página inicial</h2>
+<p>Mostra a capa, os banners, as promoções que estão valendo, os produtos em destaque e a explicação de como funciona. Tudo isso é montado no painel, em <b class="ui">Site e promoções</b> (capítulo 9). No topo ficam o cardápio, o acompanhamento de pedido, a conta e o selo <b class="ui">Aberto</b> ou <b class="ui">Fechado</b>.</p>
+<figure><img src="capturas/site-inicio.jpg" alt=""><figcaption>Página inicial no computador, com a capa e um banner.</figcaption></figure>
+
+<h2>Cardápio</h2>
+<p>Os produtos aparecem em cartões, separados por categoria. O cliente pode buscar por sabor ou ingrediente. Produto em promoção ganha um selo amarelo e mostra o preço antigo riscado. Produto marcado como indisponível aparece apagado, com o aviso “Indisponível hoje”.</p>
+<figure><img src="capturas/site-cardapio.jpg" alt=""><figcaption>Cardápio no computador: banner no topo, categorias e os cartões dos produtos.</figcaption></figure>
+<div class="celulares">
+  <figure><img src="capturas/site-inicio-celular.jpg" alt=""><figcaption>Página inicial no celular.</figcaption></figure>
+  <figure><img src="capturas/site-cardapio-celular.jpg" alt=""><figcaption>Cardápio com um banner e o selo de promoção.</figcaption></figure>
+  <figure><img src="capturas/site-produto.jpg" alt=""><figcaption>Ao tocar em um produto, os detalhes sobem sobre o cardápio.</figcaption></figure>
+</div>
+
+<h2>Montando a pizza</h2>
+<p>Ao tocar em uma pizza, a tela de detalhes abre por cima do cardápio, sem sair da página. Nela o cliente:</p>
+<ol>
+  <li>escolhe o <b>tamanho</b> (cada tamanho tem o seu preço);</li>
+  <li>decide se quer <b>inteira ou dividida</b> em mais de um sabor. Quantos sabores cabem depende do tamanho; o preço segue a regra escolhida nas configurações (o sabor mais caro ou a média);</li>
+  <li>escolhe a <b>borda</b> e os <b>adicionais</b>;</li>
+  <li>escreve uma <b>observação</b> (“sem cebola”, “bem assada”) e toca em <b class="ui">Adicionar</b>.</li>
+</ol>
+<p>A tela também mostra foto, ingredientes, promoções e informações nutricionais, quando cadastrados. O que aparece ou não é escolhido no painel (capítulo 9, Tela do produto).</p>
+<div class="celulares">
+  <figure><img src="capturas/site-produto-sabores.jpg" alt=""><figcaption>Dois sabores e borda recheada.</figcaption></figure>
+  <figure><img src="capturas/site-produto-nutricional.jpg" alt=""><figcaption>Informações nutricionais.</figcaption></figure>
+  <figure><img src="capturas/site-sacola.jpg" alt=""><figcaption>A sacola, com o subtotal.</figcaption></figure>
+</div>
+
+<h2>Finalizando o pedido</h2>
+<p>Na finalização o cliente informa como quer receber (<b>entrega</b> ou <b>retirada na loja</b>), nome, telefone, endereço e forma de pagamento. O pagamento é sempre feito na entrega ou na retirada: Pix, cartão de crédito ou débito na maquininha, ou dinheiro (com o campo de troco). Se tiver um cupom, aplica no resumo.</p>
+<figure class="alta"><img src="capturas/site-checkout.jpg" alt=""><figcaption>Finalização no computador: os dados à esquerda e o resumo com o total à direita.</figcaption></figure>
+<div class="celulares">
+  <figure><img src="capturas/site-checkout-celular.jpg" alt=""><figcaption>A mesma tela no celular.</figcaption></figure>
+</div>
+<p>A <b>taxa de entrega</b> depende de como a pizzaria configurou (capítulo 12):</p>
+<ul>
+  <li><b>Por bairro:</b> o cliente escolhe o bairro em uma lista e vê a taxa na hora.</li>
+  <li><b>Por distância:</b> o site localiza o endereço no mapa, calcula a distância até a loja e mostra a taxa. Se o pino cair no lugar errado, o cliente arrasta. Se o endereço estiver fora do raio, aparece o aviso “Este endereço está fora da nossa área de entrega” e o pedido não é enviado.</li>
+</ul>
+<figure class="media"><img src="capturas/site-checkout-distancia.jpg" alt=""><figcaption>Entrega por distância: o endereço localizado no mapa e a taxa calculada.</figcaption></figure>
+<div class="dica"><p>O preço que vale é sempre o calculado pelo sistema no momento do envio. Se um preço ou promoção mudar enquanto o cliente monta a sacola, o total cobrado é o atual.</p></div>
+
+<h2>Acompanhando o pedido</h2>
+<p>Depois de enviar, o cliente cai na tela de acompanhamento. Ela mostra o número do pedido, a previsão, a linha do tempo com o horário de cada etapa e o resumo. A tela se atualiza sozinha. Quem escolheu Pix vê a chave para copiar. No fim da página há um botão de WhatsApp que já abre a conversa com a frase “Olá, gostaria de falar sobre o pedido #…”.</p>
+<div class="celulares">
+  <figure><img src="capturas/site-acompanhar.jpg" alt=""><figcaption>Pedido recém-enviado.</figcaption></figure>
+  <figure><img src="capturas/site-acompanhar-pix.jpg" alt=""><figcaption>Chave Pix e resumo.</figcaption></figure>
+  <figure><img src="capturas/site-acompanhar-mapa.jpg" alt=""><figcaption>Pedido na rua, com o mapa do motoboy.</figcaption></figure>
+</div>
+<p>Quando o pedido sai para entrega e o motoboy está com o aplicativo aberto, aparece um <b>mapa com a posição aproximada</b> dele. Se o motoboy registrar um problema, o cliente vê o aviso e é convidado a falar com a pizzaria.</p>
+<p>Para voltar ao acompanhamento depois, o cliente usa <b class="ui">Acompanhar pedido</b> no topo do site e digita o código de 8 letras e números que apareceu ao finalizar. Os pedidos feitos naquele aparelho ficam listados ali.</p>
+
+<h2>Conta do cliente</h2>
+<p>O cliente pode pedir sem cadastro, só com nome e telefone. Se preferir, entra com a conta do Google (ou do Facebook, se ligado): assim os endereços ficam guardados e todos os pedidos aparecem em <b class="ui">Minha conta</b>.</p>
+<div class="celulares">
+  <figure><img src="capturas/site-entrar.jpg" alt=""><figcaption>Entrada com o Google.</figcaption></figure>
+  <figure><img src="capturas/site-conta-celular.jpg" alt=""><figcaption>Minha conta: pedidos e endereços.</figcaption></figure>
+  <figure><img src="capturas/site-acompanhar-problema.jpg" alt=""><figcaption>Aviso de problema na entrega.</figcaption></figure>
+</div>
+<div class="atencao"><p>A entrada com Google e Facebook só funciona depois de ligada no banco de dados (capítulo 22). Em <b class="ui">Configurações → Pedidos</b> você escolhe quais botões aparecem e se o pedido exige conta.</p></div>
+
+<h2>WhatsApp</h2>
+<p>O botão do WhatsApp aparece na página inicial e no cardápio (botão verde flutuante), na sacola, na finalização, no acompanhamento e no rodapé. O número é o cadastrado em <b class="ui">Configurações → Loja</b>.</p>
+
+<!-- ============================================================ -->
+<h1 id="c3"><span class="n">3</span>Entrando no painel</h1>
+<p>O painel fica em <b>tiacepizzas.com.br/admin</b> (ou pelo link “Área da equipe” no rodapé do site). Digite seu e-mail e sua senha e clique em <b class="ui">Entrar</b>. Se esquecer a senha, digite o e-mail, clique em <b class="ui">Esqueci a senha</b> e siga o link que chega por e-mail.</p>
+<figure class="media"><img src="capturas/painel-login.jpg" alt=""><figcaption>Tela de entrada da equipe.</figcaption></figure>
+<h2>O menu</h2>
+<p>À esquerda fica o menu com as telas liberadas para a sua função. No celular, o menu abre pelo botão de três riscos no topo. No pé do menu ficam:</p>
+<ul>
+  <li>seu nome e sua função;</li>
+  <li>o sinal <b>ao vivo</b>: verde quando os pedidos chegam na hora; amarelo (“a cada 45 s”) quando a conexão em tempo real caiu e a tela está se atualizando sozinha de tempos em tempos;</li>
+  <li>o botão do <b>alto-falante</b>, que liga e desliga o som de pedido novo;</li>
+  <li>o botão da <b>chave</b>, para trocar a senha, e o <b class="ui">Sair</b>.</li>
+</ul>
+<p>Quando há pedidos novos esperando, um número amarelo pisca ao lado de <b class="ui">Pedidos</b>.</p>
+<figure><img src="capturas/painel-menu-atendente.jpg" alt=""><figcaption>O painel visto por quem tem a função Atendimento: o menu mostra só as telas liberadas.</figcaption></figure>
+<div class="dica"><p>Deixe o painel aberto no computador da loja durante todo o expediente. É ele que toca o aviso de pedido novo, aceita automaticamente (se ligado) e manda imprimir.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c4"><span class="n">4</span>Pedidos</h1>
+<p>É a tela principal do expediente. A aba <b class="ui">Em andamento</b> mostra um quadro com uma coluna por etapa; a aba <b class="ui">Histórico</b> lista os pedidos por período.</p>
+<figure><img src="capturas/painel-pedidos.jpg" alt=""><figcaption>Quadro de pedidos. No alto, a faixa de alertas; em cada cartão, o botão que leva o pedido à próxima etapa.</figcaption></figure>
+
+<h2>Lendo um cartão</h2>
+<p>Cada cartão mostra o número do pedido, há quanto tempo ele chegou, o cliente, o bairro (ou “Retirada”/“Balcão”), o motoboy, os primeiros itens, o total e a forma de pagamento (com um ✓ quando já está pago). O botão do cartão avança o pedido: <b class="ui">Aceitar</b>, <b class="ui">Iniciar preparo</b>, <b class="ui">Marcar pronto</b>, <b class="ui">Saiu para entrega</b> e <b class="ui">Entregue e recebido</b>. Clicar em qualquer outra parte do cartão abre os detalhes.</p>
+
+<h2>Alertas de pedido parado</h2>
+<p>O sistema conta há quanto tempo cada pedido está na mesma etapa. Quando passa dos limites, o cartão ganha uma borda colorida e um selo, e a faixa amarela no topo mostra quantos pedidos estão em cada nível:</p>
+<table>
+  <tr><th style="width:22%">Nível</th><th>Padrão</th><th>Como aparece</th></tr>
+  <tr><td><b>Atenção</b></td><td>15 minutos na mesma etapa</td><td>Borda e selo amarelos</td></tr>
+  <tr><td><b>Atrasado</b></td><td>25 minutos</td><td>Borda e selo laranja</td></tr>
+  <tr><td><b>Crítico</b></td><td>40 minutos</td><td>Borda e selo vermelhos</td></tr>
+</table>
+<p>Os minutos de cada nível são definidos em <b class="ui">Configurações → Pedidos</b>. Os mesmos alertas aparecem na tela da cozinha.</p>
+
+<h2>Detalhes do pedido</h2>
+<figure><img src="capturas/painel-pedido-detalhe.jpg" alt=""><figcaption>Detalhes de um pedido, com o histórico de alterações no fim.</figcaption></figure>
+<p>Na janela de detalhes você encontra:</p>
+<ul>
+  <li><b>Cliente:</b> nome, telefone, o atalho <b class="ui">Avisar no WhatsApp</b> (abre a conversa com uma mensagem pronta) e <b class="ui">Link de acompanhamento</b> (copia o endereço para enviar ao cliente).</li>
+  <li><b>Entrega:</b> endereço, referência, distância (quando a entrega é por distância) e previsão.</li>
+  <li><b>Itens</b>, com adicionais e observações, e os valores.</li>
+  <li><b>Pagamento:</b> a forma pode ser trocada enquanto o pedido não estiver pago. <b class="ui">Confirmar pagamento</b> marca como pago e lança a venda no caixa; o botão vira <b class="ui">Pago ✓ (desfazer)</b>.</li>
+  <li><b>Motoboy responsável:</b> escolha quem vai levar. O pedido aparece na hora no aplicativo dele.</li>
+  <li><b>Nota fiscal:</b> situação da NFC-e e o botão para emitir (capítulo 17).</li>
+  <li><b>Histórico de alterações:</b> cada mudança de etapa, pagamento ou motoboy, com horário e quem fez.</li>
+</ul>
+<p>No rodapé ficam <b class="ui">Cozinha</b> (imprime a via da cozinha), <b class="ui">Imprimir</b> (cupom do cliente) e o botão verde da próxima etapa.</p>
+
+<h2>Cancelar, registrar problema e reembolsar</h2>
+<figure class="media"><img src="capturas/painel-pedido-cancelar.jpg" alt=""><figcaption>Cancelamento: o motivo é opcional e aparece para o cliente.</figcaption></figure>
+<table>
+  <tr><th style="width:19%">Ação</th><th style="width:27%">Quando usar</th><th>O que acontece</th></tr>
+  <tr><td><b class="ui">Cancelar</b></td><td>O pedido não vai ser entregue (cliente desistiu, endereço fora da área).</td><td>Os ingredientes voltam ao estoque. Se já estava pago, o valor é estornado do caixa. O pedido sai do faturamento. Não pode ser reaberto.</td></tr>
+  <tr><td><b class="ui">Problema</b></td><td>O pedido saiu e o motoboy não conseguiu entregar.</td><td>O pedido fica vermelho no quadro e o cliente é avisado. Depois: <b class="ui">Tentar entregar de novo</b>, cancelar ou reembolsar.</td></tr>
+  <tr><td><b class="ui">Reembolsar</b></td><td>O pedido foi entregue, mas o dinheiro será devolvido (pizza errada, chegou fria).</td><td>O valor sai do caixa e o pedido sai do faturamento. O estoque <b>não</b> volta, porque a pizza foi feita. O motivo é obrigatório.</td></tr>
+</table>
+<div class="atencao"><p>Se o pedido tem nota fiscal autorizada, cancele também a nota em <b class="ui">Fiscal</b>. A SEFAZ só aceita o cancelamento em até 30 minutos depois da emissão.</p></div>
+
+<h2>Histórico e busca</h2>
+<p>Para achar um pedido pelo número, digite-o em <b class="ui">Buscar nº do pedido</b>, no alto da tela, e aperte Enter: os detalhes abrem direto. Na aba <b class="ui">Histórico</b> você filtra por datas, situação e forma de pagamento, busca por número, nome ou telefone, e exporta a lista em <b class="ui">PDF</b>, <b class="ui">Excel</b> ou <b class="ui">CSV</b>.</p>
+<figure><img src="capturas/painel-pedidos-historico.jpg" alt=""><figcaption>Histórico de pedidos, com filtros e exportação.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c5"><span class="n">5</span>Novo pedido</h1>
+<p>Use <b class="ui">Novo pedido</b> para vendas no balcão e pedidos que chegam por telefone, WhatsApp ou iFood.</p>
+<figure><img src="capturas/painel-pdv.jpg" alt=""><figcaption>Novo pedido: os produtos à esquerda e o pedido sendo montado à direita.</figcaption></figure>
+<ol>
+  <li>Escolha <b class="ui">Balcão</b>, <b class="ui">Retirada</b> ou <b class="ui">Entrega</b>.</li>
+  <li>Digite o <b>telefone</b>. Se o cliente já existe, o nome e o último endereço são preenchidos sozinhos e aparece “Cliente já cadastrado”. No balcão, telefone e nome são opcionais.</li>
+  <li>Em entregas, confira o endereço e o bairro (ou a faixa de distância). A taxa pode ser alterada no campo ao lado.</li>
+  <li>Clique nos produtos para adicionar. As pizzas abrem a mesma tela de montagem do site.</li>
+  <li>Escolha o pagamento. Se quiser, informe desconto, troco e CPF na nota.</li>
+  <li>Deixe <b class="ui">Já foi pago</b> ligado quando o cliente pagou na hora (padrão no balcão). Em entregas, deixe desligado: o pagamento é registrado ao concluir.</li>
+  <li>Clique em <b class="ui">Lançar pedido</b>. Ele já entra como confirmado, dá baixa no estoque e segue para a cozinha.</li>
+</ol>
+<div class="atencao"><p>Se você marcar um pedido como pago sem ter um caixa aberto, o sistema avisa: o pagamento fica registrado no pedido, mas não entra no controle do caixa. Abra o caixa no começo do expediente (capítulo 11).</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c6"><span class="n">6</span>Cozinha</h1>
+<p>A tela da cozinha mostra só o que precisa ser feito, em letras grandes, do pedido mais antigo para o mais novo. Funciona bem em um tablet ou monitor na cozinha.</p>
+<figure><img src="capturas/painel-cozinha.jpg" alt=""><figcaption>Tela da cozinha. Borda azul: aguardando início; laranja: em preparo; as cores de alerta indicam atraso.</figcaption></figure>
+<ul>
+  <li>Cada cartão traz o número, se é entrega, retirada ou balcão, os itens com adicionais e as observações em destaque amarelo.</li>
+  <li><b class="ui">Iniciar preparo</b> passa o pedido para “Em preparo”. <b class="ui">Pronto!</b> avisa o atendimento e o cliente de que a pizza saiu do forno.</li>
+  <li>Quem tem a função Cozinha enxerga apenas esta tela.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h1 id="c7"><span class="n">7</span>Clientes</h1>
+<p>O cliente é cadastrado sozinho no primeiro pedido com telefone. A lista mostra quantos pedidos cada um fez, quanto gastou, o ticket médio e quando comprou pela última vez. Quem tem conta no site aparece com o selo “conta”.</p>
+<figure><img src="capturas/painel-clientes.jpg" alt=""><figcaption>Lista de clientes, do que mais gastou para o que menos gastou.</figcaption></figure>
+<ul>
+  <li><b>Busca:</b> por nome, telefone, e-mail ou número de um pedido (digite, por exemplo, 1234).</li>
+  <li><b>Segmentos:</b> novos (últimos 30 dias), fiéis (5 pedidos ou mais) e sumidos (sem pedir há 45 dias) — úteis para campanhas.</li>
+  <li><b class="ui">Exportar</b> baixa a lista em planilha; <b class="ui">Novo cliente</b> cadastra manualmente.</li>
+</ul>
+<p>Clique em um cliente para abrir a ficha: dados, observações (alergias, preferências, “portão azul”), atalho do WhatsApp, endereços e as compras — total de pedidos e pizzas, total gasto, ticket médio, produtos mais comprados e as datas dos pedidos. Clicar em um pedido abre os detalhes.</p>
+<figure><img src="capturas/painel-cliente-ficha.jpg" alt=""><figcaption>Ficha do cliente, com os produtos mais comprados e as datas dos pedidos.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c8"><span class="n">8</span>Cardápio</h1>
+<p>Aqui você controla o que aparece no site e quanto custa. A tela tem quatro abas: <b class="ui">Produtos</b>, <b class="ui">Categorias</b>, <b class="ui">Tamanhos de pizza</b> e <b class="ui">Bordas e adicionais</b>.</p>
+<figure><img src="capturas/painel-cardapio.jpg" alt=""><figcaption>Produtos por categoria, com os preços de cada tamanho e a chave “Disponível”.</figcaption></figure>
+<h2>Acabou um sabor?</h2>
+<p>Desligue a chave <b class="ui">Disponível</b> do produto. Ele continua no cardápio, apagado e com o aviso “Indisponível hoje”, e ninguém consegue pedi-lo. Ligue de novo quando voltar. A mudança vale na hora.</p>
+<h2>Criar ou editar um produto</h2>
+<p>Clique em <b class="ui">Novo produto</b> ou no lápis de um produto.</p>
+<figure><img src="capturas/painel-produto.jpg" alt=""><figcaption>Cadastro do produto: preços por tamanho, foto e chaves de exibição.</figcaption></figure>
+<ul>
+  <li><b>Nome, categoria e descrição curta</b> (a que aparece no cartão do cardápio).</li>
+  <li><b>Preço por tamanho</b>, nas pizzas. Deixe em branco o tamanho que não vende. Nos demais produtos há um preço só.</li>
+  <li><b>Ordem no cardápio:</b> números menores aparecem primeiro.</li>
+  <li><b>Foto:</b> até 3 MB.</li>
+  <li><b class="ui">Disponível hoje</b>, <b class="ui">Destaque na capa</b> (aparece na página inicial) e <b class="ui">Aparece no cardápio</b> (desligue para esconder de vez, sem apagar).</li>
+  <li><b>Ingredientes</b> e <b>informações nutricionais</b> (porção, calorias, carboidratos, proteínas, gorduras, sódio e alergênicos), mostrados na tela de detalhes.</li>
+  <li><b>Dados fiscais</b> (NCM, CFOP, CSOSN), só se o produto fugir do padrão definido em Fiscal.</li>
+</ul>
+<figure class="media"><img src="capturas/painel-produto-nutricional.jpg" alt=""><figcaption>Ingredientes e informações nutricionais.</figcaption></figure>
+<div class="dica"><p>Para excluir um produto que já foi vendido, prefira desligar <b class="ui">Aparece no cardápio</b>. Os pedidos antigos continuam no histórico de qualquer forma.</p></div>
+
+<h2>Ficha técnica</h2>
+<p>O botão da balança abre a ficha técnica: quanto de cada insumo vai em uma unidade do produto, por tamanho. É ela que permite a baixa automática do estoque (capítulo 10).</p>
+<figure><img src="capturas/painel-ficha-tecnica.jpg" alt=""><figcaption>Ficha técnica da Calabresa: insumo e quantidade para cada tamanho.</figcaption></figure>
+<p>Exemplo: se a Calabresa grande leva 0,28 kg de farinha e 0,196 kg de calabresa, cada Calabresa grande confirmada tira essas quantidades do estoque. Uma pizza meio a meio consome metade da ficha de cada sabor. Bordas e adicionais também têm ficha (botão da balança na aba Bordas e adicionais).</p>
+
+<h2>Categorias, tamanhos e adicionais</h2>
+<ul>
+  <li><b>Categorias:</b> marque <b class="ui">É pizza (preço por tamanho)</b> nas categorias de pizza; isso habilita tamanhos, meio a meio e bordas.</li>
+  <li><b>Tamanhos de pizza:</b> nome, descrição (“8 fatias”) e o <b>máximo de sabores</b> que o tamanho aceita (de 1 a 4).</li>
+  <li><b>Bordas e adicionais:</b> nome, tipo (borda recheada ou adicional) e preço. O cliente escolhe no máximo uma borda por pizza.</li>
+</ul>
+<figure class="media"><img src="capturas/painel-cardapio-tamanhos.jpg" alt=""><figcaption>Tamanhos de pizza e quantos sabores cada um aceita.</figcaption></figure>
+<figure class="media"><img src="capturas/painel-cardapio-adicionais.jpg" alt=""><figcaption>Bordas e adicionais.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c9"><span class="n">9</span>Site e promoções</h1>
+<p>Esta tela muda o que o cliente vê, sem mexer em código. São cinco abas.</p>
+<h2>Página inicial</h2>
+<figure class="alta"><img src="capturas/painel-site-inicio.jpg" alt=""><figcaption>Logo, capa, seções e textos da página inicial.</figcaption></figure>
+<ul>
+  <li><b>Logo e capa:</b> envie a logo, escreva o título, o trecho que aparece em amarelo, a frase de apresentação e, se quiser, uma imagem no lugar da pizza ilustrada.</li>
+  <li><b>Seções:</b> capa, banners, promoções, destaques e “como funciona”. Use as setas para mudar a <b>ordem</b>, a chave para <b>ligar ou desligar</b> e a lista para escolher o <b>tamanho</b> (pequeno, médio ou grande).</li>
+  <li><b>Textos:</b> títulos das seções e os três passos do “como funciona”.</li>
+</ul>
+<p>Clique em <b class="ui">Salvar página inicial</b> e em <b class="ui">Ver o site</b> para conferir.</p>
+
+<h2>Banners</h2>
+<p>Um banner tem título, texto de apoio, cor de fundo ou imagem, e pode levar a um link. Você escolhe <b>onde</b> ele aparece: no topo ou no meio da página inicial; no topo do cardápio, antes de uma categoria, entre os produtos de uma categoria ou no fim do cardápio. Também define o tamanho, a ordem e o período em que fica visível.</p>
+<figure class="media"><img src="capturas/painel-site-banners.jpg" alt=""><figcaption>Banners ativos, com pré-visualização.</figcaption></figure>
+<figure class="media"><img src="capturas/painel-site-banner-form.jpg" alt=""><figcaption>Cadastro de um banner: posição, tamanho, cor, botão, link e período.</figcaption></figure>
+
+<h2>Promoções</h2>
+<p>Uma promoção dá desconto em um ou mais produtos. Enquanto vale, o produto ganha o selo no cardápio, o preço antigo aparece riscado, a tela de detalhes explica a promoção e o produto entra na faixa de promoções da página inicial.</p>
+<figure class="media"><img src="capturas/painel-site-promocoes.jpg" alt=""><figcaption>Promoções cadastradas e a situação de cada uma.</figcaption></figure>
+<figure><img src="capturas/painel-site-promocao-form.jpg" alt=""><figcaption>Cadastro da promoção: desconto, produtos participantes, datas, horário e dias da semana.</figcaption></figure>
+<ul>
+  <li><b>Tipo de desconto:</b> percentual, valor em reais ou preço promocional fixo (este costuma valer para um tamanho só).</li>
+  <li><b>Produtos participantes:</b> marque na lista.</li>
+  <li><b>Quando vale:</b> data inicial e final, horário e dias da semana. Tudo é opcional; em branco, vale sempre. Exemplo: “Terça da Calabresa” = só a terça marcada.</li>
+  <li>A coluna <b>Situação</b> mostra “Valendo agora”, “Fora do período” ou “Desligada”.</li>
+</ul>
+<div class="dica"><p>Em pizzas meio a meio, o desconto vale para o sabor em promoção; o preço final segue a regra dos sabores (o mais caro ou a média).</p></div>
+
+<h2>Cupons</h2>
+<p>O cupom é um código que o cliente digita na finalização. Defina o código, o desconto (percentual ou valor fixo), o pedido mínimo, a validade e o limite de usos.</p>
+<figure class="media"><img src="capturas/painel-site-cupons.jpg" alt=""><figcaption>Cupons de desconto.</figcaption></figure>
+
+<h2>Tela do produto</h2>
+<p>Escolha o que o cliente vê ao tocar em um produto: foto, descrição, ingredientes, informações nutricionais, complementos (bordas e adicionais) e o campo de observações.</p>
+<figure class="media"><img src="capturas/painel-site-produto.jpg" alt=""><figcaption>O que aparece na tela de detalhes do produto.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c10"><span class="n">10</span>Estoque</h1>
+<p>O estoque controla os insumos (farinha, queijo, caixas de pizza, refrigerantes). As vendas dão baixa sozinhas pela ficha técnica; você só registra o que entra e o que se perde.</p>
+<figure><img src="capturas/painel-estoque.jpg" alt=""><figcaption>Insumos: quantidade, mínimo, custo médio e o selo “Repor” quando está abaixo do mínimo.</figcaption></figure>
+
+<h2>Como a baixa automática funciona</h2>
+<p>Suponha 1.000 g de farinha em estoque e uma pizza que usa 250 g na ficha técnica. Ao confirmar três pedidos com essa pizza, o sistema registra sozinho: estoque inicial de 1.000 g, consumo de 750 g e estoque restante de 250 g. Se um pedido for cancelado, os ingredientes dele voltam.</p>
+<div class="atencao"><p>A baixa acontece quando o pedido é <b>confirmado</b> (aceito), não quando chega. Produto sem ficha técnica não baixa estoque.</p></div>
+
+<h2>Cadastrar um insumo</h2>
+<p><b class="ui">Novo insumo</b>: nome, unidade de medida (kg, g, litro, ml ou unidade), <b>estoque mínimo</b> e fornecedor. O estoque mínimo é o limite do alerta: abaixo dele o insumo ganha o selo “Repor”, entra na contagem “Abaixo do mínimo” e aparece no aviso amarelo do Painel. Mude o mínimo quando quiser, no lápis.</p>
+
+<h2>Registrar entradas e saídas</h2>
+<figure class="media"><img src="capturas/painel-estoque-entrada.jpg" alt=""><figcaption>Entrada de 10 kg de bacon, com o custo por quilo.</figcaption></figure>
+<ul>
+  <li><b class="ui">Entrada</b> (compra): informe a quantidade e o custo por unidade. O sistema recalcula o <b>custo médio</b>, usado para estimar o custo dos produtos vendidos.</li>
+  <li>O botão ao lado (três traços) abre os outros movimentos: <b>saída</b> (uso interno), <b>perda</b> (vencimento, quebra) e <b>ajuste de contagem</b> — neste você digita o que contou na prateleira e o sistema calcula a diferença.</li>
+</ul>
+<h2>Movimentações e fornecedores</h2>
+<p>A aba <b class="ui">Movimentações</b> lista tudo o que entrou e saiu, inclusive as baixas de cada pedido. A aba <b class="ui">Fornecedores</b> guarda nome, telefone e CNPJ.</p>
+<figure><img src="capturas/painel-estoque-movimentos.jpg" alt=""><figcaption>Movimentações: vendas (com o número do pedido), entradas, perdas e ajustes.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c11"><span class="n">11</span>Caixa</h1>
+<p>O caixa controla o dinheiro do expediente. Só pode haver um caixa aberto por vez.</p>
+<h2>Abrir</h2>
+<p>No começo do dia, conte o dinheiro de troco que está na gaveta, digite em <b class="ui">Troco inicial</b> e clique em <b class="ui">Abrir caixa</b>.</p>
+<h2>Durante o expediente</h2>
+<figure><img src="capturas/painel-caixa.jpg" alt=""><figcaption>Caixa aberto: troco inicial, vendas recebidas, sangrias e o dinheiro que deve estar na gaveta.</figcaption></figure>
+<ul>
+  <li>Toda vez que um pedido é marcado como <b>pago</b>, a venda entra aqui sozinha, separada por forma de pagamento.</li>
+  <li><b class="ui">Sangria</b>: registre quando tirar dinheiro da gaveta (pagar o gás, levar para o banco, dar troco ao motoboy). O motivo é obrigatório.</li>
+  <li><b class="ui">Suprimento</b>: registre quando colocar dinheiro (reforço de troco).</li>
+  <li>O quadro escuro, <b>Dinheiro na gaveta</b>, mostra quanto deve haver em espécie: troco inicial + vendas em dinheiro + suprimentos − sangrias.</li>
+</ul>
+<figure class="media"><img src="capturas/painel-caixa-sangria.jpg" alt=""><figcaption>Registrando uma sangria.</figcaption></figure>
+<h2>Fechar</h2>
+<p>No fim do dia, clique em <b class="ui">Fechar caixa</b>, conte o dinheiro e informe o valor. O sistema compara com o esperado e mostra se bateu, sobrou ou faltou. Os caixas fechados ficam na lista “Caixas anteriores”; clique em um deles para rever os movimentos.</p>
+<figure class="media"><img src="capturas/painel-caixa-fechar.jpg" alt=""><figcaption>Fechamento: o valor contado é comparado com o esperado.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c12"><span class="n">12</span>Entregas</h1>
+<h2>Como a taxa é calculada</h2>
+<p>Na aba <b class="ui">Área e taxas</b> você escolhe entre dois modos. Pode trocar quando quiser; os cadastros do outro modo ficam guardados.</p>
+<h3>Por bairro</h3>
+<p>Cadastre os bairros ou regiões atendidos, a taxa de cada um e, se quiser, um tempo extra de entrega. O cliente só consegue pedir entrega para os bairros da lista.</p>
+<figure class="media"><img src="capturas/painel-entregas-bairro.jpg" alt=""><figcaption>Entrega por bairro.</figcaption></figure>
+<h3>Por distância</h3>
+<p>O sistema mede a distância em linha reta entre a loja e o endereço do cliente e aplica a faixa correspondente. A maior faixa ativa é o <b>raio máximo</b> de atendimento.</p>
+<figure><img src="capturas/painel-entregas-distancia.jpg" alt=""><figcaption>Entrega por distância: o ponto da loja, as faixas e os círculos de cada faixa no mapa.</figcaption></figure>
+<ol>
+  <li>Marque o <b>ponto da loja</b>: clique em <b class="ui">Localizar pelo endereço da loja</b> (usa o endereço de Configurações → Loja) ou informe latitude e longitude.</li>
+  <li>Cadastre as <b>faixas</b>. Exemplo: até 3 km, R$ 5; até 5 km, R$ 8; até 8 km, R$ 10; até 10 km, R$ 15.</li>
+  <li>Para aumentar o raio (de 10 para 15 km, por exemplo), crie uma faixa nova. Para reduzir, desative ou exclua a maior.</li>
+</ol>
+<div class="dica"><p>A distância é em linha reta, não o caminho pelas ruas. Na prática o trajeto real é um pouco maior; leve isso em conta ao definir as faixas.</p></div>
+
+<h2>Entregadores</h2>
+<p>A aba <b class="ui">Entregadores</b> lista quem faz entregas, quanto cada um recebe por entrega e se tem acesso ao aplicativo. Para dar acesso ao aplicativo, crie o usuário com a função <b>Motoboy</b> em Configurações → Usuários; ele entra nesta lista sozinho. A chave <b class="ui">Mostrar a posição do motoboy para o cliente</b> liga ou desliga o mapa do acompanhamento.</p>
+<figure class="media"><img src="capturas/painel-entregadores.jpg" alt=""><figcaption>Entregadores e a situação do acesso ao aplicativo.</figcaption></figure>
+<h2>Acerto de entregas</h2>
+<p>Escolha o período e veja, por entregador, quantas entregas fez, quanto de taxa os clientes pagaram e quanto a pizzaria deve a ele (entregas × valor por entrega). Exporte em PDF, Excel ou CSV. Depois de pagar, lance a saída em Financeiro, na categoria Motoboys.</p>
+<figure class="media"><img src="capturas/painel-entregas-acerto.jpg" alt=""><figcaption>Acerto de entregas do período.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c13"><span class="n">13</span>Aplicativo do motoboy</h1>
+<p>O motoboy abre <b>tiacepizzas.com.br/entregador</b> no navegador do celular e entra com o e-mail e a senha dele. Para ficar com cara de aplicativo, use a opção “Adicionar à tela inicial” do navegador.</p>
+<div class="celulares">
+  <figure><img src="capturas/motoboy-entregas.jpg" alt=""><figcaption>As entregas do dia e o aviso de localização.</figcaption></figure>
+  <figure><img src="capturas/motoboy-entrega-na-rua.jpg" alt=""><figcaption>Uma entrega na rua.</figcaption></figure>
+  <figure><img src="capturas/motoboy-problema.jpg" alt=""><figcaption>Registrando um problema.</figcaption></figure>
+</div>
+<p>Ele vê apenas as entregas que a pizzaria atribuiu a ele (no campo “Motoboy responsável” do pedido). Em cada entrega:</p>
+<ul>
+  <li><b>Endereço e referência</b> em letras grandes, e os itens do pedido.</li>
+  <li>A faixa colorida diz se é para <b>cobrar</b> (valor, forma de pagamento e o troco a levar) ou se <b>já está pago</b>.</li>
+  <li><b class="ui">Rota</b> abre o trajeto no aplicativo de mapas; <b class="ui">Ligar</b> e <b class="ui">WhatsApp</b> falam com o cliente.</li>
+  <li><b class="ui">Saí para entregar</b>, quando o pedido está pronto. O cliente é avisado.</li>
+  <li><b class="ui">Entreguei e recebi</b> conclui a entrega e registra o pagamento.</li>
+  <li><b class="ui">Tive um problema</b>: escolha um motivo pronto ou escreva. A pizzaria e o cliente são avisados na hora.</li>
+</ul>
+<h2>Localização</h2>
+<p>Enquanto há uma entrega na rua, o celular envia a posição a cada 15 segundos e o cliente acompanha no mapa. Na primeira vez o navegador pede permissão; é preciso aceitar. A faixa verde “Compartilhando sua localização com o cliente” confirma que está funcionando.</p>
+<div class="atencao"><p>O navegador só envia a posição com esta tela aberta. Se o motoboy trocar de aplicativo ou bloquear o celular, o envio para e o mapa do cliente some depois de 5 minutos sem atualização. A entrega em si não é afetada.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c14"><span class="n">14</span>Financeiro</h1>
+<p>No alto da tela escolha o período: <b class="ui">Hoje</b>, <b class="ui">Semana</b>, <b class="ui">Mês</b>, <b class="ui">Ano</b>, <b class="ui">30 dias</b>, <b class="ui">Mês passado</b> ou duas datas quaisquer. Ao lado ficam os filtros de categoria de despesa e de forma de pagamento.</p>
+<h2>Resumo e resultado</h2>
+<figure class="alta"><img src="capturas/painel-financeiro-resumo.jpg" alt=""><figcaption>Resumo: entradas, recebido, saídas e resultado, com o detalhamento por forma de pagamento e por categoria.</figcaption></figure>
+<ul>
+  <li><b>Entradas (faturamento bruto):</b> soma dos pedidos válidos do período. Cancelados e reembolsados não entram.</li>
+  <li><b>Recebido / a receber:</b> o que já foi marcado como pago e o que falta.</li>
+  <li><b>Saídas:</b> as despesas lançadas.</li>
+  <li><b>Resultado do período:</b> faturamento − custo dos insumos vendidos − perdas de estoque − despesas.</li>
+</ul>
+<div class="atencao"><p>O resultado é uma estimativa para acompanhar o negócio. Ele só fica fiel se as despesas forem lançadas e se as fichas técnicas e os custos de entrada no estoque estiverem em dia. Não substitui a contabilidade.</p></div>
+
+<h2>Faturamento por período</h2>
+<p>Gráfico e tabela do faturamento. Escolha agrupar por dia, semana ou mês. Na visão por dia, cada linha mostra se o dia foi Bom, Médio ou Ruim em relação à meta (capítulo 20).</p>
+<figure><img src="capturas/painel-financeiro-periodo.jpg" alt=""><figcaption>Faturamento por dia, com a classificação pela meta.</figcaption></figure>
+
+<h2>Entradas e saídas</h2>
+<p>A aba <b class="ui">Entradas</b> lista os pedidos do período, com a forma de pagamento e se já foram recebidos. A aba <b class="ui">Saídas (despesas)</b> é onde você lança os gastos: clique em <b class="ui">Nova despesa</b> e informe descrição, valor, data, categoria e forma de pagamento.</p>
+<figure class="media"><img src="capturas/painel-financeiro-entradas.jpg" alt=""><figcaption>Entradas do período.</figcaption></figure>
+<figure class="media"><img src="capturas/painel-financeiro-saidas.jpg" alt=""><figcaption>Saídas, com o total conforme os filtros.</figcaption></figure>
+<figure class="media"><img src="capturas/painel-financeiro-despesa.jpg" alt=""><figcaption>Lançando uma despesa.</figcaption></figure>
+<p>As categorias (Motoboys, Ingredientes, Embalagens, Manutenção, Aluguel…) são definidas em Configurações → Financeiro.</p>
+
+<h2>Exportar relatórios</h2>
+<p>Os botões <b class="ui">PDF</b>, <b class="ui">Excel</b> e <b class="ui">CSV</b>, no alto, geram o relatório do período com os filtros escolhidos: resultado, entradas por forma de pagamento, faturamento por período, saídas por categoria e as listas detalhadas de entradas e saídas. No Excel, cada parte vem em uma aba.</p>
+
+<!-- ============================================================ -->
+<h1 id="c15"><span class="n">15</span>Painel de indicadores</h1>
+<p>O Painel resume o desempenho do período escolhido e se atualiza conforme os pedidos chegam.</p>
+<figure><img src="capturas/painel-indicadores.jpg" alt=""><figcaption>Painel: aviso de estoque baixo, indicadores com a classificação pela meta e o gráfico de faturamento.</figcaption></figure>
+<ul>
+  <li><b>Indicadores:</b> faturamento, pedidos, ticket médio, a receber, tempo de preparo, tempo até a entrega, cancelamentos e clientes atendidos. A seta mostra a variação em relação ao período anterior de mesmo tamanho.</li>
+  <li><b>Bom, Médio ou Ruim:</b> aparece ao lado dos indicadores que têm meta. As metas são suas (Configurações → Metas e indicadores).</li>
+  <li><b>Dias do período pela meta:</b> quantos dias foram bons, médios e ruins em faturamento.</li>
+  <li><b>Gráficos:</b> faturamento ao longo do tempo, pedidos por horário, faturamento por dia da semana, mais vendidos, clientes que mais gastaram, formas de pagamento, bairros, canais de venda e modalidades. Passe o mouse sobre um ponto ou barra para ver o valor.</li>
+  <li><b>Estoque baixo:</b> a faixa amarela lista os insumos abaixo do mínimo.</li>
+</ul>
+<figure><img src="capturas/painel-indicadores-graficos.jpg" alt=""><figcaption>Mais abaixo no Painel: horários de pico, dias da semana, mais vendidos e melhores clientes.</figcaption></figure>
+
+<h1 id="c16"><span class="n">16</span>Análises</h1>
+<p>Responde a perguntas como “qual pizza mais vendeu este mês?” e “qual cliente mais comprou em agosto?”. Escolha o período e a aba.</p>
+<h2>Produtos</h2>
+<figure><img src="capturas/painel-analises-produtos.jpg" alt=""><figcaption>Ranking de produtos, com a participação de cada um nas vendas.</figcaption></figure>
+<p>Os três quadros do alto mostram o mais vendido em quantidade, o de maior faturamento e o menos vendido (ou quantos não venderam nada). A tabela lista todos os produtos com quantidade, faturamento, participação nas vendas e número de pedidos. Pizzas de mais de um sabor contam a fração de cada sabor.</p>
+<h2>Clientes</h2>
+<figure><img src="capturas/painel-analises-clientes.jpg" alt=""><figcaption>Ranking de clientes do período.</figcaption></figure>
+<p>Mostra quem mais gastou e quem mais pediu. Clique em um cliente para ver, só daquele período, o número de pedidos e de pizzas, o total gasto, o ticket médio, os produtos comprados e as datas dos pedidos.</p>
+<figure class="media"><img src="capturas/painel-analises-cliente.jpg" alt=""><figcaption>Compras de um cliente no período.</figcaption></figure>
+<div class="dica"><p>As duas listas podem ser exportadas. Use-as para decidir promoções: um produto parado pode ganhar desconto; clientes sumidos podem receber um cupom.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c17"><span class="n">17</span>Nota fiscal (NFC-e)</h1>
+<p>O sistema emite a Nota Fiscal de Consumidor Eletrônica pela Focus NFe, um serviço pago que faz a ponte com a SEFAZ. A emissão vem <b>desligada</b>. Enquanto estiver desligada, o cupom impresso sai com o aviso “não é documento fiscal”.</p>
+<figure class="media"><img src="capturas/painel-fiscal.jpg" alt=""><figcaption>Fiscal → Configuração, com o passo a passo à direita.</figcaption></figure>
+<h2>O que é preciso</h2>
+<ol>
+  <li>CNPJ com Inscrição Estadual, credenciado para NFC-e na SEFAZ do estado (a contabilidade faz).</li>
+  <li>Certificado digital A1 e o CSC (Código de Segurança do Contribuinte).</li>
+  <li>Conta na Focus NFe, com a empresa, o certificado e o CSC cadastrados.</li>
+  <li>Os tokens da Focus NFe gravados no servidor — tarefa técnica, descrita no arquivo README do projeto.</li>
+</ol>
+<h2>Como ligar</h2>
+<ol>
+  <li>Em <b class="ui">Fiscal → Configuração</b>, preencha CNPJ, razão social e inscrição estadual.</li>
+  <li>Confira com a contabilidade o NCM, o CFOP e o CSOSN padrão.</li>
+  <li>Deixe o ambiente em <b>Homologação (testes)</b>, ligue <b class="ui">Emissão de NFC-e ligada</b> e emita algumas notas de teste.</li>
+  <li>Quando estiver tudo certo, mude o ambiente para <b>Produção (valendo)</b>.</li>
+</ol>
+<p>Com <b class="ui">Emitir sozinho ao confirmar o pedido</b> ligado, a nota sai no aceite. Também é possível emitir pelo botão <b class="ui">Emitir NFC-e</b> nos detalhes do pedido. A aba <b class="ui">Notas emitidas</b> lista as notas, abre o DANFE e o XML, permite tentar de novo as rejeitadas e cancelar (em até 30 minutos).</p>
+<div class="atencao"><p>A emissão de nota foi programada conforme a documentação da Focus NFe, mas <b>ainda não foi testada com uma conta de verdade</b>. Faça os testes em homologação junto com a contabilidade antes de usar em produção. Se a empresa for MEI, pergunte ao contador se a NFC-e é obrigatória no seu caso.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c18"><span class="n">18</span>Impressão</h1>
+<p>O cupom é impresso pelo navegador, em bobina de 80 mm ou 58 mm. Em <b class="ui">Configurações → Impressão</b> você escolhe a largura, se imprime sozinho ao confirmar o pedido e se sai também a via da cozinha.</p>
+<figure class="media"><img src="capturas/painel-config-impressao.jpg" alt=""><figcaption>Configurações de impressão e o botão do cupom de teste.</figcaption></figure>
+<h2>Imprimir direto, sem a janela do navegador</h2>
+<ol>
+  <li>Instale o programa (driver) da impressora térmica e defina-a como <b>impressora padrão</b> do computador da loja.</li>
+  <li>Nas preferências da impressora, escolha o papel de 80 mm e ative o corte ao fim de cada página.</li>
+  <li>Crie um atalho do Chrome só para o painel, com a opção <code>--kiosk-printing</code>:
+    <ul>
+      <li>Windows: <code>"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing https://tiacepizzas.com.br/admin</code></li>
+      <li>Mac: <code>open -a "Google Chrome" --args --kiosk-printing https://tiacepizzas.com.br/admin</code></li>
+    </ul>
+  </li>
+  <li>Feche todas as janelas do Chrome e abra pelo atalho. Use <b class="ui">Imprimir cupom de teste</b> para conferir.</li>
+</ol>
+<div class="atencao"><p>A impressão ainda não foi testada em uma impressora térmica de verdade (ela ainda não foi comprada). Ao instalar, imprima o cupom de teste e confira margens e corte antes do primeiro expediente.</p></div>
+
+<!-- ============================================================ -->
+<h1 id="c19"><span class="n">19</span>Auditoria</h1>
+<p>A Auditoria registra as alterações importantes: quem fez, quando, o valor anterior e o novo. Ninguém consegue apagar ou editar esses registros pelo painel, nem o administrador.</p>
+<figure><img src="capturas/painel-auditoria.jpg" alt=""><figcaption>Auditoria: cada linha mostra o usuário, o registro alterado e a mudança (de → para).</figcaption></figure>
+<p>São registradas mudanças de preço, alterações manuais de estoque, mudanças de situação e pagamento de pedidos, cancelamentos, promoções, cupons, taxas de entrega, entregadores, despesas, configurações, usuários e permissões. Filtre por período, pelo que foi alterado e por usuário ou registro.</p>
+
+<!-- ============================================================ -->
+<h1 id="c20"><span class="n">20</span>Configurações</h1>
+<p>Aqui ficam as regras da operação. Quase tudo o que varia na pizzaria muda por esta tela, sem programador.</p>
+<h2>Loja</h2>
+<p>Nome, telefone, WhatsApp, Instagram, chave Pix, endereço e um aviso opcional que aparece no topo do site (“Hoje abrimos às 19h”).</p>
+<figure class="media"><img src="capturas/painel-config-loja.jpg" alt=""><figcaption>Dados da loja.</figcaption></figure>
+<h2>Horários</h2>
+<p>Marque os dias em que abre e os horários. Se fecha depois da meia-noite, basta informar (por exemplo, 18:00 às 01:00). Fora do horário, o site mostra “Fechado” e não aceita pedidos. <b>Situação da loja</b> permite forçar aberta ou fechada em um dia fora do normal; lembre de voltar para Automático.</p>
+<figure class="media"><img src="capturas/painel-config-horarios.jpg" alt=""><figcaption>Horários de funcionamento.</figcaption></figure>
+<h2>Pedidos</h2>
+<figure class="alta"><img src="capturas/painel-config-pedidos.jpg" alt=""><figcaption>Regras de pedido, alertas de atraso e conta do cliente.</figcaption></figure>
+<ul>
+  <li><b>Aceitar pedidos pelo site</b> e <b>aceitar automaticamente</b> (confirma, emite nota e imprime sem ninguém clicar; o painel precisa estar aberto no computador da loja).</li>
+  <li><b>Pedido mínimo</b>, <b>tempo de preparo</b> e <b>tempo de entrega</b> (formam a previsão mostrada ao cliente).</li>
+  <li><b>Preço da pizza com mais de um sabor:</b> o sabor mais caro ou a média.</li>
+  <li><b>Alertas de pedido parado:</b> os minutos de Atenção, Atrasado e Crítico.</li>
+  <li><b>Conta do cliente:</b> quais entradas oferecer (Google, Facebook) e se só aceita pedidos de quem tem conta.</li>
+</ul>
+<h2>Metas e indicadores</h2>
+<p>Defina o que é ruim e o que é bom para faturamento por dia, pedidos por dia, ticket médio, tempo de preparo e cancelamentos. Entre os dois valores fica Médio. Exemplo do faturamento: abaixo de R$ 1.000 é Ruim, a partir de R$ 2.000 é Bom.</p>
+<figure class="media"><img src="capturas/painel-config-metas.jpg" alt=""><figcaption>Metas que definem Bom, Médio e Ruim.</figcaption></figure>
+<h2>Financeiro</h2>
+<p>A lista de categorias de despesa, uma por linha.</p>
+<figure class="media"><img src="capturas/painel-config-financeiro.jpg" alt=""><figcaption>Categorias de despesa.</figcaption></figure>
+
+<h2>Usuários</h2>
+<p>Só administradores veem esta aba. <b class="ui">Novo usuário</b> cria o acesso de alguém da equipe: nome, e-mail, senha inicial (a pessoa troca depois) e função. Na lista você muda a função e bloqueia ou libera o acesso. Quando alguém sair da equipe, bloqueie o acesso.</p>
+<figure class="media"><img src="capturas/painel-config-usuarios.jpg" alt=""><figcaption>Usuários do painel.</figcaption></figure>
+<figure class="media"><img src="capturas/painel-config-usuario-novo.jpg" alt=""><figcaption>Criando o acesso de um motoboy.</figcaption></figure>
+<h2>Permissões</h2>
+<p>Marque as telas que cada função pode usar. A regra vale também no banco de dados: quem não tem a tela marcada não consegue ver nem alterar aquelas informações, mesmo tentando por fora do painel. A mudança vale no próximo acesso da pessoa.</p>
+<figure class="alta"><img src="capturas/painel-config-permissoes.jpg" alt=""><figcaption>O que cada função pode usar.</figcaption></figure>
+<h2>Sistema</h2>
+<p><b class="ui">Baixar cópia de segurança</b> gera um arquivo com todos os dados (pedidos, clientes, cardápio, estoque, caixa e configurações). Faça pelo menos uma vez por semana e guarde em local seguro, porque o arquivo contém dados de clientes.</p>
+<figure class="media"><img src="capturas/painel-config-sistema.jpg" alt=""><figcaption>Cópia de segurança.</figcaption></figure>
+
+<!-- ============================================================ -->
+<h1 id="c21"><span class="n">21</span>Rotina e dúvidas comuns</h1>
+<h2>Ao abrir</h2>
+<ol>
+  <li>Abra o painel no computador da loja (pelo atalho da impressora) e confira o sinal “ao vivo” e o som.</li>
+  <li><b>Caixa → Abrir caixa</b>, com o troco inicial.</li>
+  <li>Em <b>Cardápio</b>, desligue o que não tem hoje.</li>
+  <li>Confira no <b>Painel</b> se há aviso de estoque baixo.</li>
+</ol>
+<h2>Durante o expediente</h2>
+<ol>
+  <li>Pedido novo chegou (som + número piscando): <b>Pedidos → Aceitar</b>.</li>
+  <li>A cozinha toca em <b>Iniciar preparo</b> e depois em <b>Pronto!</b>.</li>
+  <li>Em entregas, escolha o <b>motoboy responsável</b>. Ele marca a saída e a entrega pelo aplicativo.</li>
+  <li>Em retiradas, clique em <b>Entregar e receber</b> quando o cliente buscar.</li>
+  <li>Fique de olho na faixa de alertas: pedido vermelho pede atenção imediata.</li>
+</ol>
+<h2>Ao fechar</h2>
+<ol>
+  <li>Confira se não sobrou pedido no quadro.</li>
+  <li><b>Caixa → Fechar caixa</b>, com o dinheiro contado.</li>
+  <li>Lance as despesas do dia em <b>Financeiro → Saídas</b>.</li>
+</ol>
+<h2>Toda semana</h2>
+<ul>
+  <li>Registre as compras em <b>Estoque → Entrada</b>, com o custo.</li>
+  <li>Faça o <b>acerto dos motoboys</b> em Entregas.</li>
+  <li>Baixe a <b>cópia de segurança</b> em Configurações → Sistema.</li>
+</ul>
+
+<h2>Dúvidas comuns</h2>
+<table class="longa">
+  <tr><th style="width:36%">Situação</th><th>O que fazer</th></tr>
+  <tr><td>O pedido novo não tocou.</td><td>Veja se o alto-falante do menu está ligado e o volume do computador. O navegador só toca som depois do primeiro clique na página.</td></tr>
+  <tr><td>O menu mostra “a cada 45 s”.</td><td>A conexão em tempo real caiu. Os pedidos continuam chegando, com até 45 segundos de atraso. Verifique a internet e recarregue a página.</td></tr>
+  <tr><td>O cliente diz que o site está fechado.</td><td>Confira Configurações → Horários e a Situação da loja (pode ter ficado em “Forçar fechada”).</td></tr>
+  <tr><td>O cliente não consegue pedir entrega.</td><td>Por bairro: o bairro dele não está cadastrado. Por distância: o endereço está fora do raio, ou o ponto da loja não foi marcado.</td></tr>
+  <tr><td>Marquei como pago por engano.</td><td>Abra o pedido e clique em <b>Pago ✓ (desfazer)</b>. A venda é estornada do caixa.</td></tr>
+  <tr><td>Aceitei um pedido errado.</td><td>Abra o pedido e use <b>Cancelar</b>. O estoque volta.</td></tr>
+  <tr><td>O estoque não baixou.</td><td>O produto está sem ficha técnica, ou o pedido ainda não foi confirmado.</td></tr>
+  <tr><td>O estoque ficou diferente da prateleira.</td><td>Use o ajuste de contagem (botão de três traços do insumo) e digite o que contou.</td></tr>
+  <tr><td>O caixa não bateu.</td><td>Veja os movimentos do caixa: sangria sem registro e pedido pago em dinheiro marcado como Pix são as causas mais comuns.</td></tr>
+  <tr><td>Um funcionário não vê uma tela.</td><td>A função dele não tem aquela tela liberada. Um administrador ajusta em Configurações → Permissões.</td></tr>
+  <tr><td>O mapa do motoboy não aparece.</td><td>O motoboy precisa estar com o aplicativo aberto e com a localização permitida, e a chave de rastreamento ligada em Entregas → Entregadores.</td></tr>
+  <tr><td>Quem mudou este preço?</td><td>Veja em Auditoria, filtrando por “Preço de pizza” ou “Produto”.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h1 id="c22"><span class="n">22</span>Antes de entrar no ar</h1>
+<p>O sistema está construído e testado em ambiente de demonstração. Para funcionar de verdade, faltam passos que dependem de contas e dados da pizzaria:</p>
+<table>
+  <tr><th style="width:30%">O que falta</th><th>Para que serve</th></tr>
+  <tr><td><b>Banco de dados (Supabase)</b></td><td>É onde os dados ficam guardados. Sem ele, o site publicado mostra o aviso de que não está ligado ao banco. Criar a conta é gratuito.</td></tr>
+  <tr><td><b>Domínio (Cloudflare)</b></td><td>Fazer tiacepizzas.com.br abrir o site. Hoje o domínio ainda aponta para a HostGator.</td></tr>
+  <tr><td><b>Primeiro usuário</b></td><td>O primeiro usuário criado no banco vira administrador; os demais são criados pelo painel.</td></tr>
+  <tr><td><b>Dados reais</b></td><td>Endereço, WhatsApp, horários, bairros ou faixas de entrega e o cardápio. O que existe hoje é exemplo.</td></tr>
+  <tr><td><b>Entrada com Google/Facebook</b></td><td>Exige criar as credenciais no Google e na Meta e ligá-las no banco. Até lá, os clientes pedem sem cadastro.</td></tr>
+  <tr><td><b>Nota fiscal</b></td><td>Documentos da empresa e conta na Focus NFe (capítulo 17).</td></tr>
+  <tr><td><b>Impressora térmica</b></td><td>Instalar e testar o cupom (capítulo 18).</td></tr>
+</table>
+<p>Algumas partes só poderão ser conferidas depois que o banco de verdade existir: a chegada de pedidos em tempo real, o envio de fotos, a criação de usuários, a entrada com Google e a nota fiscal. No ambiente de demonstração essas partes são simuladas.</p>
+<p>Pagamento online (Pix automático ou cartão pelo site) não faz parte desta versão: o pagamento é sempre na entrega ou na retirada.</p>
+
+<h2>Como ver o sistema funcionando hoje</h2>
+<p>No computador onde o projeto está instalado, abra o terminal na pasta do projeto e rode:</p>
+<p><code>npm run dev:demo</code></p>
+<p>Depois abra <b>http://localhost:5173</b> no navegador. O ambiente vem com um mês de pedidos, clientes e despesas fictícios, e nada do que você fizer ali afeta dados reais: tudo some ao encerrar. Os usuários de teste, todos com a senha <code>teste1234</code>, são:</p>
+<table>
+  <tr><th style="width:36%">E-mail</th><th style="width:22%">Função</th><th>Onde entrar</th></tr>
+  <tr><td>dona@teste.local</td><td>Administrador</td><td>/admin</td></tr>
+  <tr><td>fin@teste.local</td><td>Financeiro</td><td>/admin</td></tr>
+  <tr><td>ana@teste.local</td><td>Atendimento</td><td>/admin</td></tr>
+  <tr><td>ze@teste.local</td><td>Cozinha</td><td>/admin</td></tr>
+  <tr><td>carlos@teste.local</td><td>Motoboy</td><td>/entregador</td></tr>
+</table>
+<p>No site, o botão “Continuar com Google” entra como uma cliente fictícia, sem sair do computador. Nesse ambiente o painel se atualiza a cada 45 segundos (não há tempo real) e a nota fiscal não funciona.</p>
+
+</body>
+</html>

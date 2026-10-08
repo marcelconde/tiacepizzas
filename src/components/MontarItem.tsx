@@ -20,11 +20,11 @@ const opcao = (ativo: boolean, centralizado = false) =>
   )
 
 /** Preço com o valor de tabela riscado quando há promoção. */
-export function Preco({ tabela, promo, className }: { tabela: number; promo: number; className?: string }) {
+export function Preco({ tabela, promo, className, empilhado }: { tabela: number; promo: number; className?: string; empilhado?: boolean }) {
   if (promo >= tabela) return <span className={cx('tabular-nums', className)}>{brl(tabela)}</span>
   return (
-    <span className={cx('tabular-nums', className)}>
-      <s className="mr-1.5 text-xs font-normal text-stone-400">{brl(tabela)}</s>
+    <span className={cx('tabular-nums', empilhado && 'flex flex-col items-end leading-tight', className)}>
+      <s className={cx('text-xs font-normal text-stone-400', !empilhado && 'mr-1.5')}>{brl(tabela)}</s>
       {brl(promo)}
     </span>
   )
@@ -157,7 +157,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
                     {t.nome}
                     {t.descricao && <span className="block text-xs font-normal text-stone-500">{t.descricao}</span>}
                   </span>
-                  <Preco tabela={tabela} promo={precoComPromocao(catalogo, produto.id, t.id, tabela)} />
+                  <Preco empilhado tabela={tabela} promo={precoComPromocao(catalogo, produto.id, t.id, tabela)} />
                 </button>
               )
             })}

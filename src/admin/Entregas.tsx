@@ -148,10 +148,11 @@ function Area() {
                   <Erro>A loja ainda não foi localizada. Sem isso, os clientes não conseguem pedir entrega por distância.</Erro>
                 </div>
               )}
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <Botao variante="secundario" carregando={ocupado} disabled={!podeConfigurar} onClick={localizarLoja}>
-                  <MapPin className="size-4" /> Localizar pelo endereço da loja
-                </Botao>
+              <Botao variante="secundario" className="mt-3" carregando={ocupado} disabled={!podeConfigurar} onClick={localizarLoja}>
+                <MapPin className="size-4" /> Localizar pelo endereço da loja
+              </Botao>
+              <p className="mt-4 text-xs text-stone-500">Ou informe as coordenadas (copie do Google Maps, clicando com o botão direito sobre a loja):</p>
+              <div className="mt-1 flex flex-wrap items-end gap-2">
                 <Campo rotulo="Latitude" className="w-28">
                   <Entrada inputMode="decimal" placeholder="-23.5505" value={lat} onChange={(e) => setLat(e.target.value)} />
                 </Campo>

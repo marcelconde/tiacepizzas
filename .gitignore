@@ -7,3 +7,7 @@ dist
 .DS_Store
 supabase/.temp
 supabase/.branches
+
+# gerados pelo roteiro do manual
+docs/manual/capturas/
+docs/*.pdf

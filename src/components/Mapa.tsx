@@ -39,6 +39,7 @@ export default function Mapa({ marcadores, circulosKm = [], className = 'h-64' }
     }).addTo(m)
     camada.current = L.layerGroup().addTo(m)
     mapa.current = m
+    enquadrado.current = '' // mapa novo ainda não tem enquadramento (o React recria o mapa ao remontar)
     return () => {
       m.remove()
       mapa.current = null

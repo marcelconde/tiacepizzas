@@ -15,17 +15,8 @@ minimum_password_length = 8
 [auth.email]
 enable_signup = false
 
-# Entrada social dos clientes. Preencha as credenciais em Authentication > Providers no painel do Supabase
-# (ou defina as variáveis abaixo antes de rodar "supabase config push").
-[auth.external.google]
-enabled = true
-client_id = "env(GOOGLE_CLIENT_ID)"
-secret = "env(GOOGLE_CLIENT_SECRET)"
-
-[auth.external.facebook]
-enabled = false
-client_id = "env(FACEBOOK_CLIENT_ID)"
-secret = "env(FACEBOOK_CLIENT_SECRET)"
+# Entrada social dos clientes (Google e Facebook): ligue em Authentication > Providers no painel do Supabase,
+# com as credenciais criadas no Google Cloud e na Meta. O passo a passo está no README.
 
 [functions.fiscal]
 verify_jwt = true

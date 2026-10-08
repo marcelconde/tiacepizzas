@@ -14,13 +14,14 @@ export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
 /** Mensagem que já identifica o pedido para a equipe. */
 export const mensagemPedido = (numero: number) => `Olá, gostaria de falar sobre o pedido #${numero}.`
 
-export function SeloAberta() {
+export function SeloAberta({ curto }: { curto?: boolean }) {
   const { aberta } = useLoja()
   if (aberta == null) return null
   return (
     <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap', aberta ? 'bg-manjericao-100 text-manjericao-700' : 'bg-stone-200 text-stone-700')}>
       <span className={cx('size-2 rounded-full', aberta ? 'bg-manjericao-500' : 'bg-stone-500')} />
-      {aberta ? 'Aberto agora' : 'Fechado agora'}
+      {aberta ? 'Aberto' : 'Fechado'}
+      {!curto && ' agora'}
     </span>
   )
 }
@@ -99,6 +100,8 @@ export default function SiteLayout() {
   const [sacola, setSacola] = useState(false)
   const { pathname } = useLocation()
   const noCheckout = pathname.startsWith('/checkout')
+  // o botão flutuante do WhatsApp fica onde a pessoa está escolhendo; nas outras telas há um link próprio
+  const comBotaoWhats = pathname === '/' || pathname.startsWith('/cardapio')
   const whats = linkWhatsApp(config?.whatsapp, 'Olá! Vim pelo site.')
   const temLogin = config?.login_google || config?.login_facebook
 
@@ -107,7 +110,7 @@ export default function SiteLayout() {
   }, [pathname])
 
   const link = ({ isActive }: { isActive: boolean }) =>
-    cx('rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap', isActive ? 'text-molho-700' : 'text-forno-700 hover:text-molho-700')
+    cx('rounded-lg px-2.5 py-2 text-sm font-semibold whitespace-nowrap md:px-3', isActive ? 'text-molho-700' : 'text-forno-700 hover:text-molho-700')
   const conta = (sessao || temLogin) && (
     <NavLink to={sessao ? '/conta' : '/entrar'} className={link}>
       <span className="inline-flex items-center gap-1.5">
@@ -152,8 +155,8 @@ export default function SiteLayout() {
             Acompanhar
           </NavLink>
           {conta}
-          <span className="ml-auto pr-3">
-            <SeloAberta />
+          <span className="ml-auto pr-2">
+            <SeloAberta curto />
           </span>
         </nav>
       </header>
@@ -189,7 +192,7 @@ export default function SiteLayout() {
         </div>
       )}
 
-      {whats && !noCheckout && (
+      {whats && comBotaoWhats && (
         <a
           href={whats}
           target="_blank"
