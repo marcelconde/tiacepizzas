@@ -182,6 +182,7 @@ const TABELAS_BACKUP = [
 
 function Sistema() {
   const aviso = useAviso()
+  const { config } = useLoja()
   const [andamento, setAndamento] = useState('')
 
   async function baixar() {
@@ -189,6 +190,10 @@ function Sistema() {
     try {
       for (const tabela of TABELAS_BACKUP) {
         setAndamento(tabela)
+        if (tabela === 'configuracoes') {
+          copia[tabela] = [config]
+          continue
+        }
         const linhas: unknown[] = []
         for (let de = 0; ; de += 1000) {
           const { data, error } = await supabase.from(tabela).select('*').range(de, de + 999)

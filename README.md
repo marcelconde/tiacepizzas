@@ -24,6 +24,7 @@ Regras que valem a pena conhecer:
 - **O visitante só lê o cardápio.** O cliente com conta só enxerga os próprios dados. A equipe enxerga o que a função dela permite (tabela `permissoes`, aplicada no banco por RLS — não é só o menu que some). O motoboy não lê tabela nenhuma: usa funções que só devolvem as entregas dele.
 - **Confirmar um pedido** dá baixa no estoque pela ficha técnica; **cancelar** devolve o estoque e estorna o caixa; **reembolsar** estorna o caixa de um pedido já entregue.
 - **Marcar como pago** lança a venda no caixa aberto.
+- **Ninguém se cadastra sozinho com e-mail e senha.** A equipe é criada pela administradora; o banco recusa qualquer outro cadastro por e-mail. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.
 - **Auditoria**: mudanças de preço, estoque, situação de pedido, configurações, usuários e permissões ficam registradas com quem, quando, antes e depois. Ninguém apaga pelo painel.
 
 ## Colocar no ar (uma vez)
@@ -37,9 +38,9 @@ Regras que valem a pena conhecer:
    npx supabase login
    npx supabase link --project-ref SEU_PROJECT_REF
    npx supabase db push --include-seed      # cria as tabelas e o cardápio de exemplo
-   npx supabase config push                 # ajusta os links de login e desliga o cadastro por e-mail
-   npx supabase functions deploy fiscal
-   npx supabase functions deploy admin-usuarios
+   npx supabase config push                 # ajusta os links de login e fecha o cadastro público
+   npx supabase functions deploy fiscal --use-api           # --use-api dispensa o Docker
+   npx supabase functions deploy admin-usuarios --use-api
    ```
 
 3. No painel do Supabase, em **Authentication → Users → Add user**, crie o usuário da dona da loja.
@@ -48,11 +49,11 @@ Regras que valem a pena conhecer:
 ### 2. Site (GitHub Pages)
 
 O site é publicado sozinho a cada `git push` na branch `main` (`.github/workflows/deploy.yml`).
-Ele precisa de duas variáveis públicas do projeto Supabase (Project Settings → API):
+Ele precisa de duas variáveis públicas do projeto Supabase (Project Settings → API Keys; a chave é a *publishable*):
 
 ```bash
 gh variable set VITE_SUPABASE_URL --body "https://SEU-PROJETO.supabase.co"
-gh variable set VITE_SUPABASE_ANON_KEY --body "CHAVE-PUBLICA-ANON"
+gh variable set VITE_SUPABASE_ANON_KEY --body "sb_publishable_..."
 gh workflow run "Publicar site"
 ```
 
@@ -78,7 +79,8 @@ Sem isto o cliente pede normalmente, só não tem conta.
 1. **Google**: no [Google Cloud Console](https://console.cloud.google.com), crie um projeto, configure a tela de consentimento e crie uma credencial *OAuth client ID* do tipo *Web application* com a URL de retorno `https://SEU-PROJETO.supabase.co/auth/v1/callback`.
 2. No Supabase, em **Authentication → Providers → Google**, ligue o provedor e cole o *Client ID* e o *Client Secret*.
 3. **Facebook**: o mesmo caminho, com um aplicativo em [developers.facebook.com](https://developers.facebook.com) (produto *Facebook Login*) e o provedor Facebook no Supabase.
-4. No painel da pizzaria, em **Configurações → Pedidos → Conta do cliente**, ligue os botões que devem aparecer no site.
+4. Em `supabase/config.toml`, troque `enable_signup = false` por `true` na seção `[auth]` e rode `npx supabase config push`. Sem isso o primeiro acesso de um cliente é recusado. (O cadastro por e-mail continua barrado pelo banco.)
+5. No painel da pizzaria, em **Configurações → Pedidos → Conta do cliente**, ligue os botões que devem aparecer no site.
 
 Quem entra com Google/Facebook é sempre cliente: nunca ganha acesso ao painel.
 

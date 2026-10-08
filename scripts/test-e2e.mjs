@@ -67,7 +67,7 @@ async function preencher(p, rotulo, valor) {
 }
 const entrar = async (p, rota, email) => { await ir(p, rota); await p.type('input[type=email]', email); await p.type('input[type=password]', SENHA); await p.click('button[type=submit]'); await dormir(2500) }
 const tok = (await (await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'dona@teste.local', password: SENHA }) })).json()).access_token
-const api = async (caminho, opcoes = {}) => (await fetch(`${API}/rest/v1/${caminho}`, { ...opcoes, headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json', prefer: 'return=representation', ...opcoes.headers } })).json()
+const api = async (caminho, opcoes = {}) => (await fetch(`${API}/rest/v1/${caminho}`, { ...opcoes, headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json', prefer: 'return=representation', ...opcoes.headers } })).text().then((t) => (t ? JSON.parse(t) : null))
 const rpc = (fn, args) => api(`rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) })
 const baixados = async (n) => { for (let i = 0; i < 40; i++) { const f = readdirSync(DL).filter((x) => !x.endsWith('.crdownload')); if (f.length >= n) return f; await dormir(300) } return readdirSync(DL) }
 async function teste(nome, fn) { try { await fn(); console.log("  ✓", nome) } catch (e) { console.log("  ✗", nome, "\n     ", e.stack.split("\n").slice(0, 8).join("\n      ")); process.exitCode = 1 } }
@@ -199,7 +199,7 @@ await teste('criar usuário motoboy já ligado a um entregador; metas salvas', a
   assert.equal((await api(`entregadores?select=nome&usuario_id=eq.${perfil.id}`))[0].nome, 'João Entregas')
   await clicar(pc, 'Metas e indicadores', '[role=tab]')
   await preencher(pc, 'Faturamento por dia: ruim', '1200'); await clicar(pc, 'Salvar', 'button[type=submit]'); await dormir(900)
-  assert.equal((await api('configuracoes?select=metas'))[0].metas.faturamento_dia.ruim, 1200)
+  assert.equal((await rpc('config_interna', {})).metas.faturamento_dia.ruim, 1200)
 })
 
 await teste('motoboy conclui a entrega pelo aplicativo', async () => {
@@ -232,7 +232,7 @@ await teste('cliente com conta: novo endereço, pedido e lista de pedidos', asyn
 })
 
 await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', async () => {
-  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'distancia' }) })
+  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'distancia' }), headers: { prefer: 'return=minimal' } })
   const cli = await nova('desktop'); await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'main button'); await clicar(cli, 'Adicionar ·', 'button'); await ir(cli, '/checkout', 1200)
   await preencher(cli, 'Nome', 'Teste Distância'); await preencher(cli, 'WhatsApp', '11973000000')
   await preencher(cli, 'Rua / avenida', 'Rua Augusta'); await preencher(cli, 'Número', '1500'); await cli.keyboard.press('Tab'); await dormir(6000)
@@ -244,7 +244,7 @@ await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', 
   console.log(`     (endereço ${achou ? 'localizado pelo mapa' : 'marcado manualmente'}: ${ult.distancia_km} km, taxa ${ult.taxa_entrega})`)
   const fora = await rpc('calcular_entrega', { p_lat: -23.9, p_lng: -46.65 })
   assert.equal(fora.dentro, false)
-  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'bairro' }) })
+  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'bairro' }), headers: { prefer: 'return=minimal' } })
   await cli.close()
 })
 

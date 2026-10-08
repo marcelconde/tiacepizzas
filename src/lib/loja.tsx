@@ -31,6 +31,18 @@ const Contexto = createContext<Loja>({ config: null, conteudo: null, catalogo: v
 // e o cardápio é buscado de novo a cada 2 minutos e sempre que a pessoa volta para a aba.
 const INTERVALO = 120_000
 
+// O visitante só pode ler estas colunas. O que é interno (metas, alertas, impressão…) vem de config_interna(),
+// que só responde à equipe; para os demais valem estes padrões, que o site não usa.
+const CONFIG_PUBLICA =
+  'id, nome_loja, slogan, telefone, whatsapp, instagram, cep, logradouro, numero, bairro, cidade, uf, fuso_horario, horarios, loja_aberta_manual, aceita_pedidos_online, pedido_minimo, tempo_preparo_min, tempo_entrega_min, regra_preco_sabores, chave_pix, mensagem_aviso, modo_entrega, loja_lat, loja_lng, rastreio_motoboy, exigir_login, login_google, login_facebook'
+const CONFIG_INTERNA_PADRAO: Pick<Configuracoes, 'auto_aceitar' | 'impressao' | 'alertas_pedido' | 'metas' | 'categorias_despesa'> = {
+  auto_aceitar: false,
+  impressao: { largura: 80, auto: false, via_cozinha: true },
+  alertas_pedido: { atencao: 15, atrasado: 25, critico: 40 },
+  metas: {},
+  categorias_despesa: ['Outros'],
+}
+
 export function LojaProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<Configuracoes | null>(null)
   const [conteudo, setConteudo] = useState<SiteConteudo | null>(null)
@@ -39,6 +51,7 @@ export function LojaProvider({ children }: { children: ReactNode }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   const ultima = useRef(0)
+  const usuario = useRef<string | null>(null)
 
   const recarregar = useCallback(async () => {
     if (!configurado) {
@@ -47,8 +60,11 @@ export function LojaProvider({ children }: { children: ReactNode }) {
       return
     }
     ultima.current = Date.now()
-    const [cfg, site, cat, tam, prod, adi, bai, fai, ban, promo, ab] = await Promise.all([
-      supabase.from('configuracoes').select('*').single(),
+    const { data: sessao } = await supabase.auth.getSession()
+    usuario.current = sessao.session?.user.id ?? null
+    const [cfg, interna, site, cat, tam, prod, adi, bai, fai, ban, promo, ab] = await Promise.all([
+      supabase.from('configuracoes').select(CONFIG_PUBLICA).single(),
+      sessao.session ? supabase.rpc('config_interna') : Promise.resolve({ data: null, error: null }),
       supabase.from('site_conteudo').select('dados').single(),
       supabase.from('categorias').select('*').eq('ativo', true).order('ordem'),
       supabase.from('tamanhos').select('*').eq('ativo', true).order('ordem'),
@@ -65,7 +81,7 @@ export function LojaProvider({ children }: { children: ReactNode }) {
     else {
       const hoje = isoDia()
       setErro(null)
-      setConfig(cfg.data as Configuracoes)
+      setConfig({ ...CONFIG_INTERNA_PADRAO, ...(cfg.data as unknown as Configuracoes), ...((interna.data as Partial<Configuracoes> | null) ?? {}) })
       setConteudo((site.data as { dados: SiteConteudo }).dados)
       setCatalogo({
         categorias: cat.data as Categoria[],
@@ -91,7 +107,12 @@ export function LojaProvider({ children }: { children: ReactNode }) {
     const t = setInterval(() => document.visibilityState === 'visible' && recarregar(), INTERVALO)
     document.addEventListener('visibilitychange', seVelho)
     window.addEventListener('focus', seVelho)
+    // entrou ou saiu alguém: as configurações internas mudam de dono (fora do retorno do evento, como o supabase-js pede)
+    const { data: escuta } = supabase.auth.onAuthStateChange((_evento, s) => {
+      if ((s?.user.id ?? null) !== usuario.current) setTimeout(recarregar, 0)
+    })
     return () => {
+      escuta.subscription.unsubscribe()
       clearInterval(t)
       document.removeEventListener('visibilitychange', seVelho)
       window.removeEventListener('focus', seVelho)

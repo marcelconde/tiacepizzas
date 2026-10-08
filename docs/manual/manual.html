@@ -74,7 +74,7 @@
 <h1 id="como" style="break-before: auto">Como usar este manual</h1>
 <p>Este manual explica, tela por tela, como usar o sistema da Tia Cê Pizzas. Ele foi escrito para quem vai operar a pizzaria no dia a dia, sem precisar entender de programação. Cada capítulo cobre uma parte do sistema e pode ser lido separadamente.</p>
 <p>Nos textos, os nomes de botões e campos aparecem assim: <b class="ui">Aceitar</b>. As caixas verdes trazem dicas; as amarelas, cuidados importantes.</p>
-<div class="atencao"><p><b>O sistema ainda não está no ar para os clientes.</b> Ele está pronto e pode ser explorado no computador com dados fictícios (capítulo 22), mas para funcionar de verdade ainda falta criar a conta do banco de dados, apontar o domínio e cadastrar os dados reais da loja. O que falta está listado no capítulo 22.</p></div>
+<div class="atencao"><p><b>O sistema ainda não está no ar para os clientes.</b> Ele está pronto e pode ser explorado no computador com dados fictícios (capítulo 22), mas para funcionar de verdade ainda falta criar o primeiro usuário, apontar o domínio e cadastrar os dados reais da loja. O que falta está listado no capítulo 22.</p></div>
 
 <h2>Sumário</h2>
 <ol class="sumario">
@@ -643,18 +643,17 @@
 
 <!-- ============================================================ -->
 <h1 id="c22"><span class="n">22</span>Antes de entrar no ar</h1>
-<p>O sistema está construído e testado em ambiente de demonstração. Para funcionar de verdade, faltam passos que dependem de contas e dados da pizzaria:</p>
+<p>O sistema está construído e o banco de dados já existe (Supabase, em São Paulo), com um cardápio de exemplo. Para funcionar de verdade, faltam passos que dependem de contas e dados da pizzaria:</p>
 <table>
   <tr><th style="width:30%">O que falta</th><th>Para que serve</th></tr>
-  <tr><td><b>Banco de dados (Supabase)</b></td><td>É onde os dados ficam guardados. Sem ele, o site publicado mostra o aviso de que não está ligado ao banco. Criar a conta é gratuito.</td></tr>
+  <tr><td><b>Primeiro usuário</b></td><td>O primeiro usuário criado no painel do Supabase (Authentication → Users → Add user) vira administrador; os demais são criados pelo painel da pizzaria.</td></tr>
   <tr><td><b>Domínio (Cloudflare)</b></td><td>Fazer tiacepizzas.com.br abrir o site. Hoje o domínio ainda aponta para a HostGator.</td></tr>
-  <tr><td><b>Primeiro usuário</b></td><td>O primeiro usuário criado no banco vira administrador; os demais são criados pelo painel.</td></tr>
   <tr><td><b>Dados reais</b></td><td>Endereço, WhatsApp, horários, bairros ou faixas de entrega e o cardápio. O que existe hoje é exemplo.</td></tr>
   <tr><td><b>Entrada com Google/Facebook</b></td><td>Exige criar as credenciais no Google e na Meta e ligá-las no banco. Até lá, os clientes pedem sem cadastro.</td></tr>
   <tr><td><b>Nota fiscal</b></td><td>Documentos da empresa e conta na Focus NFe (capítulo 17).</td></tr>
   <tr><td><b>Impressora térmica</b></td><td>Instalar e testar o cupom (capítulo 18).</td></tr>
 </table>
-<p>Algumas partes só poderão ser conferidas depois que o banco de verdade existir: a chegada de pedidos em tempo real, o envio de fotos, a criação de usuários, a entrada com Google e a nota fiscal. No ambiente de demonstração essas partes são simuladas.</p>
+<p>Algumas partes só podem ser conferidas com o primeiro usuário criado e a loja em uso: a chegada de pedidos em tempo real, o envio de fotos, a criação de usuários, a entrada com Google e a nota fiscal. No ambiente de demonstração essas partes são simuladas.</p>
 <p>Pagamento online (Pix automático ou cartão pelo site) não faz parte desta versão: o pagamento é sempre na entrega ou na retirada.</p>
 
 <h2>Como ver o sistema funcionando hoje</h2>

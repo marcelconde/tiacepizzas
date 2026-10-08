@@ -128,7 +128,19 @@ await teste('visitante lê cardápio, promoções e banners, mas nada da operaç
     await falha(q(`select relatorio_faturamento(current_date, current_date)`), 'permission denied')
     await falha(q(`select baixar_estoque_pedido(gen_random_uuid(), false)`), 'permission denied')
     await falha(q(`select minhas_entregas()`), 'permission denied')
+    // da loja o visitante lê o que o site mostra, não o que é interno
+    assert.ok((await q(`select nome_loja, horarios, pedido_minimo, chave_pix from configuracoes`)).length === 1)
+    for (const c of ['metas', 'categorias_despesa', 'alertas_pedido', 'impressao', 'auto_aceitar', '*']) await falha(q(`select ${c} from configuracoes`), 'permission denied')
+    await falha(q(`select config_interna()`), 'permission denied')
   })
+  // cliente com conta não é equipe: a função responde vazio; a equipe recebe as configurações internas
+  assert.equal(await como('authenticated', cliente, async () => (await q(`select config_interna() as c`))[0].c), null)
+  await como('authenticated', cliente, () => falha(q(`select metas from configuracoes`), 'permission denied'))
+  const interna = await como('authenticated', cozinha, async () => (await q(`select config_interna() as c`))[0].c)
+  assert.deepEqual(Object.keys(interna).sort(), ['alertas_pedido', 'auto_aceitar', 'categorias_despesa', 'impressao', 'metas'])
+  // e a administradora continua conseguindo gravar
+  const atual = await um(`select metas, auto_aceitar from configuracoes`)
+  await como('authenticated', admin, () => db.query(`update configuracoes set metas = $1::jsonb, auto_aceitar = $2 where id = 1`, [JSON.stringify(atual.metas), atual.auto_aceitar]))
 })
 
 await teste('cada papel só alcança os módulos liberados para ele', async () => {

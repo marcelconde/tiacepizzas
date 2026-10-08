@@ -101,8 +101,8 @@ const topo = (p) => p.evaluate(() => window.scrollTo(0, 0))
 
 // acesso direto à API do ambiente de teste, para preparar situações (ex.: achar o pedido que está na rua)
 const tokenAdmin = (await (await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'dona@teste.local', password: SENHA }) })).json()).access_token
-const api = async (caminho, opcoes = {}) => (await fetch(`${API}/rest/v1/${caminho}`, { ...opcoes, headers: { authorization: `Bearer ${tokenAdmin}`, 'content-type': 'application/json', prefer: 'return=representation', ...opcoes.headers } })).json()
-const modoEntrega = (modo) => api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: modo }) })
+const api = async (caminho, opcoes = {}) => (await fetch(`${API}/rest/v1/${caminho}`, { ...opcoes, headers: { authorization: `Bearer ${tokenAdmin}`, 'content-type': 'application/json', prefer: 'return=representation', ...opcoes.headers } })).text().then((t) => (t ? JSON.parse(t) : null))
+const modoEntrega = (modo) => api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: modo }), headers: { prefer: 'return=minimal' } })
 await modoEntrega('bairro')
 
 // =====================================================================================

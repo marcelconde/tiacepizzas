@@ -266,6 +266,8 @@ http.createServer(async (req, res) => {
     if (!m) return enviar(404, { message: 'rota não encontrada: ' + url.pathname })
     const tabela = m[1]; const t = `public.${id(tabela)}`
     const prefer = req.headers.prefer ?? ''
+    // como o PostgREST: só lê as linhas gravadas quando pedem; quem grava não precisa poder ler todas as colunas
+    const retorno = (alias) => (prefer.includes('return=representation') ? `to_jsonb(${alias}.*) as r` : '1 as r')
     const objeto = (req.headers.accept ?? '').includes('vnd.pgrst.object')
     const params = [...url.searchParams]
     const valores = []
@@ -288,15 +290,15 @@ http.createServer(async (req, res) => {
         const pk = pks[tabela].map(id); const resto = cols.filter((c) => !pk.includes(c))
         sql += ` on conflict (${pk.join(', ')}) do ${resto.length ? 'update set ' + resto.map((c) => `${c} = excluded.${c}`).join(', ') : 'nothing'}`
       }
-      linhas = (await executar((tx) => tx.query(sql + ' returning to_jsonb(' + id(tabela) + '.*) as r', [JSON.stringify(lista)]))).rows.map((r) => r.r)
+      linhas = (await executar((tx) => tx.query(sql + ' returning ' + retorno(id(tabela)), [JSON.stringify(lista)]))).rows.map((r) => r.r)
     } else if (req.method === 'PATCH') {
       const cols = Object.keys(corpo).map(id)
       valores.push(JSON.stringify(corpo))
       const atrib = cols.length === 1 ? cols[0] : `(${cols.join(', ')})`
-      const sql = `update ${t} a set ${atrib} = (select ${cols.join(', ')} from jsonb_populate_record(null::${t}, $1::jsonb))${filtros(params, 'a', valores, tabela)} returning to_jsonb(a.*) as r`
+      const sql = `update ${t} a set ${atrib} = (select ${cols.join(', ')} from jsonb_populate_record(null::${t}, $1::jsonb))${filtros(params, 'a', valores, tabela)} returning ${retorno('a')}`
       linhas = (await executar((tx) => tx.query(sql, valores))).rows.map((r) => r.r)
     } else if (req.method === 'DELETE') {
-      linhas = (await executar((tx) => tx.query(`delete from ${t} a${filtros(params, 'a', valores, tabela)} returning to_jsonb(a.*) as r`, valores))).rows.map((r) => r.r)
+      linhas = (await executar((tx) => tx.query(`delete from ${t} a${filtros(params, 'a', valores, tabela)} returning ${retorno('a')}`, valores))).rows.map((r) => r.r)
     }
 
     const cabecalhos = total != null ? { 'Content-Range': `${linhas.length ? `0-${linhas.length - 1}` : '*'}/${total}` } : {}
