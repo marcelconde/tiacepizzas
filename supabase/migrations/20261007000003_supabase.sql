@@ -2,24 +2,33 @@
 -- Tia Cê Pizzas — integrações com o Supabase (login, fotos e tempo real)
 -- =====================================================================
 
--- Todo usuário criado no Auth ganha um perfil. O primeiro vira admin;
--- os seguintes só entram se criados pelo painel (app_metadata é gravado
--- apenas pelo servidor, então ninguém se autopromove no cadastro).
+-- Quem ganha perfil no painel:
+--  * o primeiro usuário criado por e-mail e senha (no painel do Supabase) vira administrador;
+--  * usuários criados pelo painel do sistema, que chegam com o papel em app_metadata (só o servidor grava ali).
+-- Clientes que entram pelo site com Google/Facebook não ganham perfil: são apenas clientes.
 create function public.tg_novo_usuario() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
+  v_papel text := new.raw_app_meta_data ->> 'papel';
+  v_nome text := coalesce(nullif(new.raw_user_meta_data ->> 'nome', ''), split_part(new.email, '@', 1));
   v_primeiro boolean;
 begin
-  select not exists (select 1 from perfis) into v_primeiro;
+  select not exists (select 1 from perfis) and coalesce(new.raw_app_meta_data ->> 'provider', 'email') = 'email'
+  into v_primeiro;
+  if v_papel is null and not v_primeiro then
+    return new;
+  end if;
+
   insert into perfis (id, nome, email, papel, ativo)
   values (
-    new.id,
-    coalesce(nullif(new.raw_user_meta_data ->> 'nome', ''), split_part(new.email, '@', 1)),
-    new.email,
-    case when v_primeiro then 'admin'::papel_usuario
-         else coalesce((new.raw_app_meta_data ->> 'papel')::papel_usuario, 'atendente') end,
+    new.id, v_nome, new.email,
+    case when v_primeiro then 'admin'::papel_usuario else v_papel::papel_usuario end,
     v_primeiro or coalesce((new.raw_app_meta_data ->> 'ativo')::boolean, false)
   );
+  -- o motoboy já nasce ligado a um cadastro de entregador
+  if v_papel = 'motoboy' and not v_primeiro then
+    insert into entregadores (nome, usuario_id) values (v_nome, new.id);
+  end if;
   return new;
 end $$;
 revoke execute on function public.tg_novo_usuario() from public, anon, authenticated;

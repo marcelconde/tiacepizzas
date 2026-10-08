@@ -81,6 +81,27 @@ begin
 
   insert into cupons (codigo, tipo, valor, pedido_minimo) values ('BEMVINDO10', 'percentual', 10, 50);
 
+  -- entrega por distância (usada quando o modo de entrega é "por distância")
+  insert into faixas_entrega (ate_km, taxa, tempo_extra_min) values (3, 5, 0), (5, 8, 5), (8, 10, 10), (10, 15, 15);
+
+  -- uma promoção e dois banners de exemplo
+  insert into promocoes (nome, descricao, tipo, valor, selo) values
+    ('Semana da Calabresa', 'Calabresa com 15% de desconto em todos os tamanhos.', 'percentual', 15, '15% OFF')
+    returning id into v_id;
+  insert into promocao_produtos (promocao_id, produto_id) select v_id, id from produtos where nome = 'Calabresa';
+  insert into banners (titulo, subtitulo, cor, link, botao, posicao, tamanho, ordem) values
+    ('Peça pelo site e acompanhe em tempo real', 'Do forno até a sua porta, você vê cada etapa.', 'forno', '/cardapio', 'Ver cardápio', 'inicio_meio', 'medio', 1),
+    ('Borda recheada em qualquer pizza', 'Catupiry, cheddar ou chocolate.', 'queijo', null, null, 'cardapio_topo', 'pequeno', 1);
+
+  update produtos set
+    ingredientes = 'Molho de tomate, mussarela, orégano, azeitonas',
+    nutricional = '{"porcao": "1 fatia (120 g)", "calorias": 290, "carboidratos": 33, "proteinas": 13, "gorduras": 11, "sodio": 590, "alergenicos": "Contém glúten e leite."}'::jsonb
+  where nome = 'Mussarela';
+  update produtos set
+    ingredientes = 'Molho de tomate, calabresa fatiada, cebola, orégano',
+    nutricional = '{"porcao": "1 fatia (125 g)", "calorias": 310, "carboidratos": 32, "proteinas": 12, "gorduras": 14, "sodio": 720, "alergenicos": "Contém glúten. Pode conter leite."}'::jsonb
+  where nome = 'Calabresa';
+
   -- estoque
   insert into insumos (nome, unidade, estoque_minimo) values ('Farinha de trigo', 'kg', 10) returning id into i_farinha;
   insert into insumos (nome, unidade, estoque_minimo) values ('Molho de tomate', 'kg', 5) returning id into i_molho;

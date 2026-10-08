@@ -1,10 +1,12 @@
 -- =====================================================================
 -- Tia Cê Pizzas — esquema principal
--- Tabelas, regras de segurança (RLS) e gatilhos.
+-- Tabelas e gatilhos. As regras de acesso ficam em 20261008000002_seguranca.sql.
 -- =====================================================================
 
-create type public.papel_usuario as enum ('admin', 'atendente', 'cozinha');
-create type public.status_pedido as enum ('novo', 'confirmado', 'em_preparo', 'pronto', 'saiu_entrega', 'entregue', 'cancelado');
+create type public.papel_usuario as enum ('admin', 'atendente', 'cozinha', 'financeiro', 'motoboy');
+create type public.status_pedido as enum (
+  'novo', 'confirmado', 'em_preparo', 'pronto', 'saiu_entrega', 'problema_entrega', 'entregue', 'cancelado', 'reembolsado'
+);
 create type public.tipo_pedido as enum ('entrega', 'retirada', 'balcao');
 create type public.origem_pedido as enum ('site', 'balcao', 'telefone', 'whatsapp', 'ifood');
 create type public.forma_pagamento as enum ('dinheiro', 'pix', 'credito', 'debito', 'vale_refeicao');
@@ -24,9 +26,10 @@ create table public.perfis (
   criado_em timestamptz not null default now()
 );
 
+-- Equipe interna do painel (o motoboy só usa o aplicativo de entregas).
 create function public.eh_staff() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from perfis where id = auth.uid() and ativo);
+  select exists (select 1 from perfis where id = auth.uid() and ativo and papel <> 'motoboy');
 $$;
 
 create function public.eh_admin() returns boolean
@@ -71,6 +74,26 @@ create table public.configuracoes (
   chave_pix text,
   mensagem_aviso text,
   impressao jsonb not null default '{"largura": 80, "auto": true, "via_cozinha": true}'::jsonb,
+  -- entrega: por bairro (tabela bairros) ou por distância (tabela faixas_entrega, a partir do ponto da loja)
+  modo_entrega text not null default 'bairro' check (modo_entrega in ('bairro', 'distancia')),
+  loja_lat numeric(9,6),
+  loja_lng numeric(9,6),
+  rastreio_motoboy boolean not null default true,
+  -- conta do cliente
+  exigir_login boolean not null default false,
+  login_google boolean not null default true,
+  login_facebook boolean not null default false,
+  -- minutos sem mudança de status até cada nível de alerta
+  alertas_pedido jsonb not null default '{"atencao": 15, "atrasado": 25, "critico": 40}'::jsonb,
+  -- metas: abaixo de "ruim" fica vermelho, a partir de "bom" fica verde (ou o inverso quando menor é melhor)
+  metas jsonb not null default '{
+    "faturamento_dia": {"ruim": 1000, "bom": 2000},
+    "pedidos_dia": {"ruim": 15, "bom": 30},
+    "ticket_medio": {"ruim": 50, "bom": 70},
+    "tempo_preparo": {"ruim": 45, "bom": 30, "menor_melhor": true},
+    "cancelamentos_pct": {"ruim": 10, "bom": 3, "menor_melhor": true}
+  }'::jsonb,
+  categorias_despesa jsonb not null default '["Motoboys", "Ingredientes", "Embalagens", "Manutenção", "Aluguel", "Energia", "Água", "Gás", "Internet e telefone", "Salários", "Marketing", "Impostos e taxas", "Outros"]'::jsonb,
   atualizado_em timestamptz not null default now()
 );
 insert into public.configuracoes (id) values (1);
@@ -134,6 +157,9 @@ create table public.produtos (
   ncm text,
   cfop text,
   csosn text,
+  ingredientes text,
+  -- {porcao, calorias, carboidratos, proteinas, gorduras, sodio, alergenicos}
+  nutricional jsonb,
   criado_em timestamptz not null default now()
 );
 create index on public.produtos (categoria_id);
@@ -180,13 +206,18 @@ create table public.cupons (
 create table public.clientes (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
-  telefone text not null unique,
+  telefone text,
   email text,
   cpf text,
   nascimento date,
   observacoes text,
+  -- preenchido quando o cliente tem conta (login social); convidados ficam sem
+  usuario_id uuid unique references auth.users (id) on delete set null,
   criado_em timestamptz not null default now()
 );
+-- convidados são identificados pelo telefone; contas podem repetir um telefone (não há verificação por SMS)
+create unique index clientes_telefone_convidado on public.clientes (telefone) where usuario_id is null;
+create index on public.clientes (telefone);
 
 create table public.enderecos (
   id uuid primary key default gen_random_uuid(),
@@ -200,6 +231,8 @@ create table public.enderecos (
   cidade text,
   uf text,
   referencia text,
+  lat numeric(9,6),
+  lng numeric(9,6),
   criado_em timestamptz not null default now()
 );
 create index on public.enderecos (cliente_id);
@@ -209,7 +242,12 @@ create table public.entregadores (
   nome text not null,
   telefone text,
   valor_por_entrega numeric(10,2) not null default 0,
-  ativo boolean not null default true
+  ativo boolean not null default true,
+  -- login do motoboy no aplicativo de entregas e última posição enviada
+  usuario_id uuid unique references auth.users (id) on delete set null,
+  lat numeric(9,6),
+  lng numeric(9,6),
+  posicao_em timestamptz
 );
 
 -- ---------------------------------------------------------------------
@@ -249,7 +287,7 @@ end $$;
 
 create table public.pedidos (
   id uuid primary key default gen_random_uuid(),
-  numero bigint generated always as identity,
+  numero bigint generated always as identity (start with 1001),
   codigo text not null unique default public.gerar_codigo(),
   cliente_id uuid references public.clientes (id) on delete set null,
   cliente_nome text not null,
@@ -273,6 +311,14 @@ create table public.pedidos (
   observacoes text,
   entregador_id uuid references public.entregadores (id) on delete set null,
   estoque_baixado boolean not null default false,
+  chave uuid unique, -- enviada pelo site: reenviar o mesmo pedido não o duplica
+  lat numeric(9,6),
+  lng numeric(9,6),
+  distancia_km numeric(6,2),
+  problema_entrega text,
+  motivo_reembolso text,
+  reembolsado_em timestamptz,
+  status_em timestamptz not null default now(), -- última mudança de status (base dos alertas de atraso)
   previsao_em timestamptz,
   criado_em timestamptz not null default now(),
   confirmado_em timestamptz,
@@ -446,6 +492,13 @@ begin
     new.custo_unitario := coalesce(new.custo_unitario, v.custo_unitario);
     update insumos set quantidade = v.quantidade + new.quantidade where id = new.insumo_id;
   end if;
+
+  if new.tipo in ('entrada', 'saida', 'perda', 'ajuste') and auth.uid() is not null then
+    insert into auditoria (tabela, registro_id, acao, descricao, antes, depois, usuario_id, usuario_nome)
+    values ('estoque', new.insumo_id::text, 'alterou', v.nome || ' — ' || new.tipo,
+            jsonb_build_object('quantidade', v.quantidade), jsonb_build_object('quantidade', v.quantidade + new.quantidade),
+            auth.uid(), (select nome from perfis where id = auth.uid()));
+  end if;
   return new;
 end $$;
 
@@ -509,13 +562,18 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_cfg configuracoes%rowtype;
   v_extra int := 0;
+  v_encerrado constant status_pedido[] := array['cancelado', 'reembolsado']::status_pedido[];
 begin
   new.atualizado_em := now();
 
   if new.status is distinct from old.status then
-    if old.status = 'cancelado' then
-      raise exception 'Pedido cancelado não pode ser reaberto';
+    if old.status = any (v_encerrado) then
+      raise exception 'Pedido cancelado ou reembolsado não pode ser reaberto';
     end if;
+    if new.status = 'reembolsado' and old.status not in ('entregue', 'problema_entrega') then
+      raise exception 'Só é possível reembolsar pedidos entregues ou com problema na entrega';
+    end if;
+    new.status_em := now();
 
     if new.status = 'confirmado' then
       new.confirmado_em := now();
@@ -524,11 +582,13 @@ begin
     elsif new.status = 'pronto' then
       new.pronto_em := now();
     elsif new.status = 'saiu_entrega' then
-      new.saiu_em := now();
+      new.saiu_em := coalesce(new.saiu_em, now());
     elsif new.status = 'entregue' then
       new.entregue_em := now();
     elsif new.status = 'cancelado' then
       new.cancelado_em := now();
+    elsif new.status = 'reembolsado' then
+      new.reembolsado_em := now();
     end if;
 
     if old.status = 'novo' and new.status <> 'cancelado' then
@@ -541,6 +601,7 @@ begin
       new.previsao_em := now() + make_interval(mins => v_cfg.tempo_preparo_min + v_extra);
     end if;
 
+    -- estoque: baixa ao confirmar, devolve ao cancelar (reembolso não devolve: a pizza foi feita)
     if new.status = 'cancelado' then
       if old.estoque_baixado then
         perform baixar_estoque_pedido(new.id, true);
@@ -552,12 +613,12 @@ begin
     end if;
   end if;
 
-  if new.status = 'cancelado' and old.status <> 'cancelado' then
+  -- caixa
+  if new.status = any (v_encerrado) and not (old.status = any (v_encerrado)) then
     if old.pago then
       perform registrar_caixa_pedido(old, 'estorno');
     end if;
     new.pago := false;
-    new.pago_em := null;
   elsif new.pago and not old.pago then
     new.pago_em := now();
     perform registrar_caixa_pedido(new, 'venda');
@@ -598,60 +659,123 @@ from public.clientes c
 left join lateral (
   select count(*) as pedidos, sum(total) as gasto, max(criado_em) as ultimo_pedido_em
   from public.pedidos
-  where cliente_id = c.id and status <> 'cancelado'
+  where cliente_id = c.id and status not in ('cancelado', 'reembolsado')
 ) p on true;
 
 -- ---------------------------------------------------------------------
--- Segurança (RLS)
--- Público lê só o cardápio; o painel exige usuário ativo; pedidos do site
--- entram exclusivamente pela função criar_pedido.
+-- Entrega por distância: faixas a partir do ponto da loja. A maior faixa ativa é o raio de atendimento.
 -- ---------------------------------------------------------------------
-do $$
-declare
-  t text;
-begin
-  foreach t in array array[
-    'perfis', 'configuracoes', 'config_fiscal', 'categorias', 'tamanhos', 'produtos', 'produto_precos',
-    'adicionais', 'bairros', 'cupons', 'clientes', 'enderecos', 'entregadores', 'caixas', 'pedidos',
-    'pedido_itens', 'caixa_movimentos', 'fornecedores', 'insumos', 'fichas_tecnicas', 'estoque_movimentos',
-    'despesas', 'notas_fiscais'
-  ] loop
-    execute format('alter table public.%I enable row level security', t);
-  end loop;
+create table public.faixas_entrega (
+  id uuid primary key default gen_random_uuid(),
+  ate_km numeric(5,2) not null unique check (ate_km > 0),
+  taxa numeric(10,2) not null default 0 check (taxa >= 0),
+  tempo_extra_min int not null default 0,
+  ativo boolean not null default true
+);
 
-  -- leitura pública do cardápio
-  foreach t in array array['configuracoes', 'categorias', 'tamanhos', 'produtos', 'produto_precos', 'adicionais', 'bairros'] loop
-    execute format('create policy "leitura publica" on public.%I for select to anon, authenticated using (true)', t);
-    execute format('grant select on public.%I to anon', t);
-  end loop;
+-- ---------------------------------------------------------------------
+-- Promoções: desconto sobre produtos, com período, horário e dias da semana opcionais.
+-- ---------------------------------------------------------------------
+create table public.promocoes (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  descricao text,
+  tipo text not null default 'percentual' check (tipo in ('percentual', 'valor', 'preco')), -- % de desconto, R$ de desconto ou preço final
+  valor numeric(10,2) not null check (valor > 0),
+  tamanho_id uuid references public.tamanhos (id) on delete cascade, -- nulo = todos os tamanhos
+  data_inicio date,
+  data_fim date,
+  hora_inicio time,
+  hora_fim time,
+  dias_semana int[], -- 0 = domingo; nulo = todos os dias
+  selo text not null default 'Em promoção',
+  destaque boolean not null default true, -- aparece na faixa de promoções da página inicial
+  imagem_url text,
+  ativo boolean not null default true,
+  criado_em timestamptz not null default now()
+);
 
-  -- operação: qualquer usuário ativo do painel
-  foreach t in array array[
-    'categorias', 'tamanhos', 'produtos', 'produto_precos', 'adicionais', 'bairros', 'cupons', 'clientes',
-    'enderecos', 'entregadores', 'caixas', 'pedidos', 'pedido_itens', 'caixa_movimentos', 'fornecedores',
-    'insumos', 'fichas_tecnicas', 'estoque_movimentos', 'despesas'
-  ] loop
-    execute format('create policy "equipe" on public.%I for all to authenticated using (public.eh_staff()) with check (public.eh_staff())', t);
-  end loop;
-end $$;
+create table public.promocao_produtos (
+  promocao_id uuid not null references public.promocoes (id) on delete cascade,
+  produto_id uuid not null references public.produtos (id) on delete cascade,
+  primary key (promocao_id, produto_id)
+);
+create index on public.promocao_produtos (produto_id);
 
-create policy "equipe le perfis" on public.perfis for select to authenticated
-  using (id = auth.uid() or public.eh_staff());
-create policy "admin gerencia perfis" on public.perfis for update to authenticated
-  using (public.eh_admin()) with check (public.eh_admin());
+-- ---------------------------------------------------------------------
+-- Conteúdo do site (CMS)
+-- ---------------------------------------------------------------------
+create table public.banners (
+  id uuid primary key default gen_random_uuid(),
+  titulo text not null,
+  subtitulo text,
+  imagem_url text,
+  cor text not null default 'molho' check (cor in ('molho', 'forno', 'queijo', 'manjericao')),
+  link text,
+  botao text,
+  posicao text not null default 'inicio_meio'
+    check (posicao in ('inicio_topo', 'inicio_meio', 'cardapio_topo', 'cardapio_entre_categorias', 'cardapio_produtos', 'cardapio_fim')),
+  categoria_id uuid references public.categorias (id) on delete set null, -- para as posições ligadas a uma categoria
+  tamanho text not null default 'medio' check (tamanho in ('pequeno', 'medio', 'grande')),
+  ordem int not null default 0,
+  ativo boolean not null default true,
+  data_inicio date,
+  data_fim date
+);
 
-create policy "admin altera configuracoes" on public.configuracoes for update to authenticated
-  using (public.eh_admin()) with check (public.eh_admin());
+-- Textos, logo, seções da página inicial e o que aparece na tela do produto (linha única).
+create table public.site_conteudo (
+  id int primary key default 1 check (id = 1),
+  dados jsonb not null default '{
+    "logo_url": null,
+    "hero": {
+      "titulo": "Pizza de verdade, feita pela Tia Cê.",
+      "destaque": "Tia Cê",
+      "subtitulo": "Receita de família, ingredientes escolhidos a dedo e entrega quentinha na sua porta.",
+      "imagem_url": null
+    },
+    "secoes": [
+      {"id": "hero", "ativo": true, "tamanho": "grande"},
+      {"id": "banners", "ativo": true, "tamanho": "medio"},
+      {"id": "promocoes", "ativo": true, "tamanho": "medio"},
+      {"id": "destaques", "ativo": true, "tamanho": "medio"},
+      {"id": "como_funciona", "ativo": true, "tamanho": "medio"}
+    ],
+    "destaques_titulo": "As mais pedidas",
+    "promocoes_titulo": "Promoções de hoje",
+    "passos": [
+      {"titulo": "Monte do seu jeito", "texto": "Escolha o tamanho, divida em até três sabores e capriche na borda."},
+      {"titulo": "A gente prepara na hora", "texto": "Massa aberta à mão e forno bem quente. Nada de pizza pronta esperando."},
+      {"titulo": "Acompanhe até a porta", "texto": "Veja cada etapa do pedido em tempo real, do forno à entrega."}
+    ],
+    "produto": {"foto": true, "descricao": true, "ingredientes": true, "nutricional": true, "observacoes": true, "complementos": true}
+  }'::jsonb,
+  atualizado_em timestamptz not null default now()
+);
+insert into public.site_conteudo (id) values (1);
+create trigger site_conteudo_atualizado before update on public.site_conteudo
+  for each row execute function public.tg_atualizado_em();
 
-create policy "equipe le config fiscal" on public.config_fiscal for select to authenticated
-  using (public.eh_staff());
-create policy "admin altera config fiscal" on public.config_fiscal for update to authenticated
-  using (public.eh_admin()) with check (public.eh_admin());
+-- ---------------------------------------------------------------------
+-- Permissões por papel (o administrador sempre pode tudo) e trilha de auditoria
+-- ---------------------------------------------------------------------
+create table public.permissoes (
+  papel public.papel_usuario not null,
+  modulo text not null,
+  primary key (papel, modulo)
+);
 
--- notas fiscais: a equipe só lê; quem grava é a função de servidor (service role)
-create policy "equipe le notas" on public.notas_fiscais for select to authenticated
-  using (public.eh_staff());
-
-grant usage on schema public to anon, authenticated, service_role;
-grant all on all tables in schema public to authenticated, service_role;
-grant usage, select on all sequences in schema public to authenticated, service_role;
+create table public.auditoria (
+  id bigint generated always as identity primary key,
+  tabela text not null,
+  registro_id text,
+  acao text not null, -- criou, alterou, excluiu
+  descricao text,
+  antes jsonb,
+  depois jsonb,
+  usuario_id uuid,
+  usuario_nome text,
+  criado_em timestamptz not null default now()
+);
+create index on public.auditoria (criado_em desc);
+create index on public.auditoria (tabela, registro_id);
