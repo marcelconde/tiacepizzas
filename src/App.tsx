@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { noAplicativo } from './lib/rastreio'
 import { AvisoProvider, Carregando } from './components/ui'
 import { AuthProvider } from './lib/auth'
 import { CarrinhoProvider } from './lib/carrinho'
@@ -40,7 +41,8 @@ export default function App() {
               <Suspense fallback={<Carregando />}>
                 <Routes>
                   <Route element={<SiteLayout />}>
-                    <Route index element={<Inicio />} />
+                    {/* dentro do aplicativo Android do entregador não há site: abre direto na tela dele */}
+                    <Route index element={noAplicativo ? <Navigate to="/entregador" replace /> : <Inicio />} />
                     <Route path="cardapio" element={<Cardapio />} />
                     <Route path="checkout" element={<Checkout />} />
                     <Route path="pedido" element={<Acompanhar />} />

@@ -5,7 +5,8 @@ import { Login, Moldura } from '../components/Login'
 import { AreaTexto, Botao, Carregando, Erro, Modal, Selo, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, soDigitos, telefone } from '../lib/formato'
-import { linkRota } from '../lib/geo'
+import { linkRota, linkWaze } from '../lib/geo'
+import { acompanharPosicao, noAplicativo } from '../lib/rastreio'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, StatusPedido } from '../lib/tipos'
 
@@ -39,7 +40,9 @@ interface Painel {
 /**
  * Aplicativo do entregador (abre no navegador do celular e pode ser adicionado à tela inicial).
  * Mostra só as entregas atribuídas a ele e, com uma entrega na rua, envia a posição a cada 15 segundos
- * para o cliente acompanhar no mapa. O navegador só envia a posição com esta tela aberta.
+ * para o cliente acompanhar no mapa. O navegador só envia a posição com esta tela aberta: enquanto o
+ * motoboy estiver no Waze ou no Google Maps o envio pausa, e volta quando ele retorna aqui.
+ * Dentro do aplicativo Android (Tia Cê Entregas) o envio continua em segundo plano — ver lib/rastreio.ts.
  */
 export default function Entregador() {
   const { sessao, carregando: carregandoSessao, sair } = useAuth()
@@ -76,21 +79,27 @@ export default function Entregador() {
       setGps('desligado')
       return
     }
-    if (!('geolocation' in navigator)) {
-      setGps('indisponivel')
-      return
+    return acompanharPosicao((p) => {
+      setGps('ativo')
+      if (Date.now() - ultimoEnvio.current < 15_000) return
+      ultimoEnvio.current = Date.now()
+      supabase.rpc('entrega_posicao', { p_lat: p.lat, p_lng: p.lng }).then(() => {})
+    }, setGps)
+  }, [naRua])
+
+  useEffect(() => {
+    // com entrega na rua, a tela não apaga sozinha enquanto o aplicativo estiver à vista
+    if (!naRua || !('wakeLock' in navigator)) return
+    let trava: WakeLockSentinel | null = null
+    const pedir = () => {
+      if (document.visibilityState === 'visible') navigator.wakeLock.request('screen').then((t) => (trava = t), () => {})
     }
-    const id = navigator.geolocation.watchPosition(
-      (pos) => {
-        setGps('ativo')
-        if (Date.now() - ultimoEnvio.current < 15_000) return
-        ultimoEnvio.current = Date.now()
-        supabase.rpc('entrega_posicao', { p_lat: pos.coords.latitude, p_lng: pos.coords.longitude }).then(() => {})
-      },
-      (e) => setGps(e.code === e.PERMISSION_DENIED ? 'negado' : 'indisponivel'),
-      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
-    )
-    return () => navigator.geolocation.clearWatch(id)
+    pedir()
+    document.addEventListener('visibilitychange', pedir)
+    return () => {
+      document.removeEventListener('visibilitychange', pedir)
+      trava?.release().catch(() => {})
+    }
   }, [naRua])
 
   useEffect(() => {
@@ -136,8 +145,11 @@ export default function Entregador() {
 
   const aviso_gps = {
     desligado: null,
-    ativo: { cor: 'bg-manjericao-100 text-manjericao-700', texto: 'Compartilhando sua localização com o cliente.' },
-    negado: { cor: 'bg-red-100 text-red-900', texto: 'Localização bloqueada. Libere o acesso à localização nas permissões do navegador.' },
+    ativo: {
+      cor: 'bg-manjericao-100 text-manjericao-700',
+      texto: noAplicativo ? 'Enviando sua localização ao cliente. Pode abrir o Waze: o envio continua.' : 'Enviando sua localização ao cliente enquanto esta tela está aberta.',
+    },
+    negado: { cor: 'bg-red-100 text-red-900', texto: `Localização bloqueada. Libere o acesso à localização nas permissões do ${noAplicativo ? 'aplicativo' : 'navegador'}.` },
     indisponivel: { cor: 'bg-amber-100 text-amber-900', texto: 'Não foi possível obter a localização deste aparelho.' },
   }[gps]
 
@@ -164,6 +176,11 @@ export default function Entregador() {
       {aviso_gps && (
         <p className={cx('flex items-center gap-2 px-4 py-2 text-sm font-semibold', aviso_gps.cor)}>
           <LocateFixed className="size-4 shrink-0" /> {aviso_gps.texto}
+        </p>
+      )}
+      {gps === 'ativo' && !noAplicativo && (
+        <p className="bg-amber-50 px-4 py-2 text-xs text-amber-900">
+          No navegador, o envio pausa enquanto o Waze ou o Maps estiver aberto. Para continuar enviando, use o aplicativo Tia Cê Entregas (Android).
         </p>
       )}
 
@@ -205,9 +222,12 @@ export default function Entregador() {
               </div>
               <p className="mt-2 text-sm text-stone-600">{e.itens.map((i) => `${i.quantidade}x ${i.nome}`).join(' · ')}</p>
 
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <a href={linkWaze(destino, endereco)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-stone-300 text-sm font-semibold">
+                  <Navigation className="size-4" /> Waze
+                </a>
                 <a href={linkRota(destino, endereco)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-stone-300 text-sm font-semibold">
-                  <Navigation className="size-4" /> Rota
+                  <MapPinned className="size-4" /> Google Maps
                 </a>
                 {e.cliente_telefone && (
                   <>

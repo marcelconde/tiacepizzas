@@ -57,6 +57,10 @@ export function distanciaKm(a: Ponto, b: Ponto) {
   return Math.round(6371 * 2 * Math.asin(Math.sqrt(h)) * 100) / 100
 }
 
-/** Link que abre o trajeto no aplicativo de mapas do celular. */
+/** Link que abre o trajeto no Google Maps do celular. */
 export const linkRota = (destino: Ponto | null, enderecoTexto: string) =>
   `https://www.google.com/maps/dir/?api=1&destination=${destino ? `${destino.lat},${destino.lng}` : encodeURIComponent(enderecoTexto)}`
+
+/** Link que abre o Waze já navegando até o destino (pelo ponto no mapa, se houver, ou pela busca do endereço). */
+export const linkWaze = (destino: Ponto | null, enderecoTexto: string) =>
+  `https://waze.com/ul?${destino ? `ll=${destino.lat}%2C${destino.lng}` : `q=${encodeURIComponent(enderecoTexto)}`}&navigate=yes`

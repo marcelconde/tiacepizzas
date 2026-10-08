@@ -15,3 +15,6 @@ docs/*.pdf
 # gerados pelo roteiro do vídeo
 docs/video/
 docs/*.mp4
+
+# aplicativo do entregador (gerado por npm run app:android)
+docs/*.apk
