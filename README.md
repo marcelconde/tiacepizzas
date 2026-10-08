@@ -4,7 +4,7 @@ Site de pedidos e sistema de gestão da pizzaria, em [tiacepizzas.com.br](https:
 
 - **Site público** — página inicial editável, cardápio, montagem de pizza (tamanho, vários sabores, borda, adicionais), promoções, sacola, finalização (entrega por bairro ou por distância) e acompanhamento do pedido com mapa. O cliente pode pedir sem cadastro ou entrar com Google/Facebook para guardar endereços e ver seus pedidos.
 - **Painel da equipe** (`/admin`) — pedidos em tempo real com alertas de atraso, venda de balcão/telefone, cozinha, clientes, cardápio com ficha técnica, site e promoções, estoque, caixa, entregas, financeiro, indicadores com metas, análises de produtos e clientes, nota fiscal (NFC-e), auditoria e configurações (usuários e permissões por função).
-- **Aplicativo do entregador** (`/entregador`) — entregas do motoboy, rota, WhatsApp do cliente, registro de entrega ou problema e envio da localização.
+- **Aplicativo do entregador** (`/entregador`) — entregas do motoboy, atalho para o Waze e o Google Maps, WhatsApp do cliente, registro de entrega ou problema e envio da localização. No navegador o envio pausa enquanto o Waze estiver aberto; o **aplicativo Android** (`npm run app:android`, passo a passo em [docs/aplicativo-android.md](docs/aplicativo-android.md)) continua enviando em segundo plano.
 
 O **manual de uso**, com capturas de todas as telas, é gerado por `npm run manual` em `docs/manual-tia-ce-pizzas.pdf`.
 O **vídeo-tutorial** narrado, que percorre todas as telas, é gerado por `npm run video` em `docs/video-tia-ce-pizzas.mp4`.
@@ -151,7 +151,9 @@ pela voz neural da Siri instalada no Mac ("Voz 2" em português; sem ela, cai na
 `scripts/video/voz.swift`), e montado com legendas por `scripts/video/montar.swift` — sem ffmpeg. `npm run video -- --so=3,4`
 grava só alguns capítulos, para conferir um ajuste.
 
-Para desenvolver contra o banco de verdade: `cp .env.example .env.local`, preencha com os dados do projeto Supabase e use `npm run dev`.
+O endereço e a chave pública do banco de produção ficam em `.env.production` (são valores públicos, os mesmos que vão no
+JavaScript do site): `npm run build` em qualquer computador gera o site ligado ao banco real.
+Para desenvolver contra o banco de verdade: `cp .env.production .env.local` e use `npm run dev`.
 
 Mudou o banco? Crie um novo arquivo em `supabase/migrations/`, rode `npm run test:db` e depois `npx supabase db push`.
 Mudou uma tela? Rode `npm run manual` (e, se o roteiro for afetado, `npm run video`) para a documentação acompanhar.

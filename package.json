@@ -14,7 +14,7 @@
     "test:e2e": "node scripts/test-e2e.mjs",
     "manual": "node scripts/manual/gerar.mjs",
     "video": "node scripts/video/gerar.mjs",
-    "app:android": "sh scripts/app/android.sh"
+    "app:android": "node scripts/app/android.mjs"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",
