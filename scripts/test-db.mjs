@@ -367,6 +367,38 @@ await teste('entrada de estoque recalcula o custo médio ponderado', async () =>
 })
 
 let vendaBalcao
+await teste('desperdício: cozinha registra com motivo, baixa o estoque, entra nas perdas e na auditoria', async () => {
+  const insumo = await um(`select id, quantidade, custo_unitario from insumos where nome = 'Mussarela'`)
+  const antes = Number(insumo.quantidade)
+  const hoje = (await um(`select (now() at time zone fuso())::date::text as d`)).d
+  const perdasAntes = Number((await como('authenticated', admin, () => um(`select relatorio_faturamento($1, $1) as r`, [hoje]))).r.resumo.perdas)
+  // a cozinha não entra no Estoque, mas enxerga a lista de insumos para registrar e registra
+  await como('authenticated', cozinha, () => falha(q(`select * from insumos`), 'permission denied|row-level'))
+    .catch(async () => assert.equal((await como('authenticated', cozinha, () => q(`select * from insumos`))).length, 0))
+  const lista = (await como('authenticated', cozinha, () => um(`select insumos_para_desperdicio() as r`))).r
+  assert.ok(lista.some((i) => i.nome === 'Mussarela' && i.unidade) && !('custo_unitario' in lista[0]), 'lista sem custos')
+  const r = (await como('authenticated', cozinha, () => um(`select registrar_desperdicio($1, 0.3, 'Caiu no chão ao montar a pizza') as r`, [insumo.id]))).r
+  perto(Number(r.restante), antes - 0.3)
+  perto(await estoque('Mussarela'), antes - 0.3)
+  perto(Number(r.valor), Math.round(0.3 * Number(insumo.custo_unitario) * 100) / 100)
+  // sem motivo, quantidade zero e quem não tem a tela da cozinha nem a do estoque: recusado
+  await como('authenticated', cozinha, () => falha(q(`select registrar_desperdicio($1, 0.2, '  ')`, [insumo.id]), 'Escreva o que aconteceu'))
+  await como('authenticated', cozinha, () => falha(q(`select registrar_desperdicio($1, 0, 'x')`, [insumo.id]), 'Informe a quantidade'))
+  await como('authenticated', financeiro, () => falha(q(`select registrar_desperdicio($1, 0.2, 'x')`, [insumo.id]), 'Acesso negado')) // sem a tela da cozinha nem a do estoque
+  await como('authenticated', motoboy, () => falha(q(`select registrar_desperdicio($1, 0.2, 'x')`, [insumo.id]), 'Acesso negado'))
+  await falha(db.query(`insert into estoque_movimentos (insumo_id, tipo, quantidade) values ($1, 'desperdicio', 1)`, [insumo.id]), 'desperdicio_com_motivo')
+  // aparece na lista do período (com quem registrou), nas perdas do resultado e na auditoria
+  const d = (await como('authenticated', admin, () => um(`select listar_desperdicios($1, $1) as r`, [hoje]))).r
+  assert.equal(d.registros.length, 1)
+  assert.deepEqual([d.registros[0].insumo, Number(d.registros[0].quantidade), d.registros[0].observacao, d.registros[0].usuario], ['Mussarela', 0.3, 'Caiu no chão ao montar a pizza', 'cozinha'])
+  perto(Number(d.total), Number(r.valor)); perto(Number(d.por_insumo[0].valor), Number(r.valor))
+  await como('authenticated', cozinha, () => falha(q(`select listar_desperdicios($1, $1)`, [hoje]), 'Acesso negado'))
+  const perdasDepois = Number((await como('authenticated', admin, () => um(`select relatorio_faturamento($1, $1) as r`, [hoje]))).r.resumo.perdas)
+  perto(perdasDepois - perdasAntes, Number(r.valor))
+  const aud = await um(`select descricao, usuario_nome from auditoria where tabela = 'estoque' order by id desc limit 1`)
+  assert.deepEqual([aud.descricao, aud.usuario_nome], ['Mussarela — desperdicio', 'cozinha'])
+})
+
 await teste('caixa: abertura, venda do balcão paga, sangria, estorno e fechamento', async () => {
   await como('authenticated', atendente, () => falha(db.query(`select abrir_caixa(100)`), 'Acesso negado'))
   await como('authenticated', admin, async () => {

@@ -31,7 +31,7 @@ function linhasResultado(r: Relatorio) {
     { rotulo: 'Descontos e cupons', valor: -Number(s.descontos) || 0, tipo: 'menos' as const },
     { rotulo: 'Faturamento bruto (entradas)', valor: Number(s.faturamento), tipo: 'total' as const },
     { rotulo: 'Custo dos insumos vendidos', valor: -Number(s.cmv) || 0, tipo: 'menos' as const, dica: 'Calculado pelas fichas técnicas e pelo custo médio do estoque.' },
-    { rotulo: 'Perdas de estoque', valor: -Number(s.perdas) || 0, tipo: 'menos' as const },
+    { rotulo: 'Perdas e desperdício de estoque', valor: -Number(s.perdas) || 0, tipo: 'menos' as const, dica: 'Perdas (vencimento, quebra) e desperdício registrados no Estoque, pelo custo médio.' },
     { rotulo: 'Lucro bruto', valor: lucroBruto, tipo: 'total' as const },
     { rotulo: 'Despesas lançadas (saídas)', valor: -Number(s.despesas) || 0, tipo: 'menos' as const },
     { rotulo: 'Resultado do período', valor: lucroBruto - Number(s.despesas), tipo: 'final' as const },

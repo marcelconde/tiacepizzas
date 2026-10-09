@@ -313,6 +313,13 @@ export function capitulos(c) {
         await cena('As cores de alerta de atraso também aparecem aqui. Quem tem a função cozinha enxerga apenas esta tela.', async () => {
           await mostrarTexto(pc, 'nesta etapa', 'main', { pausa: 3000 }).catch(() => {})
         })
+        await cena('No alto fica o botão registrar desperdício. Quando um ingrediente cai no chão, queima ou é usado errado, a cozinha registra na hora: o item, a quantidade e o que aconteceu. Dá para tocar em um motivo pronto.', async () => {
+          await topo(pc)
+          await clicar(pc, 'Registrar desperdício', 'main button', { espera: 1200 })
+          await preencher(pc, 'Item do estoque', 'Calabresa'); await preencher(pc, 'Quantidade desperdiçada', '0,2')
+          await clicar(pc, 'Queimou no forno', '[role=dialog] button', { espera: 1200 })
+          await clicarSel(pc, '[role=dialog] button[type=submit]', { espera: 1800 })
+        })
       },
     },
 
@@ -450,6 +457,21 @@ export function capitulos(c) {
           await clicar(pc, 'Saída, perda ou ajuste', 'main tbody button', { espera: 3500 })
           await fecharJanela(pc)
         })
+        await cena('A aba desperdício serve para o que se perde no preparo: a porção de queijo que caiu no chão, a pizza que queimou. Esse ingrediente saiu do estoque, mas nenhuma venda deu baixa nele.', async () => {
+          await clicar(pc, 'Desperdício', 'main [role=tab]', { espera: 2500 })
+        })
+        await cena('Escolha o item do estoque, informe a quantidade e escreva o que aconteceu. O motivo é obrigatório, porque é ele que fica registrado. Clicando em registrar, a quantidade sai do estoque na hora.', async () => {
+          await preencher(pc, 'Item do estoque', 'Mussarela'); await preencher(pc, 'Quantidade desperdiçada', '0,25')
+          await preencher(pc, 'O que aconteceu?', 'A porção caiu no chão ao montar a pizza')
+          await clicarSel(pc, 'main form button[type=submit]', { espera: 2000 })
+        })
+        await cena('Ao lado ficam os registros do período: data, item, quantidade, valor, motivo e quem registrou. Os quadros do alto somam o valor desperdiçado e mostram o que mais se perde. Esse valor entra no financeiro, junto com as perdas.', async () => {
+          await mostrarTexto(pc, 'Valor desperdiçado no período', 'main', { pausa: 3000 })
+          await mostrarTexto(pc, 'O que mais se perde', 'main', { pausa: 2500 })
+          await mostrar(pc, 'QUEM REGISTROU', 'main th', { pausa: 2500 })
+          await topo(pc)
+          await clicar(pc, 'Insumos', 'main [role=tab]', { espera: 1200 })
+        })
         await cena('Novo insumo cadastra o nome, a unidade de medida, o estoque mínimo e o fornecedor.', async () => {
           await mostrar(pc, 'Novo insumo', 'main button', { pausa: 2500 })
         })
@@ -572,9 +594,10 @@ export function capitulos(c) {
         await cena('Ele vê apenas as entregas que a pizzaria atribuiu a ele. Cada cartão mostra o endereço e a referência em letras grandes, os itens, e uma faixa colorida com o valor a cobrar, ou o aviso de que já está pago.', async () => {
           await dormir(2500); await rolar(moto, 240, 3500); await rolar(moto, 240, 2500)
         })
-        await cena('Rota abre o trajeto no aplicativo de mapas. Ligar e WhatsApp falam com o cliente.', async () => {
+        await cena('Os botões Waze e Google Maps abrem o trajeto até o cliente. Ligar e WhatsApp falam com ele.', async () => {
           await topo(moto)
-          await mostrar(moto, 'Rota', 'main a, main button', { pausa: 1500 }); await mostrar(moto, 'Ligar', 'main a, main button', { pausa: 1000 }); await mostrar(moto, 'WhatsApp', 'main a, main button', { pausa: 1000 })
+          await mostrar(moto, 'Waze', 'main a, main button', { pausa: 1300 }); await mostrar(moto, 'Google Maps', 'main a, main button', { pausa: 1300 })
+          await mostrar(moto, 'Ligar', 'main a, main button', { pausa: 900 }); await mostrar(moto, 'WhatsApp', 'main a, main button', { pausa: 900 })
         })
         await cena('Quando o pedido fica pronto, ele toca em saí para entregar, e o cliente é avisado. Ao chegar, toca em entreguei e recebi, que conclui a entrega e registra o pagamento.', async () => {
           // se houver um pedido pronto esperando, o motoboy sai com ele; senão, só mostramos o botão de concluir
@@ -586,8 +609,11 @@ export function capitulos(c) {
           await clicar(moto, 'Cliente não atende', '[role=dialog] button', { espera: 2500 })
           await fecharJanela(moto)
         })
-        await cena('Enquanto há uma entrega na rua, o celular envia a posição a cada quinze segundos, e o cliente acompanha no mapa. Isso só funciona com esta tela aberta: se o motoboy trocar de aplicativo ou bloquear o celular, o envio para.', async () => {
+        await cena('Enquanto há uma entrega na rua, o celular envia a posição a cada quinze segundos, e o cliente acompanha no mapa. Pelo navegador, o envio pausa quando o motoboy abre o Waze ou bloqueia o celular, e volta quando ele retorna a esta tela.', async () => {
           await topo(moto); await dormir(5500)
+        })
+        await cena('Para o envio continuar com o Waze aberto, existe o aplicativo Tia Cê Entregas, para Android: é esta mesma tela, instalada no celular. Ele ainda está em fase de testes. O manual explica como instalar.', async () => {
+          await mostrarTexto(moto, 'use o aplicativo Tia Cê Entregas', 'body', { pausa: 5000 }).catch(() => {})
         })
         await cena('Tocando em entreguei e recebi, a entrega é concluída e some da lista.', async () => {
           await clicar(moto, 'Entreguei e recebi', 'main button', { espera: 2800 })

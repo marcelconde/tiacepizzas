@@ -143,6 +143,20 @@ export async function popular(db) {
     [mes(26), mes(18), mes(12), mes(4), mes(9)].map(iso),
   )
   await db.query(`insert into estoque_movimentos (insumo_id, tipo, quantidade, observacao, criado_em) select id, 'perda', 1.2, 'Venceu na geladeira', $1::timestamptz from insumos where nome = 'Frango desfiado'`, [mes(6)])
+  // desperdício registrado pela cozinha ao longo do mês
+  const cozinheiro = (await q(`select id from perfis where papel = 'cozinha' limit 1`))[0]?.id ?? admin
+  for (const [insumo, qtd, motivo, dias] of [
+    ['Mussarela', 0.25, 'A porção caiu no chão ao montar a pizza', 1],
+    ['Catupiry', 0.2, 'Pizza montada com o sabor errado', 3],
+    ['Calabresa', 0.15, 'Queimou no forno', 8],
+    ['Molho de tomate', 0.4, 'O pote virou na bancada', 15],
+    ['Mussarela', 0.3, 'Caiu no chão', 21],
+  ]) {
+    await db.query(
+      `insert into estoque_movimentos (insumo_id, tipo, quantidade, observacao, usuario_id, criado_em) select id, 'desperdicio', $2::numeric, $3, $4, $5::timestamptz from insumos where nome = $1`,
+      [insumo, qtd, motivo, cozinheiro, mes(dias)],
+    )
+  }
 
   // estoque de hoje: tudo em nível saudável, menos dois itens para mostrar o alerta de reposição
   await db.exec(`

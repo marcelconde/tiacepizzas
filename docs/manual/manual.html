@@ -87,7 +87,7 @@
   <li><a href="#c7"><b>7</b>Clientes</a><small>Busca, ficha e histórico de compras</small></li>
   <li><a href="#c8"><b>8</b>Cardápio</a><small>Produtos, preços, fotos, informações nutricionais e ficha técnica</small></li>
   <li><a href="#c9"><b>9</b>Site e promoções</a><small>Página inicial, banners, promoções, cupons e tela do produto</small></li>
-  <li><a href="#c10"><b>10</b>Estoque</a><small>Insumos, compras, perdas e baixa automática</small></li>
+  <li><a href="#c10"><b>10</b>Estoque</a><small>Insumos, compras, perdas, desperdício e baixa automática</small></li>
   <li><a href="#c11"><b>11</b>Caixa</a><small>Abertura, sangria, suprimento e fechamento</small></li>
   <li><a href="#c12"><b>12</b>Entregas</a><small>Taxa por bairro ou por distância, entregadores e acerto</small></li>
   <li><a href="#c13"><b>13</b>Aplicativo do motoboy</a><small>Entregas atribuídas, rota, problemas e localização</small></li>
@@ -290,6 +290,7 @@
 <ul>
   <li>Cada cartão traz o número, se é entrega, retirada ou balcão, os itens com adicionais e as observações em destaque amarelo.</li>
   <li><b class="ui">Iniciar preparo</b> passa o pedido para “Em preparo”. <b class="ui">Pronto!</b> avisa o atendimento e o cliente de que a pizza saiu do forno.</li>
+  <li><b class="ui">Registrar desperdício</b>, no alto da tela: quando um ingrediente cai no chão, queima ou é usado errado, a cozinha registra na hora o item, a quantidade e o que aconteceu (capítulo 10).</li>
   <li>Quem tem a função Cozinha enxerga apenas esta tela.</li>
 </ul>
 
@@ -395,9 +396,21 @@
   <li><b class="ui">Entrada</b> (compra): informe a quantidade e o custo por unidade. O sistema recalcula o <b>custo médio</b>, usado para estimar o custo dos produtos vendidos.</li>
   <li>O botão ao lado (três traços) abre os outros movimentos: <b>saída</b> (uso interno), <b>perda</b> (vencimento, quebra) e <b>ajuste de contagem</b> — neste você digita o que contou na prateleira e o sistema calcula a diferença.</li>
 </ul>
+<h2>Desperdício</h2>
+<p>Às vezes uma porção de queijo cai no chão, uma pizza queima ou é montada errada. Esse ingrediente saiu do estoque de verdade, mas nenhuma venda deu baixa nele. A aba <b class="ui">Desperdício</b> serve para registrar isso.</p>
+<figure><img src="capturas/painel-estoque-desperdicio.jpg" alt=""><figcaption>Aba Desperdício: o registro à esquerda; à direita, o valor desperdiçado no período e cada ocorrência.</figcaption></figure>
+<ol>
+  <li>Em <b class="ui">Item do estoque</b>, escolha o que foi desperdiçado.</li>
+  <li>Informe a <b>quantidade</b>, na unidade do item (o sistema mostra quanto há em estoque).</li>
+  <li>Em <b class="ui">O que aconteceu?</b>, escreva o motivo ou toque em um dos motivos prontos. O motivo é obrigatório: é ele que fica registrado.</li>
+  <li>Clique em <b class="ui">Registrar desperdício</b>. A quantidade sai do estoque na hora.</li>
+</ol>
+<p>A lista ao lado mostra, do período escolhido, a data, o item, a quantidade, o valor (pelo custo médio do item), o motivo e <b>quem registrou</b>. Os quadros do alto somam o valor desperdiçado e mostram o que mais se perde. Dá para exportar em <b class="ui">PDF</b>, <b class="ui">Excel</b> ou <b class="ui">CSV</b>.</p>
+<div class="dica"><p>A cozinha registra o desperdício direto da tela dela, pelo botão <b class="ui">Registrar desperdício</b>, sem precisar ter acesso ao Estoque. O valor entra no Financeiro junto com as perdas, e cada registro aparece na Auditoria.</p></div>
+
 <h2>Movimentações e fornecedores</h2>
 <p>A aba <b class="ui">Movimentações</b> lista tudo o que entrou e saiu, inclusive as baixas de cada pedido. A aba <b class="ui">Fornecedores</b> guarda nome, telefone e CNPJ.</p>
-<figure><img src="capturas/painel-estoque-movimentos.jpg" alt=""><figcaption>Movimentações: vendas (com o número do pedido), entradas, perdas e ajustes.</figcaption></figure>
+<figure><img src="capturas/painel-estoque-movimentos.jpg" alt=""><figcaption>Movimentações: vendas (com o número do pedido), entradas, perdas, desperdícios e ajustes.</figcaption></figure>
 
 <!-- ============================================================ -->
 <h1 id="c11"><span class="n">11</span>Caixa</h1>
@@ -453,14 +466,16 @@
 <ul>
   <li><b>Endereço e referência</b> em letras grandes, e os itens do pedido.</li>
   <li>A faixa colorida diz se é para <b>cobrar</b> (valor, forma de pagamento e o troco a levar) ou se <b>já está pago</b>.</li>
-  <li><b class="ui">Rota</b> abre o trajeto no aplicativo de mapas; <b class="ui">Ligar</b> e <b class="ui">WhatsApp</b> falam com o cliente.</li>
+  <li><b class="ui">Waze</b> e <b class="ui">Google Maps</b> abrem o trajeto até o cliente; <b class="ui">Ligar</b> e <b class="ui">WhatsApp</b> falam com ele.</li>
   <li><b class="ui">Saí para entregar</b>, quando o pedido está pronto. O cliente é avisado.</li>
   <li><b class="ui">Entreguei e recebi</b> conclui a entrega e registra o pagamento.</li>
   <li><b class="ui">Tive um problema</b>: escolha um motivo pronto ou escreva. A pizzaria e o cliente são avisados na hora.</li>
 </ul>
 <h2>Localização</h2>
-<p>Enquanto há uma entrega na rua, o celular envia a posição a cada 15 segundos e o cliente acompanha no mapa. Na primeira vez o navegador pede permissão; é preciso aceitar. A faixa verde “Compartilhando sua localização com o cliente” confirma que está funcionando.</p>
-<div class="atencao"><p>O navegador só envia a posição com esta tela aberta. Se o motoboy trocar de aplicativo ou bloquear o celular, o envio para e o mapa do cliente some depois de 5 minutos sem atualização. A entrega em si não é afetada.</p></div>
+<p>Enquanto há uma entrega na rua, o celular envia a posição a cada 15 segundos e o cliente acompanha no mapa. Na primeira vez o navegador pede permissão; é preciso aceitar. A faixa verde “Enviando sua localização ao cliente” confirma que está funcionando, e a tela não apaga sozinha durante a entrega.</p>
+<div class="atencao"><p><b>No navegador, o envio pausa quando o motoboy abre o Waze ou o Google Maps</b> (ou bloqueia o celular), e volta quando ele retorna a esta tela. É um limite de qualquer site: só um aplicativo instalado consegue usar o GPS em segundo plano. O mapa do cliente some depois de 5 minutos sem atualização. A entrega em si não é afetada.</p></div>
+<h2>Aplicativo para Android (em testes)</h2>
+<p>Para o rastreio continuar com o Waze aberto, como nos aplicativos de corrida, existe o aplicativo <b>Tia Cê Entregas</b> para Android: é esta mesma tela, instalada no celular, com um aviso fixo nas notificações enquanto a localização é enviada. Ele é instalado por um arquivo (não está na loja de aplicativos) e ainda precisa ser gerado e testado em um celular; o passo a passo está no arquivo <code>docs/aplicativo-android.md</code> do projeto. No iPhone, por enquanto, o entregador usa a versão do navegador.</p>
 
 <!-- ============================================================ -->
 <h1 id="c14"><span class="n">14</span>Financeiro</h1>
@@ -471,7 +486,7 @@
   <li><b>Entradas (faturamento bruto):</b> soma dos pedidos válidos do período. Cancelados e reembolsados não entram.</li>
   <li><b>Recebido / a receber:</b> o que já foi marcado como pago e o que falta.</li>
   <li><b>Saídas:</b> as despesas lançadas.</li>
-  <li><b>Resultado do período:</b> faturamento − custo dos insumos vendidos − perdas de estoque − despesas.</li>
+  <li><b>Resultado do período:</b> faturamento − custo dos insumos vendidos − perdas e desperdício de estoque − despesas.</li>
 </ul>
 <div class="atencao"><p>O resultado é uma estimativa para acompanhar o negócio. Ele só fica fiel se as despesas forem lançadas e se as fichas técnicas e os custos de entrada no estoque estiverem em dia. Não substitui a contabilidade.</p></div>
 

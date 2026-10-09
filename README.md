@@ -23,6 +23,7 @@ Regras que valem a pena conhecer:
 
 - **Preço, promoção, cupom e taxa de entrega são sempre calculados no banco** (`criar_pedido`), nunca confiados ao navegador. Um reenvio do mesmo pedido não o duplica.
 - **O visitante só lê o cardápio.** O cliente com conta só enxerga os próprios dados. A equipe enxerga o que a função dela permite (tabela `permissoes`, aplicada no banco por RLS — não é só o menu que some). O motoboy não lê tabela nenhuma: usa funções que só devolvem as entregas dele.
+- **Desperdício** (ingrediente que caiu, queimou ou foi usado errado) é registrado na aba própria do Estoque ou pelo botão da Cozinha, sempre com o motivo; sai do estoque e entra no resultado junto com as perdas.
 - **Confirmar um pedido** dá baixa no estoque pela ficha técnica; **cancelar** devolve o estoque e estorna o caixa; **reembolsar** estorna o caixa de um pedido já entregue.
 - **Marcar como pago** lança a venda no caixa aberto.
 - **Ninguém se cadastra sozinho com e-mail e senha.** A equipe é criada pela administradora; o banco recusa qualquer outro cadastro por e-mail. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.

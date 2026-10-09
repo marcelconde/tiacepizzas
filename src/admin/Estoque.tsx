@@ -1,17 +1,20 @@
 import { useState, type FormEvent } from 'react'
-import { ArrowDownToLine, SlidersHorizontal } from 'lucide-react'
+import { ArrowDownToLine, Download, SlidersHorizontal } from 'lucide-react'
 import { Crud } from '../components/Crud'
 import { Abas, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Selo, Tabela, Vazio, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
-import { brl, dataHora, num } from '../lib/formato'
+import { exportar } from '../lib/exportar'
+import { brl, dataCurta, dataHora, isoDia, num } from '../lib/formato'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Insumo } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
+import { FormDesperdicio } from './Desperdicio'
 
 const TIPOS_MOV = {
   entrada: { rotulo: 'Entrada (compra)', cor: 'bg-emerald-100 text-emerald-900' },
   saida: { rotulo: 'Saída (uso interno)', cor: 'bg-stone-200 text-stone-800' },
   perda: { rotulo: 'Perda / vencimento', cor: 'bg-red-100 text-red-900' },
+  desperdicio: { rotulo: 'Desperdício', cor: 'bg-orange-100 text-orange-900' },
   ajuste: { rotulo: 'Ajuste de contagem', cor: 'bg-sky-100 text-sky-900' },
   venda: { rotulo: 'Venda', cor: 'bg-stone-100 text-stone-700' },
   estorno: { rotulo: 'Estorno', cor: 'bg-amber-100 text-amber-900' },
@@ -154,8 +157,122 @@ function Movimentos() {
   )
 }
 
+interface Desperdicios {
+  total: number
+  registros: { id: string; criado_em: string; insumo: string; unidade: string; quantidade: number; valor: number; observacao: string; usuario: string }[]
+  por_insumo: { insumo: string; unidade: string; quantidade: number; valor: number; vezes: number }[]
+}
+
+const PERIODOS_DESPERDICIO = [
+  { id: '7', rotulo: 'Últimos 7 dias' },
+  { id: '30', rotulo: 'Últimos 30 dias' },
+  { id: '90', rotulo: 'Últimos 90 dias' },
+  { id: 'mes', rotulo: 'Este mês' },
+]
+
+/** Aba Desperdício: registra o que se perdeu no preparo e mostra o que já foi registrado, com o valor. */
+function Desperdicio({ aoMudar }: { aoMudar: () => void }) {
+  const [periodo, setPeriodo] = useState('30')
+  const [versao, setVersao] = useState(0)
+  const hoje = new Date()
+  const fim = isoDia(hoje)
+  const inicio = isoDia(periodo === 'mes' ? new Date(hoje.getFullYear(), hoje.getMonth(), 1) : new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - Number(periodo) + 1))
+  const { dados, carregando, erro } = useConsulta<Desperdicios>(() => supabase.rpc('listar_desperdicios', { p_inicio: inicio, p_fim: fim }), [inicio, fim, versao])
+  const texto = `${dataCurta(inicio)} a ${dataCurta(fim)}`
+
+  return (
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <Cartao className="p-4">
+        <h2 className="font-display text-lg font-semibold">Registrar desperdício</h2>
+        <p className="mt-1 mb-4 text-sm text-stone-600">Caiu no chão, queimou, foi montado errado? Registre aqui: a quantidade sai do estoque e o motivo fica guardado.</p>
+        <FormDesperdicio
+          aoRegistrar={() => {
+            setVersao((v) => v + 1)
+            aoMudar()
+          }}
+        />
+      </Cartao>
+
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <Selecao aria-label="Período" className="w-auto" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>
+            {PERIODOS_DESPERDICIO.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.rotulo}
+              </option>
+            ))}
+          </Selecao>
+          <div className="flex gap-1">
+            {(['pdf', 'xlsx', 'csv'] as const).map((f) => (
+              <Botao
+                key={f}
+                variante="secundario"
+                disabled={!dados?.registros.length}
+                onClick={() =>
+                  dados &&
+                  exportar(f, `desperdicio_${inicio}_a_${fim}`, 'Desperdício', texto, [
+                    { titulo: 'Registros', colunas: ['Data', 'Item', 'Quantidade', 'Unidade', 'Valor (R$)', 'O que aconteceu', 'Quem registrou'], linhas: dados.registros.map((d) => [dataHora(d.criado_em), d.insumo, Number(d.quantidade), d.unidade, Number(d.valor), d.observacao, d.usuario]) },
+                    { titulo: 'Por item', colunas: ['Item', 'Quantidade', 'Unidade', 'Vezes', 'Valor (R$)'], linhas: dados.por_insumo.map((d) => [d.insumo, Number(d.quantidade), d.unidade, d.vezes, Number(d.valor)]) },
+                  ])
+                }
+              >
+                <Download className="size-4" /> {f === 'xlsx' ? 'Excel' : f.toUpperCase()}
+              </Botao>
+            ))}
+          </div>
+        </div>
+        {erro && <Erro>{erro}</Erro>}
+        {carregando && !dados ? (
+          <Carregando />
+        ) : !dados?.registros.length ? (
+          <Vazio titulo="Nenhum desperdício registrado no período" texto="Quando algo se perder no preparo, registre ao lado." />
+        ) : (
+          <>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <Cartao className="p-4">
+                <p className="text-sm text-stone-500">Valor desperdiçado no período</p>
+                <p className="mt-1 text-2xl font-semibold">{brl(dados.total)}</p>
+                <p className="text-sm text-stone-500">
+                  {dados.registros.length} registro{dados.registros.length === 1 ? '' : 's'} · pelo custo médio de cada item
+                </p>
+              </Cartao>
+              <Cartao className="p-4">
+                <p className="text-sm text-stone-500">O que mais se perde</p>
+                <ul className="mt-1 space-y-0.5 text-sm">
+                  {dados.por_insumo.slice(0, 3).map((d) => (
+                    <li key={d.insumo} className="flex justify-between gap-3">
+                      <span className="font-semibold">{d.insumo}</span>
+                      <span className="tabular-nums text-stone-600">
+                        {num(d.quantidade)} {d.unidade} · {brl(d.valor)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Cartao>
+            </div>
+            <Tabela colunas={['Data', 'Item', 'Quantidade', 'Valor', 'O que aconteceu', 'Quem registrou']}>
+              {dados.registros.map((d) => (
+                <tr key={d.id}>
+                  <td className="whitespace-nowrap tabular-nums">{dataHora(d.criado_em)}</td>
+                  <td className="font-semibold">{d.insumo}</td>
+                  <td className="whitespace-nowrap tabular-nums">
+                    {num(d.quantidade)} {d.unidade}
+                  </td>
+                  <td className="tabular-nums">{brl(d.valor)}</td>
+                  <td className="text-stone-700">{d.observacao}</td>
+                  <td className="text-stone-600">{d.usuario}</td>
+                </tr>
+              ))}
+            </Tabela>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Estoque() {
-  const [aba, setAba] = useState<'insumos' | 'movimentos' | 'fornecedores'>('insumos')
+  const [aba, setAba] = useState<'insumos' | 'desperdicio' | 'movimentos' | 'fornecedores'>('insumos')
   const [versao, setVersao] = useState(0)
   const [mov, setMov] = useState<{ insumo: Insumo; tipo: TipoMov } | null>(null)
   const { dados: fornecedores } = useConsulta<Fornecedor[]>(() => supabase.from('fornecedores').select('*').order('nome'), [aba])
@@ -165,13 +282,14 @@ export default function Estoque() {
   const baixos = (insumos ?? []).filter((i) => Number(i.quantidade) <= Number(i.estoque_minimo)).length
 
   return (
-    <Pagina titulo="Estoque" descricao="Insumos, compras e perdas. As vendas dão baixa sozinhas pela ficha técnica de cada produto.">
+    <Pagina titulo="Estoque" descricao="Insumos, compras, perdas e desperdício. As vendas dão baixa sozinhas pela ficha técnica de cada produto.">
       <div className="mb-4">
         <Abas
           atual={aba}
           onChange={setAba}
           abas={[
             { id: 'insumos', rotulo: 'Insumos' },
+            { id: 'desperdicio', rotulo: 'Desperdício' },
             { id: 'movimentos', rotulo: 'Movimentações' },
             { id: 'fornecedores', rotulo: 'Fornecedores' },
           ]}
@@ -235,6 +353,8 @@ export default function Estoque() {
           />
         </>
       )}
+
+      {aba === 'desperdicio' && <Desperdicio aoMudar={() => setVersao((v) => v + 1)} />}
 
       {aba === 'movimentos' && <Movimentos />}
 

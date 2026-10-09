@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Bike, Store } from 'lucide-react'
-import { Botao, Carregando, Erro, Selo, Vazio, cx, useAviso } from '../components/ui'
+import { Bike, Store, Trash2 } from 'lucide-react'
+import { Botao, Carregando, Erro, Modal, Selo, Vazio, cx, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { TIPO, haQuanto } from '../lib/formato'
 import { useLoja } from '../lib/loja'
@@ -8,6 +8,7 @@ import { mudarStatus } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Pedido } from '../lib/tipos'
 import { ATRASO, Pagina, nivelAtraso, useAdmin, usePedidosAoVivo } from './AdminLayout'
+import { FormDesperdicio } from './Desperdicio'
 
 /** Tela da cozinha: só o que precisa ser feito, em letras grandes. */
 export default function Cozinha() {
@@ -15,6 +16,7 @@ export default function Cozinha() {
   const { config } = useLoja()
   const { sincronizar } = useAdmin()
   const [ocupado, setOcupado] = useState('')
+  const [desperdicio, setDesperdicio] = useState(false)
   const [, setRelogio] = useState(0)
   const { dados, carregando, erro, recarregar } = useConsulta<Pedido[]>(
     () => supabase.from('pedidos').select('*, pedido_itens(*)').in('status', ['confirmado', 'em_preparo']).order('confirmado_em'),
@@ -39,7 +41,19 @@ export default function Cozinha() {
   }
 
   return (
-    <Pagina titulo="Cozinha" descricao="Pedidos confirmados, do mais antigo para o mais novo.">
+    <Pagina
+      titulo="Cozinha"
+      descricao="Pedidos confirmados, do mais antigo para o mais novo."
+      acoes={
+        <Botao variante="secundario" onClick={() => setDesperdicio(true)}>
+          <Trash2 className="size-4" /> Registrar desperdício
+        </Botao>
+      }
+    >
+      <Modal aberto={desperdicio} titulo="Registrar desperdício" onFechar={() => setDesperdicio(false)} largura="max-w-md">
+        <p className="mb-4 text-sm text-stone-600">Caiu no chão, queimou, foi montado errado? Registre: a quantidade sai do estoque e o motivo fica guardado.</p>
+        <FormDesperdicio aoRegistrar={() => setDesperdicio(false)} />
+      </Modal>
       {erro && <Erro>{erro}</Erro>}
       {carregando && !dados ? (
         <Carregando />

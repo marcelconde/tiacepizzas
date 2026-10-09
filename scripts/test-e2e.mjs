@@ -143,6 +143,34 @@ await teste('entrada de estoque soma a quantidade', async () => {
   assert.equal(Number((await api('insumos?select=quantidade&nome=eq.Bacon'))[0].quantidade), antes + 10)
 })
 
+await teste('desperdício: registro na aba do Estoque e pelo botão da Cozinha', async () => {
+  const qtd = async (nome) => Number((await api(`insumos?select=quantidade&nome=eq.${encodeURIComponent(nome)}`))[0].quantidade)
+  const hoje = new Date(), dia = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+  const antes = await qtd('Mussarela')
+  await ir(pc, '/admin/estoque', 1200); await clicar(pc, 'Desperdício', '[role=tab]')
+  await preencher(pc, 'Item do estoque', 'Mussarela'); await preencher(pc, 'Quantidade desperdiçada', '0,5'); await preencher(pc, 'O que aconteceu?', 'A porção caiu no chão')
+  await clicar(pc, 'Registrar desperdício', 'button[type=submit]'); await dormir(1200)
+  assert.ok(Math.abs((await qtd('Mussarela')) - (antes - 0.5)) < 1e-6, 'baixou do estoque')
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('main tbody tr')].some((t) => t.innerText.includes('A porção caiu no chão') && t.innerText.includes('Tia Cê'))), 'aparece na lista, com quem registrou')
+  // sem motivo o formulário não envia
+  await preencher(pc, 'Item do estoque', 'Bacon'); await preencher(pc, 'Quantidade desperdiçada', '1')
+  const baconAntes = await qtd('Bacon')
+  await clicar(pc, 'Registrar desperdício', 'button[type=submit]'); await dormir(600)
+  assert.equal(await qtd('Bacon'), baconAntes)
+  // a cozinha registra sem ter acesso ao Estoque
+  const coz = await nova('desktop'); await entrar(coz, '/admin', 'ze@teste.local')
+  await ir(coz, '/admin/cozinha', 1000)
+  assert.ok(!(await coz.evaluate(() => [...document.querySelectorAll('aside a')].some((a) => a.innerText.includes('Estoque')))), 'cozinha não tem o menu Estoque')
+  await clicar(coz, 'Registrar desperdício', 'main button'); await dormir(600)
+  await preencher(coz, 'Item do estoque', 'Calabresa'); await preencher(coz, 'Quantidade desperdiçada', '0.2'); await clicar(coz, 'Queimou no forno', '[role=dialog] button')
+  const calAntes = await qtd('Calabresa')
+  await clicar(coz, 'Registrar desperdício', '[role=dialog] button[type=submit]'); await dormir(1200)
+  assert.ok(Math.abs((await qtd('Calabresa')) - (calAntes - 0.2)) < 1e-6, 'cozinha baixou do estoque')
+  const lista = await rpc('listar_desperdicios', { p_inicio: dia, p_fim: dia })
+  assert.ok(lista.registros.some((d) => d.insumo === 'Calabresa' && d.observacao === 'Queimou no forno' && d.usuario.startsWith('Zé')), JSON.stringify(lista.registros.slice(0, 2)))
+  await coz.close()
+})
+
 await teste('caixa: sangria, fechamento com diferença e nova abertura', async () => {
   await ir(pc, '/admin/caixa', 1500)
   await clicar(pc, 'Sangria', 'button'); await preencher(pc, 'Valor', '20'); await preencher(pc, 'Motivo', 'Teste'); await clicar(pc, 'Registrar', 'button[type=submit]'); await dormir(800)
