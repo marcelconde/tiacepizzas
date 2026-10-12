@@ -19,6 +19,17 @@ enable_signup = true
 # e travaria o cadastro. Para confirmar por e-mail, configure antes um SMTP próprio no painel do Supabase.
 enable_confirmations = false
 
+# E-mails do login em português (hoje só sai o de "esqueci a senha"; o de confirmação fica pronto para quando for ligado).
+# Quem envia é o Resend, cadastrado como SMTP no painel do Supabase (Authentication → Emails → SMTP Settings).
+# A chave do Resend fica só lá: nunca neste arquivo, que é público.
+[auth.email.template.recovery]
+subject = "Crie uma senha nova na Tia Cê Pizzas"
+content_path = "./supabase/templates/recuperar-senha.html"
+
+[auth.email.template.confirmation]
+subject = "Confirme o seu e-mail na Tia Cê Pizzas"
+content_path = "./supabase/templates/confirmar-email.html"
+
 # Entrada social dos clientes (Google e Facebook): ligue em Authentication > Providers no painel do Supabase,
 # com as credenciais criadas no Google Cloud e na Meta. O passo a passo está no README.
 

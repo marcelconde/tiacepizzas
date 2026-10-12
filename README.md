@@ -88,12 +88,25 @@ Sem isto o cliente pede normalmente e pode criar conta com e-mail e senha; só n
 
 Quem entra com Google/Facebook é sempre cliente: nunca ganha acesso ao painel.
 
-### 5. E-mails de "esqueci a senha"
+### 5. E-mails do login (Resend)
 
-A conta com e-mail e senha é criada sem e-mail de confirmação (`enable_confirmations = false` em `supabase/config.toml`),
-porque o envio de e-mails que vem com o Supabase serve só para testes: poucos e-mails por hora. O link de **esqueci a senha**
-usa esse mesmo envio. Quando houver clientes usando a conta, cadastre um serviço de e-mail próprio em
-**Authentication → Emails → SMTP Settings** no Supabase (há opções gratuitas, como Resend e Brevo).
+Os e-mails de **esqueci a senha** saem pelo [Resend](https://resend.com), com o remetente `Tia Cê Pizzas <contato@tiacepizzas.com.br>`
+e o texto em português que está em `supabase/templates/`. O envio que vem com o Supabase gratuito não serve: só entrega para
+quem é da própria organização e não deixa mudar os textos.
+
+Para ligar em um projeto novo:
+
+1. No Resend, em **Domains → Add domain**, cadastre o domínio (região São Paulo). Com a Cloudflare ligada à conta, os registros de
+   DNS (`resend._domainkey`, `send` e `rsend`) são criados sozinhos; espere aparecer **Verified**.
+2. Em **Settings → Integrations → Supabase → Connect to Supabase**, autorize, escolha o projeto e o domínio, deixe o assistente criar
+   a chave e informe o remetente. Ele grava o SMTP no Supabase (Authentication → Emails → SMTP Settings); a chave nunca passa por este repositório.
+3. Rode `npx supabase config push` para enviar os textos em português (só é aceito depois que o SMTP próprio está ligado).
+
+Mudou um texto? Edite o arquivo em `supabase/templates/` e rode `npx supabase config push` de novo.
+
+A conta do cliente é criada **sem e-mail de confirmação** (`enable_confirmations = false` em `supabase/config.toml`), para ele já sair
+pedindo. O texto de confirmação já está pronto: para exigir, troque para `true` e rode `npx supabase config push`.
+O plano gratuito do Resend envia até 100 e-mails por dia.
 
 ## Nota fiscal (NFC-e)
 
