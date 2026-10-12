@@ -84,8 +84,11 @@ Quando o painel marca um pedido de entrega como **Pronto** (ou escolhe o motoboy
 celular do motoboy toca e mostra **"Pedido #123 está pronto — Pode retirar na pizzaria."**, com o aplicativo aberto,
 em segundo plano ou fechado. O aviso viaja pelo Firebase, o serviço gratuito do Google para notificações no Android.
 
-> **Escrito e testado só no ambiente local** (o painel chama o servidor e o servidor acha o aparelho do motoboy).
-> O envio de verdade pelo Firebase e a chegada no celular ainda não foram testados.
+> **Ligado no banco real em 2026-10-12, ainda sem prova no celular.** A migração foi aplicada, a função
+> `avisar-entregador` está publicada (sem login ela responde "Sessão inválida", e o visitante não lê nem grava o
+> cadastro de aparelhos) e o segredo `FIREBASE_CONTA` existe. O envio de verdade pelo Firebase e a chegada do aviso
+> no aparelho ainda não foram vistos. O painel publicado só passa a disparar o aviso quando esta branch entrar na
+> `main`; até lá, `npm run build` e `npm run preview` abrem em http://localhost:4173/admin um painel com o disparo.
 
 Para ligar (uma vez):
 
