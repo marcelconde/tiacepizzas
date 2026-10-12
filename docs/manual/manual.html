@@ -178,7 +178,7 @@
 <p>A <b>taxa de entrega</b> depende de como a pizzaria configurou (capítulo 11):</p>
 <ul>
   <li><b>Por bairro:</b> o cliente escolhe o bairro em uma lista e vê a taxa na hora.</li>
-  <li><b>Por distância:</b> o cliente só preenche a rua e o número. O site localiza o endereço no mapa sozinho, calcula a distância até a loja e mostra a taxa, sem o cliente escolher nada. Se o pino cair no lugar errado, o cliente arrasta. Se o endereço estiver fora do raio, aparece o aviso “Este endereço está fora da nossa área de entrega” e o pedido não é enviado.</li>
+  <li><b>Por distância:</b> o cliente digita o CEP (a rua e o bairro são preenchidos; se ele trocar o CEP, o endereço é trocado junto) e o número. O site localiza o endereço no mapa sozinho, mede a distância da loja até ele pelo caminho das ruas e mostra a taxa, sem o cliente escolher nada. Se o pino cair no lugar errado, o cliente arrasta. Se o endereço estiver fora do raio, aparece o aviso “Este endereço está fora da nossa área de entrega” e o pedido não é enviado.</li>
 </ul>
 <figure class="media"><img src="capturas/site-checkout-distancia.jpg" alt=""><figcaption>Entrega por distância: o endereço localizado no mapa e a taxa calculada.</figcaption></figure>
 <div class="dica"><p>O preço que vale é sempre o calculado pelo sistema no momento do envio. Se um preço ou promoção mudar enquanto o cliente monta a sacola, o total cobrado é o atual.</p></div>
@@ -466,14 +466,14 @@
 <p>Cadastre os bairros ou regiões atendidos, a taxa de cada um e, se quiser, um tempo extra de entrega. O cliente só consegue pedir entrega para os bairros da lista.</p>
 <figure class="media"><img src="capturas/painel-entregas-bairro.jpg" alt=""><figcaption>Entrega por bairro.</figcaption></figure>
 <h3>Por distância</h3>
-<p>O sistema mede a distância em linha reta entre a loja e o endereço do cliente e aplica a faixa correspondente. A maior faixa ativa é o <b>raio máximo</b> de atendimento.</p>
+<p>O sistema mede a distância <b>pelo caminho das ruas</b>, da loja até o endereço do cliente (o mesmo trajeto que o motoboy faz), e aplica a faixa correspondente. A maior faixa ativa é o <b>limite</b> de atendimento.</p>
 <figure><img src="capturas/painel-entregas-distancia.jpg" alt=""><figcaption>Entrega por distância: o ponto da loja, as faixas e os círculos de cada faixa no mapa.</figcaption></figure>
 <ol>
-  <li>Marque o <b>ponto da loja</b>: clique em <b class="ui">Localizar pelo endereço da loja</b> (usa o endereço de Configurações → Loja) ou informe latitude e longitude.</li>
+  <li>Marque o <b>ponto da loja</b> no quadro <b class="ui">Ponto da loja no mapa</b> (ele também aparece em Configurações → Loja). O pino tem de ficar em cima da porta da loja, porque é dali que as distâncias são medidas. Há quatro jeitos: <b>arrastar a pizza</b> no mapa (use o + para aproximar); <b class="ui">Estou na loja: usar a localização deste aparelho</b>; <b class="ui">Colar do Google Maps</b> (no Google Maps, toque e segure em cima da loja, copie os dois números e cole); ou <b class="ui">Achar pelo endereço</b>, que costuma cair perto mas não na porta. O ponto novo só vale depois de <b class="ui">Salvar este ponto</b>.</li>
   <li>Cadastre as <b>faixas</b>. Exemplo: até 3 km, R$ 5; até 5 km, R$ 8; até 8 km, R$ 10; até 10 km, R$ 15.</li>
   <li>Para aumentar o raio (de 10 para 15 km, por exemplo), crie uma faixa nova. Para reduzir, desative ou exclua a maior.</li>
 </ol>
-<div class="dica"><p>A distância é em linha reta, não o caminho pelas ruas. Na prática o trajeto real é um pouco maior; leve isso em conta ao definir as faixas.</p></div>
+<div class="dica"><p>Os círculos do mapa mostram cada faixa em linha reta, só para dar uma ideia. A taxa usa o caminho pelas ruas, que é igual ou maior: um endereço do outro lado de um rio pode estar dentro de um círculo e cair na faixa seguinte. Se o serviço de trajetos estiver fora do ar, o sistema usa a linha reta com 30% a mais e mostra a distância como “cerca de”.</p></div>
 
 <h2>Entregadores</h2>
 <p>A aba <b class="ui">Entregadores</b> lista quem faz entregas, como cada um recebe e se tem acesso ao aplicativo. Cada motoboy tem a sua regra: uma <b>diária</b> por dia trabalhado (R$ 50,00 ao cadastrar; você pode mudar) mais o valor das entregas, que pode ser <b>a taxa de entrega de cada pedido</b> ou <b>um valor fixo por entrega</b>. Para dar acesso ao aplicativo, crie o usuário com a função <b>Motoboy</b> em Configurações → Usuários; ele entra nesta lista sozinho. A chave <b class="ui">Mostrar a posição do motoboy para o cliente</b> liga ou desliga o mapa do acompanhamento.</p>

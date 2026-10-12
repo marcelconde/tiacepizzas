@@ -16,7 +16,7 @@ O **vídeo-tutorial** narrado, que percorre todas as telas, é gerado por `npm r
 | Site, painel e app do entregador (React + Vite + Tailwind) | GitHub Pages | `src/` |
 | Banco, login, tempo real e fotos | Supabase (Postgres) | `supabase/migrations/` |
 | Nota fiscal e criação de usuários | Supabase Edge Functions | `supabase/functions/` |
-| Mapas e localização de endereços | OpenStreetMap (Leaflet + Nominatim), sem chave nem custo | `src/lib/geo.ts`, `src/components/Mapa.tsx` |
+| Mapas, localização de endereços e trajetos | OpenStreetMap (Leaflet + Nominatim + OSRM), sem chave nem custo; CEP pelo ViaCEP | `src/lib/geo.ts`, `src/components/Mapa.tsx` |
 | DNS | Cloudflare → GitHub Pages | — |
 
 Regras que valem a pena conhecer:
@@ -28,6 +28,8 @@ Regras que valem a pena conhecer:
 - **Marcar como pago** lança a venda no caixa aberto.
 - **Quem cria conta no site é sempre cliente.** O acesso ao painel só existe para quem a administradora cadastra em Configurações → Usuários: o papel fica em `app_metadata`, que só o servidor grava. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.
 - **Motoboy recebe diária + entregas** (a taxa de cada pedido ou um valor fixo, por entregador). O acerto mostra o que cada um tem a receber, e o **pagamento** registrado em Pagamentos vira uma saída do dia; se o dinheiro saiu do caixa, a sangria é lançada junto.
+- **Entrega por distância usa o trajeto pelas ruas**, não a linha reta. O navegador mede o trajeto loja → cliente no OSRM (dois servidores públicos, um de reserva) e manda junto (`calcular_entrega(p_lat, p_lng, p_rota_km)` e `endereco.rota_km` em `criar_pedido`). O banco só aceita o valor se for plausível: nunca menos que a linha reta, no máximo 4× ela + 3 km; sem trajeto, usa a linha reta + 30%. A busca do endereço (Nominatim) fica restrita à região da loja, para não cair numa rua de mesmo nome em outra cidade.
+- **Ponto da loja** (Entregas e Configurações → Loja): ajustado arrastando o pino, pela localização do aparelho ou colando as coordenadas/link do Google Maps (`lerCoordenadas` em `src/lib/geo.ts`). Achar pelo endereço devolve o meio da rua, não a porta.
 - **Rastrear entrega** (quadro de Pedidos e detalhes do pedido): o painel lê a última posição do entregador (`entregadores.lat/lng/posicao_em`, gravada pelo aplicativo com `entrega_posicao`) a cada 10 s e avisa "sem sinal" quando ela tem mais de 2 minutos. Se o aplicativo passar a enviar em intervalos maiores, ajuste `SEM_SINAL_MS` em `src/admin/Rastreio.tsx`.
 - **Não existe mais a tela Cozinha**: o preparo é acompanhado no quadro de Pedidos. A função Cozinha continua existindo e usa a tela de Pedidos.
 - **Página inicial em dois modos** (Site e promoções → Página inicial): o padrão, com as seções prontas, e o livre, em que a administradora

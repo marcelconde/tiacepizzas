@@ -3,12 +3,14 @@ import { Check, Download, Plus, Printer } from 'lucide-react'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Tabela, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { chamarFuncao, useConsulta } from '../lib/dados'
-import { DIAS_SEMANA, PAPEIS, isoDia } from '../lib/formato'
+import { DIAS_SEMANA, PAPEIS, isoDia, soDigitos } from '../lib/formato'
+import { consultarCep } from '../lib/geo'
 import { imprimirPedido } from '../lib/impressao'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Configuracoes as TConfig, Meta, Papel, Pedido, Perfil } from '../lib/tipos'
 import { MODULOS, Pagina, useAdmin, type Modulo } from './AdminLayout'
+import { PontoLoja } from './PontoLoja'
 
 type Aba = 'loja' | 'horarios' | 'pedidos' | 'metas' | 'impressao' | 'financeiro' | 'usuarios' | 'permissoes' | 'sistema'
 
@@ -281,6 +283,16 @@ export default function Configuracoes() {
   })
   const numero = (v: unknown) => Number(String(v ?? '').replace(',', '.')) || 0
 
+  /** CEP completo e diferente do anterior: preenche o endereço da loja (ainda é preciso clicar em Salvar). */
+  async function mudarCep(valor: string) {
+    if (!c) return
+    setC({ ...c, cep: valor })
+    if (soDigitos(valor).length !== 8 || soDigitos(valor) === soDigitos(c.cep)) return
+    const r = await consultarCep(valor).catch(() => null)
+    if (!r) return
+    setC((v) => (v && soDigitos(v.cep) === soDigitos(valor) ? { ...v, logradouro: r.logradouro || v.logradouro, bairro: r.bairro || v.bairro, cidade: r.cidade || v.cidade, uf: r.uf || v.uf } : v))
+  }
+
   async function salvar(e: FormEvent) {
     e.preventDefault()
     setSalvando(true)
@@ -364,8 +376,8 @@ export default function Configuracoes() {
             <Campo rotulo="CNPJ" dica="Aparece no rodapé do site.">
               <Entrada inputMode="numeric" placeholder="00.000.000/0000-00" maxLength={18} {...texto('cnpj')} />
             </Campo>
-            <Campo rotulo="CEP">
-              <Entrada {...texto('cep')} />
+            <Campo rotulo="CEP" dica="Ao completar o CEP, a rua, o bairro, a cidade e a UF são preenchidos.">
+              <Entrada inputMode="numeric" maxLength={9} value={String(c.cep ?? '')} onChange={(e) => mudarCep(e.target.value)} />
             </Campo>
             <Campo rotulo="Rua / avenida">
               <Entrada {...texto('logradouro')} />
@@ -388,6 +400,11 @@ export default function Configuracoes() {
             <p className="text-xs text-stone-500 sm:col-span-2">Logo, capa, banners e textos da página inicial ficam em Site e promoções.</p>
           </>,
         )}
+      {aba === 'loja' && (
+        <div className="mt-4 max-w-3xl">
+          <PontoLoja podeEditar />
+        </div>
+      )}
 
       {aba === 'horarios' &&
         formulario(
