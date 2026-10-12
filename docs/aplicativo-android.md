@@ -50,10 +50,9 @@ assinada com a mesma chave; sem eles, o entregador teria de desinstalar e instal
 
 1. Envie o `tia-ce-entregas.apk` para o celular (WhatsApp, Google Drive ou cabo) e toque no arquivo.
 2. O Android avisa que é um aplicativo de fora da loja: toque em **Configurações** → **Permitir desta fonte** → **Instalar**.
-3. Abra o **Tia Cê Entregas** e entre com o e-mail e a senha do entregador (os mesmos do site).
-4. Na primeira entrega ele pede duas permissões — aceite as duas:
-   - **Localização**: "Durante o uso do app" e **localização precisa**.
-   - **Notificações**: é o aviso fixo que mantém o envio funcionando.
+3. Abra o **Tia Cê Entregas**. Ele pede para enviar **notificações**: toque em **Permitir** — é o aviso fixo que
+   aparece enquanto a localização é enviada. Depois entre com o e-mail e a senha do entregador (os mesmos do site).
+4. Na primeira entrega ele pede a **localização**: escolha "Durante o uso do app" e **localização precisa**.
 5. Em Xiaomi, Samsung e Motorola, vale tirar a economia de bateria deste aplicativo
    (Configurações → Apps → Tia Cê Entregas → Bateria → **Sem restrições**): alguns aparelhos encerram
    aplicativos em segundo plano por conta própria.
@@ -100,22 +99,27 @@ Quando a tela do entregador mudar:
 
 ## O que já foi comprovado
 
-Em 2026-10-12, num Windows 11 com Node 24:
+Em 2026-10-12, num Windows 11 com Node 24, Android Studio 2026.2 e Java 21 (Temurin):
 
+- **`npm run app:android` gera o APK no Windows** (primeira compilação do projeto, cerca de 2 minutos): 4,2 MB,
+  assinado com a chave do projeto (`CN=Tia Ce Pizzas, C=BR`), para o Android 16 (`targetSdk 36`), com as
+  permissões de localização, serviço em primeiro plano e notificações. Funcionou com o projeto numa pasta com
+  espaços no caminho.
 - O Gradle do projeto (8.14.3) **não roda com o Java 25** que vem no Android Studio atual: para logo no começo
   com "Unsupported class file major version 69". Por isso o Java 21 entrou na lista do que instalar, e
   `scripts/app/android.mjs` procura um JDK do 21 ao 24 e avisa com clareza quando não acha.
+- O assistente do Android Studio baixou a versão 37 do Android; a 36, que o projeto pede, o Gradle baixou sozinho
+  na primeira compilação (as licenças já estavam aceitas).
+- `npm run build`, `npm run test:db`, `npm run test:e2e` e `npm run manual` passam no Windows.
 
-- `npm run build`, `npm run test:db` (23 testes), `npm run test:e2e` (15 roteiros) e `npm run manual` passam no Windows.
-- `npx cap sync android` roda e leva o `useLegacyBridge` para dentro do aplicativo.
-- `scripts/app/android.mjs` foi corrigido para o Windows: a criação da chave de assinatura falhava porque o
-  caminho do Android Studio tem espaço (`C:\Program Files\...`). A correção foi conferida com uma simulação,
-  não com o `keytool` de verdade.
+Ainda **não** comprovado: tudo o que depende do celular. O que conferir nele:
 
-Ainda **não** comprovado: a compilação do APK (faltam o Java 21 e o Android SDK) e tudo o que depende do celular.
-Pontos já conhecidos para conferir no celular:
-
-- O plugin de GPS declara a permissão de notificações, mas **não a pede** (conferido no código dele): no
-  Android 13 ou mais novo o aviso fixo pode não aparecer enquanto o aplicativo não pedir essa permissão.
+- **Notificações:** o plugin de GPS declara a permissão, mas não a pede (conferido no código dele). O aplicativo
+  passou a pedi-la ao abrir (`MainActivity.java`). Falta ver no celular se o pedido aparece e se o aviso fixo
+  aparece durante a entrega.
+- **`useLegacyBridge`:** aplicado; o efeito só se vê no teste de 15 minutos com a tela apagada.
 - Tela de ponta a ponta do Android 16, botão voltar, teclado sobre o login, links para Waze, Google Maps,
   WhatsApp e telefone, e renovação da sessão com o aplicativo em segundo plano.
+
+O emulador do Android Studio não serve para esses testes neste Windows sem ligar a virtualização (ele avisa que o
+"hypervisor driver" não está instalado), e de qualquer forma GPS em segundo plano se comprova é no aparelho.
