@@ -181,3 +181,35 @@ Para desenvolver contra o banco de verdade: `cp .env.production .env.local` e us
 
 Mudou o banco? Crie um novo arquivo em `supabase/migrations/`, rode `npm run test:db` e depois `npx supabase db push`.
 Mudou uma tela? Rode `npm run manual` (e, se o roteiro for afetado, `npm run video`) para a documentação acompanhar.
+
+### Dois computadores trabalhando ao mesmo tempo
+
+O projeto é desenvolvido em dois computadores, cada um com a sua sessão do Claude:
+
+| Computador | Branch | Cuida de |
+| --- | --- | --- |
+| Mac | `main` | site, painel, banco, manual e vídeo |
+| Windows | `app-android` | aplicativo Android do entregador: `android/`, `scripts/app/`, `capacitor.config.ts`, `docs/aplicativo-android.md` |
+
+Regras, para um envio nunca apagar o outro:
+
+1. **Nunca `git push --force`** (nem `--force-with-lease`), em nenhuma branch. Push recusado quer dizer que o outro
+   computador enviou antes: traga as mudanças dele e envie de novo.
+2. **Antes de cada push:** na `main`, `git pull --rebase`; na `app-android`, `git fetch` e `git merge origin/main`
+   (a branch já está no GitHub: um rebase nela exigiria forçar o envio).
+3. **Commits pequenos, enviados logo**, para os dois lados nunca ficarem muito diferentes.
+4. **Cada um no seu território.** Precisou mexer no do outro (o Windows em `src/`, o Mac em `android/`)? Faça a menor
+   mudança possível e avise o Marcel antes de enviar.
+5. **Conflito não se resolve no escuro:** se o git apontar conflito em arquivo do outro computador, pare e mostre ao Marcel.
+6. **Só a `main` publica o site.** A `app-android` entra na `main` quando o aplicativo estiver comprovado no celular,
+   com `npm run test:db` e `npm run test:e2e` passando, e só quando o Marcel pedir.
+7. **O que um computador descobre e o outro precisa saber vai para arquivos versionados** — este README e
+   `docs/aplicativo-android.md`. As anotações das sessões (`CLAUDE.md`, `.claude/memory/`) ficam fora do git, uma cópia
+   em cada computador. Para ler o que o outro lado escreveu sem trocar de branch: `git fetch` e
+   `git show origin/app-android:docs/aplicativo-android.md` (ou `origin/main:README.md`).
+8. **O aplicativo leva uma cópia do site dentro dele.** Quem já instalou continua com a tela antiga até receber um APK
+   novo. Por isso as funções do banco que o motoboy usa (`minhas_entregas`, `entrega_acao`, `entrega_posicao`) não
+   podem mudar de nome, de parâmetros nem perder campos da resposta — só ganhar campos novos. Mudou a tela
+   `/entregador` ou `src/lib/rastreio.ts`? Diga no commit que o APK precisa ser gerado de novo.
+9. **Os scripts rodam nos dois sistemas.** Nada de `VAR=1 comando` no `package.json`, de caminho fixo do Chrome ou de
+   programas que só existem no Mac (`unzip`, `open`…) fora de `scripts/video/`: use `scripts/plataforma.mjs`.
