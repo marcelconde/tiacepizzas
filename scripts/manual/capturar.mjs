@@ -229,9 +229,6 @@ await preencher(pc, 'Bairro', 'Centro')
 await topo(pc)
 await foto(pc, 'painel-pdv')
 
-await ir(pc, '/admin/cozinha', 1200)
-await foto(pc, 'painel-cozinha')
-
 await ir(pc, '/admin/clientes', 1200)
 await foto(pc, 'painel-clientes')
 await pc.evaluate(() => document.querySelector('tbody tr').click())

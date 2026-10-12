@@ -179,9 +179,11 @@ await teste('visitante lê cardápio, promoções e banners, mas nada da operaç
 await teste('cada papel só alcança os módulos liberados para ele', async () => {
   const conta = async (uid, tabela) => como('authenticated', uid, async () => (await q(`select * from ${tabela}`)).length)
   await db.exec(`insert into despesas (descricao, valor) values ('Gás', 100)`)
-  // cozinha: vê pedidos, não vê clientes, caixa nem despesas
+  // a tela Cozinha saiu do painel: o módulo "cozinha" não existe mais e quem o tinha ficou com Pedidos
+  assert.deepEqual((await db.query(`select papel::text || ':' || modulo as p from permissoes where papel = 'cozinha' or modulo = 'cozinha' order by 1`)).rows.map((r) => r.p), ['cozinha:pedidos'])
+  assert.ok((await db.query(`select 1 from permissoes where papel = 'atendente' and modulo = 'pedidos'`)).rows.length === 1)
+  // cozinha: usa a tela de Pedidos; não vê despesas nem estoque
   assert.equal(await conta(cozinha, 'despesas'), 0)
-  assert.equal(await conta(cozinha, 'clientes'), 0)
   assert.ok((await conta(cozinha, 'insumos')) === 0)
   // atendente: clientes sim; despesas e estoque não
   assert.equal(await conta(atendente, 'despesas'), 0)
@@ -414,10 +416,12 @@ await teste('desperdício: cozinha registra com motivo, baixa o estoque, entra n
   perto(Number(r.restante), antes - 0.3)
   perto(await estoque('Mussarela'), antes - 0.3)
   perto(Number(r.valor), Math.round(0.3 * Number(insumo.custo_unitario) * 100) / 100)
-  // sem motivo, quantidade zero e quem não tem a tela da cozinha nem a do estoque: recusado
+  // quem cuida dos pedidos também registra (o botão fica na tela de Pedidos)
+  assert.ok((await como('authenticated', atendente, () => um(`select insumos_para_desperdicio() as r`))).r.length > 0)
+  // sem motivo, quantidade zero e quem não é da equipe: recusado
   await como('authenticated', cozinha, () => falha(q(`select registrar_desperdicio($1, 0.2, '  ')`, [insumo.id]), 'Escreva o que aconteceu'))
   await como('authenticated', cozinha, () => falha(q(`select registrar_desperdicio($1, 0, 'x')`, [insumo.id]), 'Informe a quantidade'))
-  await como('authenticated', financeiro, () => falha(q(`select registrar_desperdicio($1, 0.2, 'x')`, [insumo.id]), 'Acesso negado')) // sem a tela da cozinha nem a do estoque
+  await como('authenticated', cliente, () => falha(q(`select registrar_desperdicio($1, 0.2, 'x')`, [insumo.id]), 'Acesso negado')) // cliente com conta não é equipe
   await como('authenticated', motoboy, () => falha(q(`select registrar_desperdicio($1, 0.2, 'x')`, [insumo.id]), 'Acesso negado'))
   await falha(db.query(`insert into estoque_movimentos (insumo_id, tipo, quantidade) values ($1, 'desperdicio', 1)`, [insumo.id]), 'desperdicio_com_motivo')
   // aparece na lista do período (com quem registrou), nas perdas do resultado e na auditoria

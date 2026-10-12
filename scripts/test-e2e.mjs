@@ -150,7 +150,7 @@ await teste('entrada de estoque soma a quantidade', async () => {
   assert.equal(Number((await api('insumos?select=quantidade&nome=eq.Bacon'))[0].quantidade), antes + 10)
 })
 
-await teste('desperdício: registro na aba do Estoque e pelo botão da Cozinha', async () => {
+await teste('desperdício: registro na aba do Estoque e pelo botão da tela de Pedidos', async () => {
   const qtd = async (nome) => Number((await api(`insumos?select=quantidade&nome=eq.${encodeURIComponent(nome)}`))[0].quantidade)
   const hoje = new Date(), dia = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
   const antes = await qtd('Mussarela')
@@ -164,10 +164,12 @@ await teste('desperdício: registro na aba do Estoque e pelo botão da Cozinha',
   const baconAntes = await qtd('Bacon')
   await clicar(pc, 'Registrar desperdício', 'button[type=submit]'); await dormir(600)
   assert.equal(await qtd('Bacon'), baconAntes)
-  // a cozinha registra sem ter acesso ao Estoque
+  // a tela Cozinha saiu: quem tem essa função usa Pedidos (o endereço antigo cai lá) e registra sem ter acesso ao Estoque
   const coz = await nova('desktop'); await entrar(coz, '/admin', 'ze@teste.local')
   await ir(coz, '/admin/cozinha', 1000)
-  assert.ok(!(await coz.evaluate(() => [...document.querySelectorAll('aside a')].some((a) => a.innerText.includes('Estoque')))), 'cozinha não tem o menu Estoque')
+  assert.ok(coz.url().endsWith('/admin/pedidos'), coz.url())
+  const menuCoz = await coz.evaluate(() => [...document.querySelectorAll('aside nav a')].map((a) => a.innerText.trim().split('\n')[0]))
+  assert.deepEqual(menuCoz, ['Pedidos', 'Novo pedido'], 'função Cozinha: só Pedidos e Novo pedido')
   await clicar(coz, 'Registrar desperdício', 'main button'); await dormir(600)
   await preencher(coz, 'Item do estoque', 'Calabresa'); await preencher(coz, 'Quantidade desperdiçada', '0.2'); await clicar(coz, 'Queimou no forno', '[role=dialog] button')
   const calAntes = await qtd('Calabresa')
@@ -423,6 +425,37 @@ await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', 
   assert.equal(fora.dentro, false)
   await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'bairro' }), headers: { prefer: 'return=minimal' } })
   await cli.close()
+})
+
+await teste('entrega pronta sem motoboy fica sinalizada; rastrear entrega mostra o motoboy no mapa e avisa quando some o sinal', async () => {
+  const cartao = (n) => pc.evaluate((n) => [...document.querySelectorAll('article')].find((a) => a.innerText.includes(`#${n}`))?.innerText ?? '', n)
+  const noCartao = async (n, botao) => { await pc.evaluate((n, botao) => [...[...document.querySelectorAll('article')].find((a) => a.innerText.includes(`#${n}`)).querySelectorAll('button')].find((b) => b.innerText.includes(botao)).click(), n, botao); await dormir(1500) }
+  // uma entrega fica pronta sem ninguém escolhido para levar
+  const p = (await api('pedidos?select=id,numero&tipo=eq.entrega&status=eq.em_preparo&order=criado_em.desc&limit=1'))[0]
+  assert.ok(p, 'há uma entrega em preparo na demonstração')
+  await api(`pedidos?id=eq.${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'pronto', entregador_id: null }) })
+  await ir(pc, '/admin/pedidos', 1200)
+  assert.ok((await cartao(p.numero)).includes('Falta escolher o motoboy'), 'cartão sinalizado')
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('main [role=alert]')].some((a) => a.innerText.includes('pronto sem motoboy'))), 'faixa de alertas')
+  // escolhido o motoboy, o aviso some
+  await abrirPedido(p.numero)
+  assert.ok(await pc.evaluate(() => document.querySelector('[role=dialog]').innerText.includes('Falta escolher o motoboy')))
+  await preencher(pc, 'Motoboy responsável', 'Carlos Moto'); await dormir(1200)
+  await pc.keyboard.press('Escape'); await dormir(700)
+  assert.ok(!(await cartao(p.numero)).includes('Falta escolher o motoboy'), 'com motoboy o aviso some')
+  // saiu para entrega: o celular do motoboy manda a posição e o painel mostra no mapa
+  await noCartao(p.numero, 'Saiu para entrega')
+  const tokMoto = (await (await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'carlos@teste.local', password: SENHA }) })).json()).access_token
+  await fetch(`${API}/rest/v1/rpc/entrega_posicao`, { method: 'POST', headers: { authorization: `Bearer ${tokMoto}`, 'content-type': 'application/json' }, body: JSON.stringify({ p_lat: -23.5581, p_lng: -46.6602 }) })
+  await noCartao(p.numero, 'Rastrear entrega'); await dormir(1500)
+  const janela = () => pc.evaluate(() => [...document.querySelectorAll('[role=dialog]')].at(-1).innerText)
+  assert.match(await janela(), new RegExp(`Rastrear entrega · Pedido #${p.numero}[\\s\\S]*Carlos Moto[\\s\\S]*Posição recebida`))
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('[role=dialog] .leaflet-marker-icon')].some((m) => m.innerText.includes('🛵'))), 'motoboy no mapa')
+  // celular sem mandar a posição há 10 minutos: a janela se atualiza sozinha e avisa
+  await api('entregadores?nome=eq.Carlos%20Moto', { method: 'PATCH', body: JSON.stringify({ posicao_em: new Date(Date.now() - 10 * 60000).toISOString() }) })
+  await dormir(11500)
+  assert.match(await janela(), /Sem sinal há 10 min/)
+  await pc.keyboard.press('Escape'); await dormir(500)
 })
 
 await nav.close()

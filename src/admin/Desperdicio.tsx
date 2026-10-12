@@ -15,8 +15,8 @@ const MOTIVOS = ['Caiu no chão', 'Queimou no forno', 'Pedido montado errado', '
 
 /**
  * Registro de desperdício: o que foi perdido durante o preparo, quanto e por quê.
- * Usado na aba Desperdício do Estoque e no botão da tela da Cozinha — por isso busca os insumos por uma
- * função própria, que a cozinha também pode chamar (ela não enxerga a tela de Estoque).
+ * Usado na aba Desperdício do Estoque e no botão da tela de Pedidos — por isso busca os insumos por uma
+ * função própria, que quem cuida dos pedidos também pode chamar (sem enxergar a tela de Estoque nem os custos).
  */
 export function FormDesperdicio({ aoRegistrar }: { aoRegistrar?: () => void }) {
   const aviso = useAviso()

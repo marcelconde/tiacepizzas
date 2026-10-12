@@ -18,7 +18,6 @@ const AdminLayout = lazy(() => import('./admin/AdminLayout'))
 const Painel = lazy(() => import('./admin/Painel'))
 const Pedidos = lazy(() => import('./admin/Pedidos'))
 const Pdv = lazy(() => import('./admin/Pdv'))
-const Cozinha = lazy(() => import('./admin/Cozinha'))
 const Clientes = lazy(() => import('./admin/Clientes'))
 const CardapioAdmin = lazy(() => import('./admin/CardapioAdmin'))
 const Estoque = lazy(() => import('./admin/Estoque'))
@@ -56,7 +55,6 @@ export default function App() {
                     <Route path="painel" element={<Painel />} />
                     <Route path="pedidos" element={<Pedidos />} />
                     <Route path="pdv" element={<Pdv />} />
-                    <Route path="cozinha" element={<Cozinha />} />
                     <Route path="clientes" element={<Clientes />} />
                     <Route path="cardapio" element={<CardapioAdmin />} />
                     <Route path="estoque" element={<Estoque />} />
@@ -69,6 +67,8 @@ export default function App() {
                     <Route path="analises" element={<Analises />} />
                     <Route path="conteudo" element={<Conteudo />} />
                     <Route path="auditoria" element={<Auditoria />} />
+                    {/* endereço que não existe mais (ex.: a antiga tela Cozinha): o painel leva para uma tela liberada */}
+                    <Route path="*" element={null} />
                   </Route>
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

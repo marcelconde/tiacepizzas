@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
-  BarChart3, Bike, BookOpen, ChefHat, ClipboardList, FileText, HandCoins, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
+  BarChart3, Bike, BookOpen, ClipboardList, FileText, HandCoins, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
   PlusCircle, Settings, Users, Volume2, VolumeX, Wallet, Wallet2, Wifi, WifiOff, X, type LucideIcon,
 } from 'lucide-react'
 import { Login, Moldura, TrocarSenha } from '../components/Login'
@@ -16,7 +16,7 @@ import type { ConfigFiscal, Configuracoes } from '../lib/tipos'
 
 // ------------------------------------------------------------------ módulos e menu
 export type Modulo =
-  | 'painel' | 'pedidos' | 'cozinha' | 'clientes' | 'cardapio' | 'estoque' | 'caixa' | 'entregas' | 'financeiro' | 'analises'
+  | 'painel' | 'pedidos' | 'clientes' | 'cardapio' | 'estoque' | 'caixa' | 'entregas' | 'financeiro' | 'analises'
   | 'conteudo' | 'fiscal' | 'auditoria' | 'configuracoes'
 
 interface ItemMenu {
@@ -29,7 +29,6 @@ export const MENU: ItemMenu[] = [
   { para: '/admin/painel', rotulo: 'Painel', icone: BarChart3, modulo: 'painel' },
   { para: '/admin/pedidos', rotulo: 'Pedidos', icone: ClipboardList, modulo: 'pedidos' },
   { para: '/admin/pdv', rotulo: 'Novo pedido', icone: PlusCircle, modulo: 'pedidos' },
-  { para: '/admin/cozinha', rotulo: 'Cozinha', icone: ChefHat, modulo: 'cozinha' },
   { para: '/admin/clientes', rotulo: 'Clientes', icone: Users, modulo: 'clientes' },
   { para: '/admin/cardapio', rotulo: 'Cardápio', icone: BookOpen, modulo: 'cardapio' },
   { para: '/admin/conteudo', rotulo: 'Site e promoções', icone: LayoutTemplate, modulo: 'conteudo' },
@@ -47,8 +46,7 @@ export const MENU: ItemMenu[] = [
 /** Nomes dos módulos na tela de permissões (um por linha da matriz). */
 export const MODULOS: { id: Modulo; rotulo: string; descricao: string }[] = [
   { id: 'painel', rotulo: 'Painel', descricao: 'Indicadores e gráficos de faturamento' },
-  { id: 'pedidos', rotulo: 'Pedidos', descricao: 'Quadro de pedidos, histórico e novo pedido' },
-  { id: 'cozinha', rotulo: 'Cozinha', descricao: 'Tela de preparo' },
+  { id: 'pedidos', rotulo: 'Pedidos', descricao: 'Quadro de pedidos, histórico, novo pedido e registro de desperdício' },
   { id: 'clientes', rotulo: 'Clientes', descricao: 'Cadastro e histórico de clientes' },
   { id: 'cardapio', rotulo: 'Cardápio', descricao: 'Produtos, preços e ficha técnica' },
   { id: 'conteudo', rotulo: 'Site e promoções', descricao: 'Banners, textos, promoções e cupons' },
@@ -196,7 +194,7 @@ export default function AdminLayout() {
   useEffect(() => {
     if (!interno || !modulos) return
     recarregarFiscal()
-    if (!atendimento && !pode('cozinha')) return
+    if (!atendimento) return
     contarNovos()
     const canal = supabase
       .channel('painel-pedidos')
@@ -220,7 +218,7 @@ export default function AdminLayout() {
       clearInterval(t)
       supabase.removeChannel(canal)
     }
-  }, [interno, modulos, atendimento, pode, aviso, contarNovos, recarregarFiscal, sincronizar])
+  }, [interno, modulos, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar])
 
   const valor = useMemo(
     () => ({ fiscal, recarregarFiscal, novos, pode, ehAdmin, aoMudarPedidos, sincronizar }),
@@ -261,7 +259,9 @@ export default function AdminLayout() {
     )
   }
   const permitido = itens.some((m) => pathname.startsWith(m.para))
-  if (pathname === '/admin' || pathname === '/admin/' || !permitido) return <Navigate to={itens[0].para} replace />
+  // a tela Cozinha saiu do painel: quem guardou o endereço dela cai em Pedidos
+  const inicio = pathname.startsWith('/admin/cozinha') && atendimento ? '/admin/pedidos' : itens[0].para
+  if (pathname === '/admin' || pathname === '/admin/' || !permitido) return <Navigate to={inicio} replace />
 
   const alternarSom = () => {
     const v = !som
@@ -314,7 +314,7 @@ export default function AdminLayout() {
             <p className="truncate font-semibold text-white">{perfil.nome}</p>
             <p className="flex items-center gap-1.5 truncate text-xs text-massa-400">
               {PAPEIS[perfil.papel]}
-              {(atendimento || pode('cozinha')) && (
+              {atendimento && (
                 <span className="ml-auto inline-flex items-center gap-1" title={aoVivo ? 'Pedidos chegam na hora' : 'Sem tempo real: a tela se atualiza a cada 45 segundos'}>
                   {aoVivo ? <Wifi className="size-3.5 text-manjericao-500" /> : <WifiOff className="size-3.5 text-queijo-400" />}
                   {aoVivo ? 'ao vivo' : 'a cada 45 s'}
