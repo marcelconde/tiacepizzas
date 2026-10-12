@@ -3,7 +3,7 @@
 Site de pedidos e sistema de gestão da pizzaria, em [tiacepizzas.com.br](https://tiacepizzas.com.br).
 
 - **Site público** — página inicial editável (seções prontas ou montada em blocos arrastáveis: textos, imagens clicáveis, botões), cardápio, montagem de pizza (tamanho, vários sabores, borda, adicionais), promoções, sacola, finalização (entrega por bairro ou por distância) e acompanhamento do pedido com mapa. O cliente pode pedir sem cadastro, criar uma conta com e-mail e senha ou entrar com Google/Facebook para guardar endereços e ver seus pedidos. Quem escolhe Pix recebe a chave na tela de acompanhamento, com o botão de enviar o comprovante pelo WhatsApp.
-- **Painel da equipe** (`/admin`) — pedidos em tempo real com alertas de atraso, venda de balcão/telefone, cozinha, clientes, cardápio com ficha técnica, site e promoções, estoque, caixa, entregas, pagamentos a motoboys e funcionários, financeiro, indicadores com metas, análises de produtos e clientes, nota fiscal (NFC-e), auditoria e configurações (usuários e permissões por função).
+- **Painel da equipe** (`/admin`) — pedidos em tempo real com alertas de atraso e de entrega pronta sem motoboy, rastreio do motoboy no mapa, venda de balcão/telefone, clientes, cardápio com ficha técnica, site e promoções, estoque, caixa, entregas, pagamentos a motoboys e funcionários, financeiro, indicadores com metas, análises de produtos e clientes, nota fiscal (NFC-e), auditoria e configurações (usuários e permissões por função).
 - **Aplicativo do entregador** (`/entregador`) — entregas do motoboy, atalho para o Waze e o Google Maps, WhatsApp do cliente, registro de entrega ou problema e envio da localização. No navegador o envio pausa enquanto o Waze estiver aberto; o **aplicativo Android** (`npm run app:android`, passo a passo em [docs/aplicativo-android.md](docs/aplicativo-android.md)) continua enviando em segundo plano.
 
 O **manual de uso**, com capturas de todas as telas, é gerado por `npm run manual` em `docs/manual-tia-ce-pizzas.pdf`.
@@ -23,11 +23,13 @@ Regras que valem a pena conhecer:
 
 - **Preço, promoção, cupom e taxa de entrega são sempre calculados no banco** (`criar_pedido`), nunca confiados ao navegador. Um reenvio do mesmo pedido não o duplica.
 - **O visitante só lê o cardápio.** O cliente com conta só enxerga os próprios dados. A equipe enxerga o que a função dela permite (tabela `permissoes`, aplicada no banco por RLS — não é só o menu que some). O motoboy não lê tabela nenhuma: usa funções que só devolvem as entregas dele.
-- **Desperdício** (ingrediente que caiu, queimou ou foi usado errado) é registrado na aba própria do Estoque ou pelo botão da Cozinha, sempre com o motivo; sai do estoque e entra no resultado junto com as perdas.
+- **Desperdício** (ingrediente que caiu, queimou ou foi usado errado) é registrado na aba própria do Estoque ou pelo botão da tela de Pedidos, sempre com o motivo; sai do estoque e entra no resultado junto com as perdas.
 - **Confirmar um pedido** dá baixa no estoque pela ficha técnica; **cancelar** devolve o estoque e estorna o caixa; **reembolsar** estorna o caixa de um pedido já entregue.
 - **Marcar como pago** lança a venda no caixa aberto.
 - **Quem cria conta no site é sempre cliente.** O acesso ao painel só existe para quem a administradora cadastra em Configurações → Usuários: o papel fica em `app_metadata`, que só o servidor grava. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.
 - **Motoboy recebe diária + entregas** (a taxa de cada pedido ou um valor fixo, por entregador). O acerto mostra o que cada um tem a receber, e o **pagamento** registrado em Pagamentos vira uma saída do dia; se o dinheiro saiu do caixa, a sangria é lançada junto.
+- **Rastrear entrega** (quadro de Pedidos e detalhes do pedido): o painel lê a última posição do entregador (`entregadores.lat/lng/posicao_em`, gravada pelo aplicativo com `entrega_posicao`) a cada 10 s e avisa "sem sinal" quando ela tem mais de 2 minutos. Se o aplicativo passar a enviar em intervalos maiores, ajuste `SEM_SINAL_MS` em `src/admin/Rastreio.tsx`.
+- **Não existe mais a tela Cozinha**: o preparo é acompanhado no quadro de Pedidos. A função Cozinha continua existindo e usa a tela de Pedidos.
 - **Página inicial em dois modos** (Site e promoções → Página inicial): o padrão, com as seções prontas, e o livre, em que a administradora
   arrasta blocos de texto, imagem, botão e as próprias seções. Tudo fica no mesmo registro (`site_conteudo.dados`: `modo` e `blocos`); a prévia do
   painel é o próprio site dentro de um quadro (`/?previa=1`), recebendo o rascunho antes de salvar. Imagens enviadas pelo painel são reduzidas no

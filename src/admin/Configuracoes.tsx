@@ -452,7 +452,7 @@ export default function Configuracoes() {
             </Campo>
 
             <h2 className="mt-2 font-display text-lg font-semibold sm:col-span-2">Alertas de pedido parado</h2>
-            <p className="-mt-2 text-sm text-stone-600 sm:col-span-2">Quantos minutos um pedido pode ficar na mesma etapa antes de cada nível de alerta aparecer no quadro de pedidos e na cozinha.</p>
+            <p className="-mt-2 text-sm text-stone-600 sm:col-span-2">Quantos minutos um pedido pode ficar na mesma etapa antes de cada nível de alerta aparecer no quadro de pedidos.</p>
             <div className="grid grid-cols-3 gap-3 sm:col-span-2">
               <Campo rotulo="Atenção (min)">
                 <Entrada {...alerta('atencao')} />

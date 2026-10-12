@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, Bike, Download, Plus, Search, Store } from 'lucide-react'
-import { Abas, Botao, Carregando, Entrada, Erro, Selecao, Selo, Tabela, Vazio, cx, useAviso } from '../components/ui'
+import { AlertTriangle, Bike, Download, MapPin, Plus, Search, Store, Trash2, UserX } from 'lucide-react'
+import { Abas, Botao, Carregando, Entrada, Erro, Modal, Selecao, Selo, Tabela, Vazio, cx, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { exportar } from '../lib/exportar'
 import { ORIGEM, PAGAMENTO, STATUS, TIPO, brl, dataHora, haQuanto, isoDia, telefone } from '../lib/formato'
@@ -10,7 +10,9 @@ import { aceitarPedido, atualizarPedido, mudarStatus, proximoPasso } from '../li
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Pedido, StatusPedido } from '../lib/tipos'
 import { ATRASO, Pagina, nivelAtraso, useAdmin, usePedidosAoVivo, type NivelAtraso } from './AdminLayout'
+import { FormDesperdicio } from './Desperdicio'
 import { DetalhePedido } from './DetalhePedido'
+import { RastreioEntrega } from './Rastreio'
 
 // pedidos com problema na entrega ficam na coluna "Em entrega", destacados
 const COLUNAS: { status: StatusPedido[]; titulo: string }[] = [
@@ -21,15 +23,20 @@ const COLUNAS: { status: StatusPedido[]; titulo: string }[] = [
   { status: ['saiu_entrega', 'problema_entrega'], titulo: 'Em entrega' },
 ]
 
-function CartaoPedido({ p, atraso, onAbrir, onAvancar, ocupado }: { p: Pedido; atraso: NivelAtraso | null; onAbrir: () => void; onAvancar: () => void; ocupado: boolean }) {
+/** Entrega pronta, esperando sair, sem ninguém escolhido para levar. */
+const semMotoboy = (p: Pedido) => p.tipo === 'entrega' && p.status === 'pronto' && !p.entregador_id
+
+function CartaoPedido({ p, atraso, onAbrir, onAvancar, onRastrear, ocupado }: { p: Pedido; atraso: NivelAtraso | null; onAbrir: () => void; onAvancar: () => void; onRastrear: () => void; ocupado: boolean }) {
   const passo = proximoPasso(p)
   const itens = p.pedido_itens ?? []
   const problema = p.status === 'problema_entrega'
+  const falta = semMotoboy(p)
+  const naRua = p.tipo === 'entrega' && (p.status === 'saiu_entrega' || problema)
   return (
     <article
       className={cx(
         'rounded-xl border-2 bg-white p-3 text-sm shadow-sm',
-        problema ? 'border-red-500' : atraso ? ATRASO[atraso].borda : p.status === 'novo' ? 'pulsar-novo border-queijo-400' : 'border-transparent',
+        problema || falta ? 'border-red-500' : atraso ? ATRASO[atraso].borda : p.status === 'novo' ? 'pulsar-novo border-queijo-400' : 'border-transparent',
       )}
     >
       <button type="button" onClick={onAbrir} className="block w-full text-left">
@@ -39,9 +46,15 @@ function CartaoPedido({ p, atraso, onAbrir, onAvancar, ocupado }: { p: Pedido; a
             {haQuanto(p.criado_em)}
           </span>
         </div>
-        {(problema || atraso) && (
+        {(problema || falta || atraso) && (
           <p className="mt-1 flex flex-wrap gap-1">
             {problema && <Selo className="bg-red-600 text-white">Problema na entrega</Selo>}
+            {falta && (
+              <Selo className="bg-red-600 text-white">
+                <UserX className="mr-1 inline size-3.5" />
+                Falta escolher o motoboy
+              </Selo>
+            )}
             {atraso && (
               <Selo className={ATRASO[atraso].cor}>
                 {ATRASO[atraso].rotulo} · {haQuanto(p.status_em)} parado
@@ -70,8 +83,13 @@ function CartaoPedido({ p, atraso, onAbrir, onAvancar, ocupado }: { p: Pedido; a
           </Selo>
         </div>
       </button>
+      {naRua && (
+        <Botao variante="secundario" tamanho="p" className="mt-3 w-full" onClick={onRastrear}>
+          <MapPin className="size-4" /> Rastrear entrega
+        </Botao>
+      )}
       {passo && (
-        <Botao variante={p.status === 'novo' ? 'verde' : 'secundario'} tamanho="p" className="mt-3 w-full" carregando={ocupado} onClick={onAvancar}>
+        <Botao variante={p.status === 'novo' ? 'verde' : 'secundario'} tamanho="p" className={cx('w-full', naRua ? 'mt-2' : 'mt-3')} carregando={ocupado} onClick={onAvancar}>
           {passo.rotulo}
         </Botao>
       )}
@@ -79,7 +97,7 @@ function CartaoPedido({ p, atraso, onAbrir, onAvancar, ocupado }: { p: Pedido; a
   )
 }
 
-function Quadro({ onAbrir, versao }: { onAbrir: (id: string) => void; versao: number }) {
+function Quadro({ onAbrir, onRastrear, versao }: { onAbrir: (id: string) => void; onRastrear: (id: string) => void; versao: number }) {
   const { config } = useLoja()
   const { fiscal, sincronizar } = useAdmin()
   const aviso = useAviso()
@@ -124,23 +142,27 @@ function Quadro({ onAbrir, versao }: { onAbrir: (id: string) => void; versao: nu
   const atrasos = new Map(dados.map((p) => [p.id, nivelAtraso(p.status_em, config)]))
   const contagem = (nivel: NivelAtraso) => dados.filter((p) => atrasos.get(p.id) === nivel).length
   const problemas = dados.filter((p) => p.status === 'problema_entrega').length
+  const semQuemLeve = dados.filter(semMotoboy).length
   const alertas = (['critico', 'atrasado', 'atencao'] as NivelAtraso[]).filter((n) => contagem(n) > 0)
 
   return (
     <>
-      {(alertas.length > 0 || problemas > 0) && (
+      {(alertas.length > 0 || problemas > 0 || semQuemLeve > 0) && (
         <div role="alert" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-950">
           <AlertTriangle className="size-4 shrink-0" />
-          <b>Pedidos parados há muito tempo:</b>
+          <b>{alertas.length > 0 ? 'Pedidos parados há muito tempo:' : 'Atenção:'}</b>
           {alertas.map((n) => (
             <Selo key={n} className={ATRASO[n].cor}>
               {contagem(n)} {ATRASO[n].rotulo.toLowerCase()}
             </Selo>
           ))}
           {problemas > 0 && <Selo className="bg-red-600 text-white">{problemas} com problema na entrega</Selo>}
-          <span className="text-xs text-amber-800">
-            Limites: {config?.alertas_pedido.atencao}, {config?.alertas_pedido.atrasado} e {config?.alertas_pedido.critico} min sem mudar de etapa.
-          </span>
+          {semQuemLeve > 0 && <Selo className="bg-red-600 text-white">{semQuemLeve} pronto{semQuemLeve > 1 ? 's' : ''} sem motoboy</Selo>}
+          {alertas.length > 0 && (
+            <span className="text-xs text-amber-800">
+              Limites: {config?.alertas_pedido.atencao}, {config?.alertas_pedido.atrasado} e {config?.alertas_pedido.critico} min sem mudar de etapa.
+            </span>
+          )}
         </div>
       )}
       <div className="flex gap-3 overflow-x-auto pb-4">
@@ -154,7 +176,7 @@ function Quadro({ onAbrir, versao }: { onAbrir: (id: string) => void; versao: nu
               </h2>
               <div className="space-y-2">
                 {lista.map((p) => (
-                  <CartaoPedido key={p.id} p={p} atraso={atrasos.get(p.id) ?? null} ocupado={ocupado === p.id} onAbrir={() => onAbrir(p.id)} onAvancar={() => avancar(p)} />
+                  <CartaoPedido key={p.id} p={p} atraso={atrasos.get(p.id) ?? null} ocupado={ocupado === p.id} onAbrir={() => onAbrir(p.id)} onAvancar={() => avancar(p)} onRastrear={() => onRastrear(p.id)} />
                 ))}
               </div>
             </section>
@@ -278,6 +300,8 @@ export default function Pedidos() {
   const [aberto, setAberto] = useState<string | null>(null)
   const [versao, setVersao] = useState(0)
   const [numero, setNumero] = useState('')
+  const [desperdicio, setDesperdicio] = useState(false)
+  const [rastrear, setRastrear] = useState<string | null>(null)
 
   async function buscarNumero(e: FormEvent) {
     e.preventDefault()
@@ -299,6 +323,9 @@ export default function Pedidos() {
             <Search className="pointer-events-none absolute top-3 left-3 size-4 text-stone-400" />
             <Entrada aria-label="Buscar pedido pelo número" inputMode="numeric" placeholder="Buscar nº do pedido" className="w-48 pl-9" value={numero} onChange={(e) => setNumero(e.target.value)} />
           </form>
+          <Botao variante="secundario" onClick={() => setDesperdicio(true)}>
+            <Trash2 className="size-4" /> Registrar desperdício
+          </Botao>
           <Link to="/admin/pdv" className="inline-flex h-10 items-center gap-2 rounded-lg bg-molho-600 px-4 text-sm font-semibold text-white hover:bg-molho-700">
             <Plus className="size-4" /> Novo pedido
           </Link>
@@ -308,8 +335,13 @@ export default function Pedidos() {
       <div className="mb-4">
         <Abas abas={[{ id: 'quadro', rotulo: 'Em andamento' }, { id: 'historico', rotulo: 'Histórico' }]} atual={aba} onChange={setAba} />
       </div>
-      {aba === 'quadro' ? <Quadro onAbrir={setAberto} versao={versao} /> : <Historico onAbrir={setAberto} versao={versao} />}
+      {aba === 'quadro' ? <Quadro onAbrir={setAberto} onRastrear={setRastrear} versao={versao} /> : <Historico onAbrir={setAberto} versao={versao} />}
+      <Modal aberto={desperdicio} titulo="Registrar desperdício" onFechar={() => setDesperdicio(false)} largura="max-w-md">
+        <p className="mb-4 text-sm text-stone-600">Caiu no chão, queimou, foi montado errado? Registre: a quantidade sai do estoque e o motivo fica guardado.</p>
+        <FormDesperdicio aoRegistrar={() => setDesperdicio(false)} />
+      </Modal>
       <DetalhePedido pedidoId={aberto} onFechar={() => setAberto(null)} onMudou={() => setVersao((v) => v + 1)} />
+      <RastreioEntrega pedidoId={rastrear} onFechar={() => setRastrear(null)} />
     </Pagina>
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Ban, ChefHat, Copy, ExternalLink, FileText, MessageCircle, Printer, Undo2 } from 'lucide-react'
+import { AlertTriangle, Ban, ChefHat, Copy, ExternalLink, FileText, MapPin, MessageCircle, Printer, Undo2 } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Carregando, Erro, Modal, Selecao, Selo, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { ORIGEM, PAGAMENTO, STATUS, TIPO, brl, cpf, dataHora, enderecoTexto, hora, soDigitos, telefone } from '../lib/formato'
@@ -9,6 +9,7 @@ import { SELECT_PEDIDO, aceitarPedido, atualizarPedido, emitirNota, mudarStatus,
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Entregador, FormaPagamento, Pedido, StatusPedido } from '../lib/tipos'
 import { ATRASO, nivelAtraso, useAdmin } from './AdminLayout'
+import { RastreioEntrega } from './Rastreio'
 
 interface Mudanca {
   quando: string
@@ -41,6 +42,7 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
   const [ocupado, setOcupado] = useState('')
   const [acao, setAcao] = useState<Acao | null>(null)
   const [motivo, setMotivo] = useState('')
+  const [rastrear, setRastrear] = useState(false)
 
   const { dados: p, carregando, erro, recarregar } = useConsulta<Pedido | null>(
     () => (pedidoId ? supabase.from('pedidos').select(SELECT_PEDIDO).eq('id', pedidoId).single() : Promise.resolve({ data: null, error: null })),
@@ -55,6 +57,7 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
   useEffect(() => {
     setAcao(null)
     setMotivo('')
+    setRastrear(false)
   }, [pedidoId])
 
   if (!pedidoId) return null
@@ -307,6 +310,14 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
                       </Selecao>
                     </Campo>
                   )}
+                  {p.tipo === 'entrega' && p.status === 'pronto' && !p.entregador_id && (
+                    <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 font-semibold text-red-800">Falta escolher o motoboy que vai levar este pedido.</p>
+                  )}
+                  {p.tipo === 'entrega' && p.entregador_id && ['pronto', 'saiu_entrega', 'problema_entrega'].includes(p.status) && (
+                    <Botao variante="secundario" className="w-full" onClick={() => setRastrear(true)}>
+                      <MapPin className="size-4" /> Rastrear entrega
+                    </Botao>
+                  )}
                 </div>
               </div>
 
@@ -361,6 +372,8 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
           )
         )}
       </Modal>
+
+      <RastreioEntrega pedidoId={rastrear ? pedidoId : null} onFechar={() => setRastrear(false)} />
 
       <Modal
         aberto={acao != null}
