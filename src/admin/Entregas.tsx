@@ -1,10 +1,8 @@
 import { Suspense, lazy, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin } from 'lucide-react'
 import { Crud } from '../components/Crud'
-import { Abas, Alternar, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selo, Vazio, cx, useAviso } from '../components/ui'
+import { Abas, Alternar, Carregando, Cartao, Erro, Modal, Selo, Vazio, cx, useAviso } from '../components/ui'
 import { brl, haQuanto, num, telefone } from '../lib/formato'
-import { localizarEndereco } from '../lib/geo'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Bairro, Configuracoes, Entregador, FaixaEntrega } from '../lib/tipos'
@@ -12,6 +10,7 @@ import { Pagina, useAdmin } from './AdminLayout'
 import { BotoesExportar } from './Analises'
 import { FormPagamento, TabelaAcerto, regraDoMotoboy, useAcerto, type PagamentoInicial } from './Pagamentos'
 import { usePeriodo } from './Painel'
+import { PontoLoja } from './PontoLoja'
 import { exportar } from '../lib/exportar'
 
 const Mapa = lazy(() => import('../components/Mapa'))
@@ -76,9 +75,6 @@ function Area() {
   const { config, catalogo, recarregar } = useLoja()
   const { pode } = useAdmin()
   const aviso = useAviso()
-  const [ocupado, setOcupado] = useState(false)
-  const [lat, setLat] = useState('')
-  const [lng, setLng] = useState('')
   if (!config) return <Carregando />
 
   const podeConfigurar = pode('entregas') || pode('configuracoes')
@@ -86,21 +82,10 @@ function Area() {
   const raio = catalogo.faixas.length ? Math.max(...catalogo.faixas.map((f) => Number(f.ate_km))) : 0
 
   async function salvar(valores: Partial<Configuracoes>, sucesso: string) {
-    setOcupado(true)
     const { error } = await supabase.from('configuracoes').update(valores).eq('id', 1)
-    setOcupado(false)
     if (error) return aviso.erro(mensagemErro(error))
     aviso.sucesso(sucesso)
     recarregar()
-  }
-
-  async function localizarLoja() {
-    if (!config?.logradouro) return aviso.erro('Preencha o endereço da loja em Configurações → Loja.')
-    setOcupado(true)
-    const p = await localizarEndereco({ logradouro: config.logradouro, numero: config.numero, bairro: config.bairro, cidade: config.cidade, uf: config.uf })
-    setOcupado(false)
-    if (!p) return aviso.erro('Não encontramos o endereço da loja no mapa. Informe a latitude e a longitude manualmente.')
-    salvar({ loja_lat: p.lat, loja_lng: p.lng }, 'Loja localizada no mapa')
   }
 
   return (
@@ -111,13 +96,13 @@ function Area() {
           {(
             [
               ['bairro', 'Por bairro', 'O cliente escolhe o bairro em uma lista e paga a taxa daquele bairro. Só entrega nos bairros cadastrados.'],
-              ['distancia', 'Por distância', 'O sistema localiza o endereço no mapa e cobra conforme a distância até a loja. Fora do raio máximo, avisa que não entrega.'],
+              ['distancia', 'Por distância', 'O sistema localiza o endereço no mapa e cobra conforme a distância da loja até o cliente, pelo caminho das ruas. Passou da última faixa, avisa que não entrega.'],
             ] as const
           ).map(([modo, nome, texto]) => (
             <button
               key={modo}
               type="button"
-              disabled={!podeConfigurar || ocupado}
+              disabled={!podeConfigurar}
               aria-pressed={config.modo_entrega === modo}
               onClick={() => config.modo_entrega !== modo && salvar({ modo_entrega: modo }, `Entrega ${nome.toLowerCase()} ativada`)}
               className={cx('rounded-xl border-2 p-4 text-left', config.modo_entrega === modo ? 'border-molho-500 bg-molho-50' : 'border-stone-200 hover:border-stone-300')}
@@ -153,39 +138,9 @@ function Area() {
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           <div>
-            <Cartao className="mb-4 p-5">
-              <h2 className="font-display text-lg font-semibold">Ponto da loja</h2>
-              <p className="mt-1 text-sm text-stone-600">As distâncias são medidas em linha reta a partir deste ponto.</p>
-              {loja ? (
-                <p className="mt-2 text-sm">
-                  <MapPin className="mr-1 inline size-4" />
-                  {num(loja.lat)}, {num(loja.lng)} · raio máximo de atendimento: <b>{num(raio)} km</b>
-                </p>
-              ) : (
-                <div className="mt-3">
-                  <Erro>A loja ainda não foi localizada. Sem isso, os clientes não conseguem pedir entrega por distância.</Erro>
-                </div>
-              )}
-              <Botao variante="secundario" className="mt-3" carregando={ocupado} disabled={!podeConfigurar} onClick={localizarLoja}>
-                <MapPin className="size-4" /> Localizar pelo endereço da loja
-              </Botao>
-              <p className="mt-4 text-xs text-stone-500">Ou informe as coordenadas (copie do Google Maps, clicando com o botão direito sobre a loja):</p>
-              <div className="mt-1 flex flex-wrap items-end gap-2">
-                <Campo rotulo="Latitude" className="w-28">
-                  <Entrada inputMode="decimal" placeholder="-23.5505" value={lat} onChange={(e) => setLat(e.target.value)} />
-                </Campo>
-                <Campo rotulo="Longitude" className="w-28">
-                  <Entrada inputMode="decimal" placeholder="-46.6333" value={lng} onChange={(e) => setLng(e.target.value)} />
-                </Campo>
-                <Botao
-                  variante="secundario"
-                  disabled={!podeConfigurar || !Number(lat.replace(',', '.')) || !Number(lng.replace(',', '.'))}
-                  onClick={() => salvar({ loja_lat: Number(lat.replace(',', '.')), loja_lng: Number(lng.replace(',', '.')) }, 'Ponto da loja salvo')}
-                >
-                  Usar estas coordenadas
-                </Botao>
-              </div>
-            </Cartao>
+            <div className="mb-4">
+              <PontoLoja podeEditar={podeConfigurar} />
+            </div>
             <Crud<FaixaEntrega>
               tabela="faixas_entrega"
               nome="faixa"
@@ -199,7 +154,7 @@ function Area() {
                 { rotulo: 'Ativa', render: (f) => simNao(f.ativo) },
               ]}
               campos={[
-                { nome: 'ate_km', rotulo: 'Até quantos km', tipo: 'numero', obrigatorio: true, dica: 'A maior faixa ativa define o raio máximo de atendimento.' },
+                { nome: 'ate_km', rotulo: 'Até quantos km', tipo: 'numero', obrigatorio: true, dica: 'Distância pelo caminho das ruas, da loja até o cliente. A maior faixa ativa é o limite de atendimento.' },
                 { nome: 'taxa', rotulo: 'Taxa de entrega (R$)', tipo: 'moeda', obrigatorio: true, padrao: 0 },
                 { nome: 'tempo_extra_min', rotulo: 'Tempo extra (min)', tipo: 'numero', padrao: 0, obrigatorio: true },
                 { nome: 'ativo', rotulo: 'Ativa', tipo: 'booleano' },
@@ -211,7 +166,10 @@ function Area() {
               <Suspense fallback={<Carregando />}>
                 <Mapa marcadores={[{ id: 'loja', ponto: loja, tipo: 'loja', rotulo: config.nome_loja }]} circulosKm={catalogo.faixas.map((f) => Number(f.ate_km))} className="h-[28rem]" />
               </Suspense>
-              <p className="mt-1 text-xs text-stone-500">Cada círculo é uma faixa de entrega. Endereços fora do círculo maior recebem o aviso “Este endereço está fora da nossa área de entrega.”</p>
+              <p className="mt-1 text-xs text-stone-500">
+                Os círculos mostram cada faixa em linha reta, só para dar uma ideia (a maior vai até {num(raio)} km). A taxa usa a distância pelo caminho das ruas, que é igual ou maior: um endereço dentro de um círculo pode
+                cair na faixa seguinte. Passou da última faixa, o cliente vê “Este endereço está fora da nossa área de entrega.”
+              </p>
             </div>
           )}
         </div>

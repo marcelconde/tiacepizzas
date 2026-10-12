@@ -23,8 +23,9 @@ const icone = (tipo: Marcador['tipo']) =>
 /**
  * Mapa do OpenStreetMap com marcadores (loja, motoboy, cliente) e, opcionalmente, os círculos das faixas de entrega.
  * Carregado sob demanda: só quem abre uma tela com mapa baixa a biblioteca.
+ * `zoom` é o quanto o mapa pode se aproximar ao enquadrar os pontos (18 mostra as casas da rua).
  */
-export default function Mapa({ marcadores, circulosKm = [], className = 'h-64' }: { marcadores: Marcador[]; circulosKm?: number[]; className?: string }) {
+export default function Mapa({ marcadores, circulosKm = [], className = 'h-64', zoom = 16 }: { marcadores: Marcador[]; circulosKm?: number[]; className?: string; zoom?: number }) {
   const el = useRef<HTMLDivElement>(null)
   const mapa = useRef<L.Map | null>(null)
   const camada = useRef<L.LayerGroup | null>(null)
@@ -70,9 +71,9 @@ export default function Mapa({ marcadores, circulosKm = [], className = 'h-64' }
         const dLng = km / (111 * Math.cos((loja.ponto.lat * Math.PI) / 180))
         limites.extend([loja.ponto.lat - dLat, loja.ponto.lng - dLng]).extend([loja.ponto.lat + dLat, loja.ponto.lng + dLng])
       }
-      m.fitBounds(limites.pad(0.25), { maxZoom: 16 })
+      m.fitBounds(limites.pad(0.25), { maxZoom: zoom })
     }
-  }, [marcadores, circulosKm])
+  }, [marcadores, circulosKm, zoom])
 
   return <div ref={el} className={`z-0 w-full overflow-hidden rounded-xl border border-stone-200 ${className}`} />
 }

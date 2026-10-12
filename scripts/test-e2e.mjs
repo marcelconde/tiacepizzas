@@ -408,23 +408,63 @@ await teste('página inicial em blocos: imagem clicável, texto e botão, arrast
   assert.deepEqual([volta.modo, volta.blocos.length], ['padrao', 8])
 })
 
-await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', async () => {
+await teste('entrega por distância: CEP preenche e troca o endereço, taxa pelo trajeto das ruas e bloqueio fora da área', async () => {
   await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'distancia' }), headers: { prefer: 'return=minimal' } })
-  const cli = await nova('desktop'); await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'main button'); await clicar(cli, 'Adicionar ·', 'button'); await ir(cli, '/checkout', 1200)
+  const cli = await nova('desktop')
+  // CEP, localização e trajeto são respondidos aqui mesmo, para o teste não depender desses serviços
+  const ceps = { '01310100': { logradouro: 'Avenida Paulista', bairro: 'Bela Vista', localidade: 'São Paulo', uf: 'SP' }, '01304001': { logradouro: 'Rua Augusta', bairro: 'Consolação', localidade: 'São Paulo', uf: 'SP' } }
+  const consultas = []
+  await cli.setRequestInterception(true)
+  cli.on('request', (r) => {
+    const u = r.url(), json = (corpo) => r.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(corpo) })
+    if (u.includes('viacep.com.br')) return json(ceps[u.match(/ws\/(\d+)/)?.[1]] ?? { erro: true })
+    if (u.includes('nominatim.openstreetmap.org')) { consultas.push(u); return json(u.includes('Augusta') ? [{ lat: '-23.5503', lon: '-46.6472', address: { postcode: '01304-001' } }] : []) }
+    if (u.includes('/route/v1/')) return json({ code: 'Ok', routes: [{ distance: 4200 }] }) // 1,7 km em linha reta, 4,2 km pelas ruas
+    r.continue()
+  })
+  const campoDe = (rotulo) => cli.evaluate((rotulo) => [...document.querySelectorAll('label')].find((l) => l.innerText.trim().startsWith(rotulo))?.querySelector('input, select')?.value, rotulo)
+  await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'main button'); await clicar(cli, 'Adicionar ·', 'button'); await ir(cli, '/checkout', 1200)
   await preencher(cli, 'Nome', 'Teste Distância'); await preencher(cli, 'WhatsApp', '11973000000')
-  // a taxa aparece sozinha: a pessoa só preenche a rua e o número
   assert.ok(await cli.evaluate(() => !document.querySelector('main select')), 'por distância o cliente não escolhe bairro nem taxa')
-  await preencher(cli, 'Rua / avenida', 'Rua Augusta'); await preencher(cli, 'Número', '1500'); await dormir(7000)
-  const achou = await cli.evaluate(() => document.body.innerText.includes('Entregamos aí'))
-  if (!achou) { await clicar(cli, 'Marcar manualmente', 'button'); await dormir(1500) }
+  // o CEP preenche a rua e o bairro assim que é completado
+  await preencher(cli, 'CEP', '01310100'); await dormir(700)
+  assert.deepEqual([await campoDe('Rua / avenida'), await campoDe('Bairro')], ['Avenida Paulista', 'Bela Vista'])
+  await preencher(cli, 'Número', '1000'); await preencher(cli, 'Complemento', 'Apto 12')
+  // trocar o CEP troca a rua e o bairro, e limpa o número e o complemento, que eram do endereço anterior
+  await preencher(cli, 'CEP', '01304001'); await dormir(700)
+  assert.deepEqual([await campoDe('Rua / avenida'), await campoDe('Bairro'), await campoDe('Número'), await campoDe('Complemento')], ['Rua Augusta', 'Consolação', '', ''])
+  // CEP que não existe avisa, sem mexer no endereço
+  await preencher(cli, 'CEP', '99999999'); await dormir(700)
+  assert.ok(await cli.evaluate(() => document.body.innerText.includes('Não achamos este CEP')))
+  assert.equal(await campoDe('Rua / avenida'), 'Rua Augusta')
+  await preencher(cli, 'CEP', '01304001'); await dormir(500)
+  // a taxa aparece sozinha, pela distância das ruas (que aqui cai na faixa seguinte à da linha reta)
+  await preencher(cli, 'Número', '900'); await dormir(3000)
+  const aviso = await cli.evaluate(() => document.querySelector('form [role=status]')?.innerText ?? '')
+  assert.match(aviso, /São 4,2 km da loja até você, pelo caminho das ruas · taxa de entrega:\s+R\$\s8,00/)
+  assert.ok(consultas.some((u) => u.includes('bounded=1') && u.includes('viewbox=')), 'a busca do endereço fica restrita à região da loja')
   await clicar(cli, 'Enviar pedido', 'button'); await dormir(2200)
-  const ult = (await api(`pedidos?select=cliente_nome,taxa_entrega,distancia_km,lat&order=criado_em.desc&limit=1`))[0]
-  assert.equal(ult.cliente_nome, 'Teste Distância'); assert.ok(ult.lat != null && ult.distancia_km != null && Number(ult.taxa_entrega) >= 5, JSON.stringify(ult))
-  console.log(`     (endereço ${achou ? 'localizado pelo mapa' : 'marcado manualmente'}: ${ult.distancia_km} km, taxa ${ult.taxa_entrega})`)
+  const ult = (await api('pedidos?select=cliente_nome,taxa_entrega,distancia_km,lat,endereco&order=criado_em.desc&limit=1'))[0]
+  assert.deepEqual([ult.cliente_nome, Number(ult.taxa_entrega), Number(ult.distancia_km), Number(ult.lat), ult.endereco.logradouro, ult.endereco.numero], ['Teste Distância', 8, 4.2, -23.5503, 'Rua Augusta', '900'], JSON.stringify(ult))
   const fora = await rpc('calcular_entrega', { p_lat: -23.9, p_lng: -46.65 })
   assert.equal(fora.dentro, false)
   await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'bairro' }), headers: { prefer: 'return=minimal' } })
   await cli.close()
+})
+
+await teste('ponto da loja: colar do Google Maps, conferir no mapa e só então salvar', async () => {
+  const lido = async () => { const c = (await api('configuracoes?select=loja_lat,loja_lng&id=eq.1'))[0]; return [Number(c.loja_lat), Number(c.loja_lng)] }
+  const antes = await lido()
+  await ir(pc, '/admin/configuracoes', 1200)
+  await preencher(pc, 'Colar do Google Maps', 'https://www.google.com/maps/place/Loja/@-23.5650,-46.6520,17z/data=!8m2!3d-23.5642!4d-46.6512'); await clicar(pc, 'Usar este ponto', 'main button')
+  assert.match(await pc.evaluate(() => document.querySelector('main [role=status]')?.innerText ?? ''), /Ponto novo, ainda não salvo\.[\s\S]*Fica a \d+ metros do ponto salvo hoje/)
+  assert.deepEqual(await lido(), antes, 'nada muda antes de salvar')
+  await clicar(pc, 'Salvar este ponto', 'main button'); await dormir(900)
+  assert.deepEqual(await lido(), [-23.5642, -46.6512])
+  // texto que não é um ponto do mapa é recusado
+  await preencher(pc, 'Colar do Google Maps', 'Rua de Exemplo, 123'); await clicar(pc, 'Usar este ponto', 'main button')
+  assert.ok(await pc.evaluate(() => document.body.innerText.includes('Não entendi') && !document.querySelector('main [role=status]')))
+  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ loja_lat: antes[0], loja_lng: antes[1] }), headers: { prefer: 'return=minimal' } })
 })
 
 await teste('entrega pronta sem motoboy fica sinalizada; rastrear entrega mostra o motoboy no mapa e avisa quando some o sinal', async () => {

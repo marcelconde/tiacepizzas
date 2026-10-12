@@ -91,7 +91,8 @@ export default function Conta() {
     setSalvando(true)
     const bairro = catalogo.bairros.find((b) => b.id === novo.bairro_id)
     const local = { ...novo, cidade: novo.cidade || config?.cidade || '', uf: novo.uf || config?.uf || '' }
-    const ponto = await localizarEndereco(local)
+    const loja = config?.loja_lat != null && config.loja_lng != null ? { lat: Number(config.loja_lat), lng: Number(config.loja_lng) } : null
+    const ponto = await localizarEndereco(local, loja)
     const { error } = await supabase.from('enderecos').insert({
       cliente_id: conta!.id, cep: novo.cep || null, logradouro: novo.logradouro.trim(), numero: novo.numero.trim(), complemento: novo.complemento.trim() || null,
       bairro_id: novo.bairro_id || null, bairro: bairro?.nome ?? (novo.bairro.trim() || null), referencia: novo.referencia.trim() || null,

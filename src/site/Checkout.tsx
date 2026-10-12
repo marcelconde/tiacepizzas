@@ -5,7 +5,7 @@ import { AreaTexto, Botao, Campo, Entrada, Erro, Selecao, Vazio, cx } from '../c
 import { itensParaPedido, useCarrinho } from '../lib/carrinho'
 import { useConta } from '../lib/conta'
 import { PAGAMENTO, brl, enderecoTexto, soDigitos } from '../lib/formato'
-import { localizarEndereco, type Ponto } from '../lib/geo'
+import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento } from '../lib/tipos'
@@ -45,6 +45,10 @@ interface Entrega {
   distancia_km?: number
   taxa?: number
   mensagem?: string
+  /** true: distância medida pelas ruas; false: estimada a partir da linha reta. */
+  por_rota?: boolean
+  /** Trajeto calculado neste aparelho, enviado junto com o pedido (o banco confere). */
+  rota_km?: number | null
 }
 
 const formas: FormaPagamento[] = ['pix', 'credito', 'debito', 'dinheiro']
@@ -60,9 +64,14 @@ export default function Checkout() {
   const chave = useRef(crypto.randomUUID()) // reenviar este mesmo pedido não o duplica
   const social = useLoginSocial()
   const localizado = useRef('') // endereço da última busca no mapa
+  const vezCalculo = useRef(0)
 
   const [tipo, setTipo] = useState<'entrega' | 'retirada'>('entrega')
   const [d, setD] = useState(dadosSalvos)
+  const atual = useRef(d)
+  atual.current = d
+  const cepBuscado = useRef(soDigitos(d.cep)) // o CEP que já veio preenchido não é buscado de novo
+  const [cepAviso, setCepAviso] = useState('')
   const [ponto, setPonto] = useState<Ponto | null>(null)
   const [entrega, setEntrega] = useState<Entrega | null>(null)
   const [localizando, setLocalizando] = useState(false)
@@ -105,11 +114,19 @@ export default function Checkout() {
     if (conta.cpf) setCpfNota((c) => c || conta.cpf!)
   }, [conta])
 
+  /** Mede o trajeto pelas ruas, da loja até o ponto, e pede ao banco a taxa dessa distância. */
   async function calcular(p: Ponto) {
+    const vez = ++vezCalculo.current
     setPonto(p)
-    const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng })
-    const r: Entrega = error ? { dentro: false, mensagem: mensagemErro(error) } : (data as Entrega)
-    setEntrega(r)
+    setLocalizando(true)
+    const km = loja ? await distanciaPelasRuas(loja, p) : null
+    const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng, p_rota_km: km })
+    const r: Entrega = error ? { dentro: false, mensagem: mensagemErro(error) } : { ...(data as Entrega), rota_km: km }
+    if (vez === vezCalculo.current) {
+      // o pino pode ter sido arrastado de novo enquanto este cálculo corria: vale o mais recente
+      setEntrega(r)
+      setLocalizando(false)
+    }
     return r
   }
 
@@ -119,11 +136,12 @@ export default function Checkout() {
     const endereco = chaveEndereco(dados)
     localizado.current = endereco
     setLocalizando(true)
-    const p = await localizarEndereco({ ...dados, cidade: dados.cidade || config?.cidade, uf: dados.uf || config?.uf })
+    const p = await localizarEndereco({ ...dados, cidade: dados.cidade || config?.cidade, uf: dados.uf || config?.uf }, loja)
     if (localizado.current !== endereco) return null // o endereço mudou enquanto a busca corria: vale a busca mais nova
-    setLocalizando(false)
     if (p) return { ponto: p as Ponto | null, entrega: await calcular(p) }
     const r: Entrega = { dentro: false, mensagem: 'Não encontramos este endereço no mapa. Confira a rua e o número ou marque o local no mapa.' }
+    vezCalculo.current++
+    setLocalizando(false)
     setPonto(null)
     setEntrega(r)
     return { ponto: null as Ponto | null, entrega: r }
@@ -141,18 +159,35 @@ export default function Checkout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enderecoAtual, podeLocalizar])
 
-  async function buscarCep() {
-    const cep = soDigitos(d.cep)
-    if (cep.length !== 8) return
+  /** CEP novo troca a rua, o bairro e a cidade. Se a rua mudou, o número e o complemento eram do endereço anterior: saem. */
+  async function buscarCep(valor = d.cep) {
+    const cep = soDigitos(valor)
+    if (cep.length !== 8 || cep === cepBuscado.current) return
+    cepBuscado.current = cep
+    setCepAviso('')
     try {
-      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json())
-      if (r.erro) return
-      const achado = catalogo.bairros.find((b) => b.nome.toLowerCase() === String(r.bairro ?? '').toLowerCase())
-      const novo = { ...d, logradouro: d.logradouro || r.logradouro || '', cidade: r.localidade ?? '', uf: r.uf ?? '', bairro: d.bairro || r.bairro || '', bairro_id: d.bairro_id || achado?.id || '' }
-      setD(novo)
-      localizar(novo)
+      const r = await consultarCep(cep)
+      if (cepBuscado.current !== cep) return // outro CEP foi digitado enquanto esta busca corria
+      if (!r) return setCepAviso('Não achamos este CEP. Confira os números ou preencha o endereço à mão.')
+      const v = atual.current
+      const rua: string = r.logradouro || v.logradouro
+      const mudouRua = Boolean(v.logradouro.trim()) && rua.trim().toLowerCase() !== v.logradouro.trim().toLowerCase()
+      const achado = catalogo.bairros.find((b) => b.nome.toLowerCase() === r.bairro.toLowerCase())
+      if (mudouRua) {
+        // o ponto no mapa e a taxa eram do endereço anterior
+        localizado.current = ''
+        vezCalculo.current++
+        setLocalizando(false)
+        setPonto(null)
+        setEntrega(null)
+      }
+      setD({
+        ...v, cep: valor, logradouro: rua, cidade: r.cidade || v.cidade, uf: r.uf || v.uf,
+        bairro: r.bairro || (mudouRua ? '' : v.bairro), bairro_id: achado?.id ?? (mudouRua ? '' : v.bairro_id),
+        ...(mudouRua ? { numero: '', complemento: '', referencia: '' } : {}),
+      })
     } catch {
-      /* CEP é só um atalho: sem resposta, a pessoa preenche à mão */
+      cepBuscado.current = '' // CEP é só um atalho: sem resposta, a pessoa preenche à mão (e pode tentar de novo)
     }
   }
 
@@ -162,11 +197,12 @@ export default function Checkout() {
       bairro_id: e.bairro_id ?? '', bairro: e.bairro ?? '', referencia: e.referencia ?? '', cidade: e.cidade ?? '', uf: e.uf ?? '',
     }
     setD(novo)
+    cepBuscado.current = soDigitos(novo.cep)
+    setCepAviso('')
     if (!porDistancia) return
     if (e.lat != null && e.lng != null) {
       // endereço salvo já tem o ponto certo no mapa
       localizado.current = chaveEndereco(novo)
-      setLocalizando(false)
       calcular({ lat: Number(e.lat), lng: Number(e.lng) })
     } else localizar(novo)
   }
@@ -184,6 +220,7 @@ export default function Checkout() {
     e.preventDefault()
     setErro('')
     let destino = ponto
+    let rotaKm = entrega?.rota_km ?? null
     if (tipo === 'entrega' && porDistancia) {
       let calculo = entrega
       if (!calculo || localizado.current !== chaveEndereco(d)) {
@@ -196,6 +233,7 @@ export default function Checkout() {
           destino = r.ponto
         }
       }
+      rotaKm = calculo?.rota_km ?? null
       if (!calculo?.dentro) return setErro(calculo?.mensagem ?? 'Preencha a rua e o número para calcularmos a entrega.')
     }
     setEnviando(true)
@@ -209,7 +247,7 @@ export default function Checkout() {
             ? {
                 cep: d.cep, logradouro: d.logradouro, numero: d.numero, complemento: d.complemento, bairro_id: porDistancia ? '' : d.bairro_id,
                 bairro: bairro?.nome ?? d.bairro, referencia: d.referencia, cidade: d.cidade || config?.cidade, uf: d.uf || config?.uf,
-                lat: destino?.lat, lng: destino?.lng,
+                lat: destino?.lat, lng: destino?.lng, rota_km: rotaKm,
               }
             : null,
         itens: itensParaPedido(itens),
@@ -338,8 +376,21 @@ export default function Checkout() {
                   </div>
                 )}
                 <div className="grid gap-4 sm:grid-cols-6">
-                  <Campo rotulo="CEP" className="sm:col-span-2">
-                    <Entrada className={alto} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" maxLength={9} {...campo('cep')} onBlur={buscarCep} />
+                  <Campo rotulo="CEP" className="sm:col-span-2" dica={cepAviso || undefined}>
+                    <Entrada
+                      className={alto}
+                      inputMode="numeric"
+                      autoComplete="postal-code"
+                      placeholder="00000-000"
+                      maxLength={9}
+                      value={d.cep}
+                      onChange={(e) => {
+                        const valor = e.target.value
+                        setD((v) => ({ ...v, cep: valor }))
+                        if (soDigitos(valor).length === 8) buscarCep(valor) // completou o CEP: já busca, sem esperar sair do campo
+                      }}
+                      onBlur={() => buscarCep()}
+                    />
                   </Campo>
                   <Campo rotulo="Rua / avenida" className="sm:col-span-4">
                     <Entrada required className={alto} autoComplete="address-line1" maxLength={120} {...campo('logradouro')} />
@@ -375,12 +426,13 @@ export default function Checkout() {
                       <p role="status" className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-700">Calculando a taxa de entrega…</p>
                     ) : entrega?.dentro ? (
                       <p role="status" className="rounded-lg bg-manjericao-100 px-3 py-2 text-sm font-semibold text-manjericao-700">
-                        Entregamos aí! Fica a {String(entrega.distancia_km).replace('.', ',')} km da loja · taxa de entrega: {Number(entrega.taxa) > 0 ? brl(entrega.taxa) : 'grátis'}.
+                        Entregamos aí! {entrega.por_rota ? 'São' : 'São cerca de'} {String(entrega.distancia_km).replace('.', ',')} km da loja até você{entrega.por_rota ? ', pelo caminho das ruas' : ''} · taxa de entrega:{' '}
+                        {Number(entrega.taxa) > 0 ? brl(entrega.taxa) : 'grátis'}.
                       </p>
                     ) : entrega ? (
                       <Erro>{entrega.mensagem}</Erro>
                     ) : (
-                      <p className="text-sm text-stone-600">Preencha a rua e o número: a taxa de entrega é calculada na hora, pela distância até a loja.</p>
+                      <p className="text-sm text-stone-600">Preencha a rua e o número: a taxa de entrega é calculada na hora, pela distância da loja até você.</p>
                     )}
                     {marcadores.length > 0 && ponto && (
                       <Suspense fallback={null}>

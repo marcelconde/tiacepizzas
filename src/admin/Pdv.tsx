@@ -4,7 +4,7 @@ import { MontarItem } from '../components/MontarItem'
 import { Alternar, AreaTexto, Botao, Campo, Cartao, Contador, Entrada, Selecao, cx, useAviso } from '../components/ui'
 import { itensParaPedido, subtotalDe } from '../lib/carrinho'
 import { ORIGEM, PAGAMENTO, brl, soDigitos } from '../lib/formato'
-import { localizarEndereco, type Ponto } from '../lib/geo'
+import { distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
 import { precoInicial, useLoja } from '../lib/loja'
 import { aposConfirmar } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
@@ -31,7 +31,8 @@ export default function Pdv() {
   const [salvos, setSalvos] = useState<Endereco[]>([])
   const [end, setEnd] = useState(enderecoVazio)
   const [taxa, setTaxa] = useState('')
-  const [ponto, setPonto] = useState<Ponto | null>(null)
+  // ponto do endereço no mapa e o trajeto pelas ruas até ele (vai junto com o pedido; o banco confere)
+  const [ponto, setPonto] = useState<(Ponto & { rota_km: number | null }) | null>(null)
   const [distancia, setDistancia] = useState('')
   const [desconto, setDesconto] = useState('')
   const [pagamento, setPagamento] = useState<FormaPagamento>('dinheiro')
@@ -56,19 +57,21 @@ export default function Pdv() {
   async function calcularEntrega(sabido?: Ponto | null, e = end) {
     if (config?.modo_entrega !== 'distancia' || !e.logradouro.trim() || !e.numero.trim()) return
     setDistancia('Calculando…')
-    const p = sabido ?? (await localizarEndereco({ logradouro: e.logradouro, numero: e.numero, bairro: e.bairro, cidade: config.cidade, uf: config.uf }))
+    const loja = config.loja_lat != null && config.loja_lng != null ? { lat: Number(config.loja_lat), lng: Number(config.loja_lng) } : null
+    const p = sabido ?? (await localizarEndereco({ logradouro: e.logradouro, numero: e.numero, bairro: e.bairro, cep: e.cep, cidade: config.cidade, uf: config.uf }, loja))
     if (!p) {
       setPonto(null)
       return setDistancia('Endereço não encontrado no mapa: escolha a distância.')
     }
-    const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng })
+    const km = loja ? await distanciaPelasRuas(loja, p) : null
+    const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng, p_rota_km: km })
     if (error || !data?.dentro) {
       setPonto(null)
       return setDistancia(error ? mensagemErro(error) : (data?.mensagem ?? 'Fora da área de entrega.'))
     }
-    setPonto(p)
+    setPonto({ ...p, rota_km: km })
     setTaxa(String(data.taxa))
-    setDistancia(`${String(data.distancia_km).replace('.', ',')} km da loja`)
+    setDistancia(`${data.por_rota ? '' : 'cerca de '}${String(data.distancia_km).replace('.', ',')} km da loja${data.por_rota ? ', pelas ruas' : ''}`)
   }
 
   function mudarTipo(t: TipoPedido) {
@@ -135,7 +138,7 @@ export default function Pdv() {
         tipo,
         origem,
         cliente: { nome: nome.trim() || 'Cliente balcão', telefone },
-        endereco: tipo === 'entrega' ? { ...end, bairro: bairro?.nome ?? end.bairro, lat: ponto?.lat, lng: ponto?.lng } : null,
+        endereco: tipo === 'entrega' ? { ...end, bairro: bairro?.nome ?? end.bairro, lat: ponto?.lat, lng: ponto?.lng, rota_km: ponto?.rota_km } : null,
         itens: itensParaPedido(itens),
         forma_pagamento: pagamento,
         troco_para: pagamento === 'dinheiro' && troco ? numero(troco) : null,

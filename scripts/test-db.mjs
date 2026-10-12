@@ -321,24 +321,39 @@ await teste('promoção: preço cai no servidor, respeita dias e horário, e val
 await teste('entrega por distância: faixa certa, fora da área e ponto obrigatório', async () => {
   await db.exec(`update configuracoes set modo_entrega = 'distancia', loja_lat = -23.550000, loja_lng = -46.630000`)
   const em = async (lat, lng) => (await um(`select calcular_entrega($1::numeric, $2::numeric) as r`, [lat, lng])).r
-  const perto1 = await em(-23.56, -46.63) // ~1,1 km
+  // sem o trajeto pelas ruas (serviço de rotas fora do ar): linha reta + 30%
+  const perto1 = await em(-23.56, -46.63) // ~1,1 km em linha reta
+  assert.deepEqual([perto1.por_rota, Number(perto1.linha_reta_km), Number(perto1.distancia_km)], [false, 1.11, 1.44])
   assert.deepEqual([perto1.dentro, Number(perto1.taxa)], [true, 5])
-  const medio = await em(-23.59, -46.63) // ~4,4 km
+  const medio = await em(-23.58, -46.63) // ~3,3 km em linha reta, ~4,3 km estimados
   assert.deepEqual([medio.dentro, Number(medio.taxa)], [true, 8])
-  const longe = await em(-23.70, -46.63) // ~16,7 km
+  const longe = await em(-23.70, -46.63) // ~16,7 km em linha reta
   assert.deepEqual([longe.dentro, longe.mensagem], [false, 'Este endereço está fora da nossa área de entrega.'])
+  // com o trajeto enviado pelo site: vale o trajeto, nunca menos que a linha reta, e um valor absurdo é ignorado
+  const rota = async (km) => (await um(`select calcular_entrega(-23.56, -46.63, $1::numeric) as r`, [km])).r
+  assert.deepEqual(await rota(2.4).then((x) => [x.por_rota, Number(x.distancia_km), Number(x.taxa)]), [true, 2.4, 5])
+  assert.deepEqual(await rota(4.5).then((x) => [x.por_rota, Number(x.distancia_km), Number(x.taxa)]), [true, 4.5, 8], 'o rio no caminho muda a faixa')
+  assert.deepEqual(await rota(0.2).then((x) => [x.por_rota, Number(x.distancia_km)]), [true, 1.11], 'não dá para encurtar o caminho')
+  assert.deepEqual(await rota(0).then((x) => [x.por_rota, Number(x.distancia_km)]), [true, 1.11])
+  assert.deepEqual(await rota(-5).then((x) => [x.por_rota, Number(x.distancia_km)]), [false, 1.44])
+  assert.deepEqual(await rota(80).then((x) => [x.por_rota, Number(x.distancia_km)]), [false, 1.44])
+  // visitante chama a função, com e sem o trajeto
+  await como('anon', null, async () => { assert.equal((await q(`select calcular_entrega(-23.56, -46.63) as r`))[0].r.dentro, true); assert.equal((await q(`select calcular_entrega(-23.56, -46.63, 2.4) as r`))[0].r.por_rota, true) })
 
   const cli = { nome: 'Rita', telefone: '11922223333' }
   const ped = (endereco) => como('anon', null, () => criar({ ...pedidoSite, cliente: cli, endereco: { logradouro: 'Rua B', numero: '5', ...endereco } }))
-  const r = await ped({ lat: -23.59, lng: -46.63 })
+  const r = await ped({ lat: -23.58, lng: -46.63 })
   assert.equal(Number(r.total), 100 + 8)
   assert.equal(Number((await um(`select distancia_km from pedidos where id = $1`, [r.id])).distancia_km) > 4, true)
+  // o pedido usa o trajeto que veio com o endereço: perto em linha reta, mais longe pelas ruas
+  const pelaRua = await ped({ lat: -23.56, lng: -46.63, rota_km: 4.5 })
+  assert.deepEqual([Number(pelaRua.total), Number((await um(`select distancia_km from pedidos where id = $1`, [pelaRua.id])).distancia_km)], [100 + 8, 4.5])
   await falha(ped({ lat: -23.70, lng: -46.63 }), 'fora da nossa área de entrega')
   await falha(ped({}), 'localizar o endereço')
   // aumentar o raio pelo painel passa a atender o endereço
-  await db.exec(`insert into faixas_entrega (ate_km, taxa) values (20, 22)`)
+  await db.exec(`insert into faixas_entrega (ate_km, taxa) values (25, 22)`)
   assert.equal(Number((await ped({ lat: -23.70, lng: -46.63 })).total), 100 + 22)
-  await db.exec(`update configuracoes set modo_entrega = 'bairro'; delete from faixas_entrega where ate_km = 20`)
+  await db.exec(`update configuracoes set modo_entrega = 'bairro'; delete from faixas_entrega where ate_km = 25`)
 })
 
 console.log('\nConta do cliente')
