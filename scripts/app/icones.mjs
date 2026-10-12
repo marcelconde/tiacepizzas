@@ -4,6 +4,7 @@ import puppeteer from 'puppeteer-core'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CHROME } from '../plataforma.mjs'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const res = join(raiz, 'android/app/src/main/res')
@@ -11,7 +12,7 @@ const pizza = 'data:image/png;base64,' + readFileSync(join(raiz, 'public/icone-5
 const FUNDO = '#261912'
 const densidades = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 }
 
-const navegador = await puppeteer.launch({ executablePath: process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })
+const navegador = await puppeteer.launch({ executablePath: CHROME, headless: true })
 const pagina = await navegador.newPage()
 async function desenhar(arquivo, lado, { proporcao, fundo = 'transparent', redondo = false }) {
   await pagina.setViewport({ width: lado, height: lado, deviceScaleFactor: 1 })

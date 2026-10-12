@@ -3,21 +3,23 @@
 // Uso: npm run test:e2e   (usa o Google Chrome instalado; CHROME=/caminho/do/chrome para outro local)
 import puppeteer from 'puppeteer-core'
 import assert from 'node:assert/strict'
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { strFromU8, unzipSync } from 'fflate'
+import { CHROME, encerrarProcesso } from './plataforma.mjs'
 
 const PROJ = join(dirname(fileURLToPath(import.meta.url)), '..')
 const PORTA_API = 54351, PORTA_SITE = 5203
 const BASE = `http://localhost:${PORTA_SITE}`, API = `http://localhost:${PORTA_API}`
 const SENHA = 'teste1234' // senha dos usuários fictícios do ambiente local (scripts/dev-local.mjs)
-const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const DL = mkdtempSync(join(tmpdir(), 'tiace-e2e-'))
+const abrirZip = (arquivo) => Object.fromEntries(Object.entries(unzipSync(readFileSync(join(DL, arquivo)))).map(([nome, dados]) => [nome, strFromU8(dados)]))
 
 const servidor = spawn(process.execPath, [join(PROJ, 'scripts/dev-local.mjs')], { cwd: PROJ, stdio: 'ignore', env: { ...process.env, DEMO: '1', PORTA_API: String(PORTA_API), PORTA_SITE: String(PORTA_SITE) } })
-const encerrar = () => { servidor.kill('SIGTERM'); rmSync(DL, { recursive: true, force: true }) }
+const encerrar = () => { encerrarProcesso(servidor); rmSync(DL, { recursive: true, force: true }) }
 process.on('exit', encerrar)
 for (let i = 0; ; i++) {
   if (i > 90) throw new Error('o ambiente de demonstração não respondeu')
@@ -87,9 +89,9 @@ await teste('exportar histórico de pedidos em PDF, Excel e CSV', async () => {
   const pdf = arq.find((f) => f.endsWith('.pdf')), xlsx = arq.find((f) => f.endsWith('.xlsx')), csv = arq.find((f) => f.endsWith('.csv'))
   assert.ok(pdf && xlsx && csv, 'arquivos: ' + arq.join(', '))
   assert.equal(readFileSync(`${DL}/${pdf}`).subarray(0, 5).toString(), '%PDF-')
-  const lista = execFileSync('unzip', ['-l', `${DL}/${xlsx}`]).toString()
-  assert.ok(lista.includes('xl/worksheets/sheet1.xml') && lista.includes('xl/workbook.xml'))
-  const planilha = execFileSync('unzip', ['-p', `${DL}/${xlsx}`, 'xl/worksheets/sheet1.xml']).toString()
+  const partes = abrirZip(xlsx)
+  assert.ok(partes['xl/worksheets/sheet1.xml'] && partes['xl/workbook.xml'])
+  const planilha = partes['xl/worksheets/sheet1.xml']
   assert.ok(planilha.includes('Cliente') && /<v>\d+/.test(planilha))
   assert.ok(readFileSync(`${DL}/${csv}`).toString().includes('Nº;Data;Cliente'))
 })
@@ -100,7 +102,7 @@ await teste('exportar relatório financeiro (Excel com uma aba por parte)', asyn
   const arq = await baixados(5)
   const xlsx = arq.find((f) => f.startsWith('financeiro') && f.endsWith('.xlsx'))
   assert.ok(xlsx && arq.some((f) => f.startsWith('financeiro') && f.endsWith('.pdf')), arq.join(', '))
-  const wb = execFileSync('unzip', ['-p', `${DL}/${xlsx}`, 'xl/workbook.xml']).toString()
+  const wb = abrirZip(xlsx)['xl/workbook.xml']
   assert.equal((wb.match(/<sheet /g) ?? []).length, 6)
   assert.ok(wb.includes('Resultado') && wb.includes('Saídas por categoria'))
 })

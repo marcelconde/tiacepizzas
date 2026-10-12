@@ -9,12 +9,12 @@ import puppeteer from 'puppeteer-core'
 import { mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CHROME } from '../plataforma.mjs'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const destino = join(raiz, 'docs', 'manual', 'capturas')
 const BASE = process.env.BASE ?? 'http://localhost:5173'
 const API = process.env.API ?? 'http://localhost:54321'
-const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const SENHA = 'teste1234'
 rmSync(destino, { recursive: true, force: true }) // capturas antigas não podem sobrar no manual
 mkdirSync(destino, { recursive: true })

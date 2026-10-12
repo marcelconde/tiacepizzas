@@ -167,7 +167,8 @@ com a senha no começo de `scripts/dev-local.mjs`; "Continuar com Google" entra 
 não tem tempo real (o painel atualiza a cada 45 s) nem nota fiscal.
 
 `test:e2e`, `manual` e `video` usam o Google Chrome instalado (`CHROME=/caminho` para outro local) e sobem o próprio
-ambiente em portas separadas, sem atrapalhar um `dev:local` aberto.
+ambiente em portas separadas, sem atrapalhar um `dev:local` aberto. Tudo roda no Windows, no macOS e no Linux (o que
+muda entre eles fica em `scripts/plataforma.mjs`); só o vídeo exige macOS.
 
 O vídeo é gravado em tempo real seguindo `scripts/video/roteiro.mjs` (o que é dito e o que acontece na tela), narrado
 pela voz neural da Siri instalada no Mac ("Voz 2" em português; sem ela, cai na voz "Luciana", mais robótica — veja

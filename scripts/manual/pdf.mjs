@@ -3,11 +3,11 @@ import puppeteer from 'puppeteer-core'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { CHROME } from '../plataforma.mjs'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const origem = join(raiz, 'docs', 'manual', 'manual.html')
 const saida = join(raiz, 'docs', 'manual-tia-ce-pizzas.pdf')
-const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
 const navegador = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-first-run'] })
 const pagina = await navegador.newPage()

@@ -56,7 +56,7 @@ if (process.env.FUSO) {
   process.env.TZ = process.env.FUSO
   await db.query(`update configuracoes set fuso_horario = $1`, [process.env.FUSO])
 }
-if (process.env.DEMO) await (await import('./dados-demo.mjs')).popular(db)
+if (process.env.DEMO || process.argv.includes('--demo')) await (await import('./dados-demo.mjs')).popular(db)
 
 // ---------------------------------------------------------------- metadados do banco
 const fks = (await db.query(`

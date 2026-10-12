@@ -6,6 +6,7 @@
 import { spawn } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { encerrarProcesso } from '../plataforma.mjs'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const API = 54341
@@ -20,7 +21,7 @@ if (!process.argv.includes('--so-pdf')) {
   const servidor = spawn(process.execPath, [join(raiz, 'scripts/dev-local.mjs')], {
     cwd: raiz, stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, DEMO: '1', FUSO, TZ: FUSO, PORTA_API: String(API), PORTA_SITE: String(SITE) },
   })
-  const encerrar = () => servidor.kill('SIGTERM')
+  const encerrar = () => encerrarProcesso(servidor)
   process.on('exit', encerrar)
   try {
     for (let i = 0; ; i++) {

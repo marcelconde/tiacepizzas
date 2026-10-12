@@ -14,6 +14,9 @@ Instale uma vez:
 2. **Node.js** (versão LTS) — https://nodejs.org
 3. **Android Studio** — https://developer.android.com/studio
    Abra-o uma vez e conclua o assistente inicial: é ele que baixa o Android SDK e pede o aceite das licenças.
+4. **Java 21 (JDK)** — o Android Studio mais novo traz o Java 25, que o Gradle deste projeto (8.14) recusa.
+   No Windows: `winget install --id EclipseAdoptium.Temurin.21.JDK -e`. No Mac: `brew install --cask temurin@21`.
+   Ou baixe em https://adoptium.net/temurin/releases/?version=21. O comando abaixo acha o Java 21 sozinho.
 
 Depois, no terminal (PowerShell no Windows):
 
@@ -29,7 +32,9 @@ A primeira vez demora alguns minutos (o Gradle baixa as dependências). No fim a
 
 - Se reclamar que falta uma versão do Android ("platform android-36"): Android Studio → *More Actions* →
   *SDK Manager* → marque a versão pedida → *Apply*, e rode de novo.
-- Se o Android Studio estiver instalado fora do lugar padrão, informe `JAVA_HOME` e `ANDROID_HOME`.
+- Se o Java 21 ou o Android SDK estiverem fora do lugar padrão, informe `JAVA_HOME` e `ANDROID_HOME`.
+- **No Windows**, prefira uma pasta curta, sem acento e que não seja sincronizada com a nuvem: a compilação cria
+  milhares de arquivos com caminhos longos, que o Windows limita a 260 letras.
 
 ### Guarde a chave de assinatura
 
@@ -89,4 +94,28 @@ Quando a tela do entregador mudar:
 - `src/lib/rastreio.ts`: dentro do aplicativo usa `@capacitor-community/background-geolocation` (serviço em primeiro
   plano); no navegador usa o GPS da página.
 - `CapacitorHttp` fica ligado porque, em segundo plano, o Android segura as chamadas de rede feitas pela página.
+- `android.useLegacyBridge: true` (em `capacitor.config.ts`) é exigência do plugin de GPS: sem isso as posições
+  param de chegar à página depois de uns 5 minutos em segundo plano.
 - `scripts/app/android.mjs`: empacota o site, sincroniza e chama o Gradle. `scripts/app/icones.mjs` refaz os ícones.
+
+## O que já foi comprovado
+
+Em 2026-10-12, num Windows 11 com Node 24:
+
+- O Gradle do projeto (8.14.3) **não roda com o Java 25** que vem no Android Studio atual: para logo no começo
+  com "Unsupported class file major version 69". Por isso o Java 21 entrou na lista do que instalar, e
+  `scripts/app/android.mjs` procura um JDK do 21 ao 24 e avisa com clareza quando não acha.
+
+- `npm run build`, `npm run test:db` (23 testes), `npm run test:e2e` (15 roteiros) e `npm run manual` passam no Windows.
+- `npx cap sync android` roda e leva o `useLegacyBridge` para dentro do aplicativo.
+- `scripts/app/android.mjs` foi corrigido para o Windows: a criação da chave de assinatura falhava porque o
+  caminho do Android Studio tem espaço (`C:\Program Files\...`). A correção foi conferida com uma simulação,
+  não com o `keytool` de verdade.
+
+Ainda **não** comprovado: a compilação do APK (faltam o Java 21 e o Android SDK) e tudo o que depende do celular.
+Pontos já conhecidos para conferir no celular:
+
+- O plugin de GPS declara a permissão de notificações, mas **não a pede** (conferido no código dele): no
+  Android 13 ou mais novo o aviso fixo pode não aparecer enquanto o aplicativo não pedir essa permissão.
+- Tela de ponta a ponta do Android 16, botão voltar, teclado sobre o login, links para Waze, Google Maps,
+  WhatsApp e telefone, e renovação da sessão com o aplicativo em segundo plano.
