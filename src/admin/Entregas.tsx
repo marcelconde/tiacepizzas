@@ -2,7 +2,7 @@ import { Suspense, lazy, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { Crud } from '../components/Crud'
-import { Abas, Alternar, Botao, Campo, Carregando, Cartao, Entrada, Erro, Selo, Tabela, Vazio, cx, useAviso } from '../components/ui'
+import { Abas, Alternar, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selo, Vazio, cx, useAviso } from '../components/ui'
 import { brl, haQuanto, num, telefone } from '../lib/formato'
 import { localizarEndereco } from '../lib/geo'
 import { useLoja } from '../lib/loja'
@@ -10,46 +10,64 @@ import { mensagemErro, supabase } from '../lib/supabase'
 import type { Bairro, Configuracoes, Entregador, FaixaEntrega } from '../lib/tipos'
 import { Pagina, useAdmin } from './AdminLayout'
 import { BotoesExportar } from './Analises'
-import { usePeriodo, useRelatorio } from './Painel'
+import { FormPagamento, TabelaAcerto, regraDoMotoboy, useAcerto, type PagamentoInicial } from './Pagamentos'
+import { usePeriodo } from './Painel'
 import { exportar } from '../lib/exportar'
 
 const Mapa = lazy(() => import('../components/Mapa'))
 const simNao = (v: boolean) => (v ? 'Sim' : 'Não')
 
 function Acerto() {
+  const { pode } = useAdmin()
   const { inicio, fim, seletor, texto } = usePeriodo('hoje')
-  const { dados: r, carregando, erro } = useRelatorio(inicio, fim)
+  const { dados, carregando, erro, recarregar } = useAcerto(inicio, fim)
+  const [pagar, setPagar] = useState<PagamentoInicial | null>(null)
+  const lista = (dados ?? []).filter((e) => e.ativo || e.entregas > 0 || Number(e.pago) > 0)
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         {seletor}
         <BotoesExportar
-          desativado={!r?.por_entregador.length}
+          desativado={!lista.length}
           onExportar={(f) =>
             exportar(f, `acerto_entregas_${inicio}_a_${fim}`, 'Acerto de entregas', texto, [
-              { titulo: 'Entregadores', colunas: ['Entregador', 'Entregas', 'Taxas cobradas (R$)', 'A pagar (R$)'], linhas: (r?.por_entregador ?? []).map((e) => [e.nome, e.entregas, Number(e.taxas), Number(e.a_pagar)]) },
+              {
+                titulo: 'Entregadores',
+                colunas: ['Entregador', 'Dias', 'Entregas', 'Taxas cobradas (R$)', 'Diárias (R$)', 'Pelas entregas (R$)', 'A receber (R$)', 'Já pago (R$)', 'Falta (R$)'],
+                linhas: lista.map((e) => [e.nome, e.dias, e.entregas, Number(e.taxas), Number(e.diarias), Number(e.por_entregas), Number(e.a_receber), Number(e.pago), Number(e.falta)]),
+              },
             ])
           }
         />
       </div>
       {erro && <Erro>{erro}</Erro>}
-      {!r ? (
+      {!dados ? (
         carregando && <Carregando />
-      ) : r.por_entregador.length === 0 ? (
-        <Vazio titulo="Nenhuma entrega com entregador definido no período" texto="Defina o motoboy ao abrir o pedido para que ele apareça no acerto." />
+      ) : lista.length === 0 ? (
+        <Vazio titulo="Nenhum entregador cadastrado" texto="Cadastre os motoboys na aba Entregadores." />
       ) : (
-        <Tabela colunas={['Entregador', 'Entregas', 'Taxas cobradas dos clientes', 'A pagar ao entregador']}>
-          {r.por_entregador.map((e) => (
-            <tr key={e.nome}>
-              <td className="font-semibold">{e.nome}</td>
-              <td className="tabular-nums">{e.entregas}</td>
-              <td className="tabular-nums">{brl(e.taxas)}</td>
-              <td className="font-semibold tabular-nums">{brl(e.a_pagar)}</td>
-            </tr>
-          ))}
-        </Tabela>
+        <TabelaAcerto acerto={lista} umDia={inicio === fim} aoPagar={pode('financeiro') ? (e) => setPagar({ tipo: 'motoboy', entregador: e.id, valor: Number(e.falta) > 0 ? Number(e.falta) : undefined, data: fim }) : undefined} />
       )}
-      <p className="mt-3 text-xs text-stone-500">O valor a pagar é “entregas × valor por entrega” do cadastro do entregador. Lance o pagamento em Financeiro → Saídas, na categoria Motoboys.</p>
+      {pode('financeiro') && (
+        <p className="mt-3 text-sm text-stone-600">
+          Os pagamentos feitos ficam em{' '}
+          <Link to="/admin/pagamentos" className="font-semibold text-molho-700 hover:underline">
+            Pagamentos
+          </Link>
+          .
+        </p>
+      )}
+      <Modal aberto={pagar != null} titulo="Pagar motoboy" onFechar={() => setPagar(null)} largura="max-w-lg">
+        {pagar && (
+          <FormPagamento
+            inicial={pagar}
+            aoRegistrar={() => {
+              setPagar(null)
+              recarregar()
+            }}
+          />
+        )}
+      </Modal>
     </>
   )
 }
@@ -222,6 +240,10 @@ function Entregadores() {
         <p className="text-stone-600">
           Para dar acesso, crie o usuário com a função <b>Motoboy</b> em {ehAdmin ? <Link to="/admin/configuracoes" className="font-semibold text-molho-700 hover:underline">Configurações → Usuários</Link> : 'Configurações → Usuários (peça à administradora)'}. Ele já aparece nesta lista, ligado ao login.
         </p>
+        <p className="text-stone-600">
+          Cada motoboy tem a sua regra de pagamento: uma <b>diária</b> por dia trabalhado mais o valor das entregas (a taxa cobrada do cliente ou um valor fixo). O que cada um tem a receber aparece na aba
+          Acerto de entregas e em Pagamentos.
+        </p>
         <Alternar ativo={Boolean(config?.rastreio_motoboy)} disabled={!pode('entregas')} onChange={rastreio} rotulo="Mostrar a posição do motoboy para o cliente" />
       </Cartao>
       <Crud<Entregador>
@@ -230,7 +252,7 @@ function Entregadores() {
         colunas={[
           { rotulo: 'Nome', render: (e) => <b>{e.nome}</b> },
           { rotulo: 'Telefone', render: (e) => telefone(e.telefone) },
-          { rotulo: 'Recebe por entrega', classe: 'tabular-nums', render: (e) => brl(e.valor_por_entrega) },
+          { rotulo: 'Como recebe', render: (e) => regraDoMotoboy(e) },
           { rotulo: 'Aplicativo', render: (e) => (e.usuario_id ? <Selo className="bg-emerald-100 text-emerald-900">Com acesso</Selo> : <Selo className="bg-stone-100 text-stone-600">Sem login</Selo>) },
           { rotulo: 'Última posição', render: (e) => (e.posicao_em ? `há ${haQuanto(e.posicao_em)}` : '—') },
           { rotulo: 'Ativo', render: (e) => simNao(e.ativo) },
@@ -238,7 +260,12 @@ function Entregadores() {
         campos={[
           { nome: 'nome', rotulo: 'Nome', obrigatorio: true },
           { nome: 'telefone', rotulo: 'Telefone' },
-          { nome: 'valor_por_entrega', rotulo: 'Valor pago por entrega (R$)', tipo: 'moeda', padrao: 0, obrigatorio: true },
+          { nome: 'diaria', rotulo: 'Diária (R$)', tipo: 'moeda', padrao: 50, obrigatorio: true, dica: 'Valor fixo por dia trabalhado. Use 0 se ele não recebe diária.' },
+          {
+            nome: 'repasse', rotulo: 'Pelas entregas, ele recebe', tipo: 'selecao', obrigatorio: true, padrao: 'taxa',
+            opcoes: [{ valor: 'taxa', rotulo: 'A taxa de entrega de cada pedido' }, { valor: 'fixo', rotulo: 'Um valor fixo por entrega' }],
+          },
+          { nome: 'valor_por_entrega', rotulo: 'Valor fixo por entrega (R$)', tipo: 'moeda', padrao: 0, obrigatorio: true, dica: 'Só vale na opção “um valor fixo por entrega”.' },
           { nome: 'ativo', rotulo: 'Ativo', tipo: 'booleano' },
         ]}
       />

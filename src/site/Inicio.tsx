@@ -8,7 +8,7 @@ import { cx } from '../components/ui'
 import { useCarrinho } from '../lib/carrinho'
 import { bannersEm, precoInicial, useLoja } from '../lib/loja'
 import type { Produto, SecaoId, SiteConteudo, Tamanho3 } from '../lib/tipos'
-import { SeloAberta } from './SiteLayout'
+import { CORES_INSTAGRAM, IconeInstagram, linkInstagram } from './SiteLayout'
 
 const botao = 'inline-flex h-12 items-center justify-center rounded-lg px-6 font-semibold transition-colors'
 const ICONES = [MousePointerClick, ChefHat, Bike]
@@ -42,7 +42,7 @@ export default function Inicio() {
   }
 
   const secoes: Record<SecaoId, (tamanho: Tamanho3) => ReactNode> = {
-    hero: (tamanho) => <Hero conteudo={conteudo} tamanho={tamanho} minutos={(config?.tempo_preparo_min ?? 40) + (config?.tempo_entrega_min ?? 20)} />,
+    hero: (tamanho) => <Hero conteudo={conteudo} tamanho={tamanho} minutos={(config?.tempo_preparo_min ?? 40) + (config?.tempo_entrega_min ?? 20)} instagram={config?.instagram} />,
     banners: () => {
       const itens = bannersEm(catalogo, 'inicio_meio')
       return itens.length > 0 && <section className="mx-auto max-w-6xl px-4 py-6"><Banners itens={itens} /></section>
@@ -103,17 +103,15 @@ export default function Inicio() {
   )
 }
 
-function Hero({ conteudo, tamanho, minutos }: { conteudo: SiteConteudo; tamanho: Tamanho3; minutos: number }) {
+function Hero({ conteudo, tamanho, minutos, instagram }: { conteudo: SiteConteudo; tamanho: Tamanho3; minutos: number; instagram?: string | null }) {
   const { titulo, destaque, subtitulo, imagem_url } = conteudo.hero
+  const insta = linkInstagram(instagram)
   const i = destaque ? titulo.indexOf(destaque) : -1
   return (
     <section className="overflow-hidden bg-forno-900 text-massa-50">
       <div className={cx('mx-auto grid max-w-6xl items-center gap-8 px-4', tamanho === 'pequeno' ? 'py-8' : 'py-12 md:grid-cols-[1.1fr_1fr]', tamanho === 'grande' && 'md:py-20')}>
         <div>
-          <div className="md:hidden">
-            <SeloAberta />
-          </div>
-          <h1 className={cx('mt-4 font-display leading-[1.05] font-bold text-balance', tamanho === 'pequeno' ? 'text-3xl md:text-4xl' : 'text-4xl md:text-6xl')}>
+          <h1 className={cx('font-display leading-[1.05] font-bold text-balance', tamanho === 'pequeno' ? 'text-3xl md:text-4xl' : 'text-4xl md:text-6xl')}>
             {i >= 0 ? (
               <>
                 {titulo.slice(0, i)}
@@ -134,6 +132,11 @@ function Hero({ conteudo, tamanho, minutos }: { conteudo: SiteConteudo; tamanho:
             <Link to="/pedido" className={`${botao} border border-massa-300/40 text-massa-100 hover:bg-white/10`}>
               Acompanhar pedido
             </Link>
+            {insta && (
+              <a href={insta} target="_blank" rel="noreferrer" className={cx(botao, 'gap-2 hover:opacity-90', CORES_INSTAGRAM)}>
+                <IconeInstagram /> Siga @{insta.split('/').pop()}
+              </a>
+            )}
           </div>
         </div>
         {tamanho !== 'pequeno' &&

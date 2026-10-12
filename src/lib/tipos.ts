@@ -49,6 +49,8 @@ export interface Configuracoes {
   exigir_login: boolean
   login_google: boolean
   login_facebook: boolean
+  login_email: boolean
+  cnpj: string | null
   alertas_pedido: { atencao: number; atrasado: number; critico: number }
   metas: Record<string, Meta>
   categorias_despesa: string[]
@@ -229,6 +231,10 @@ export interface Entregador {
   nome: string
   telefone: string | null
   valor_por_entrega: number
+  /** Valor fixo por dia trabalhado. */
+  diaria: number
+  /** Pelas entregas recebe a taxa cobrada do cliente ("taxa") ou valor_por_entrega ("fixo"). */
+  repasse: 'taxa' | 'fixo'
   ativo: boolean
   usuario_id: string | null
   posicao_em: string | null

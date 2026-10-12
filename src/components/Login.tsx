@@ -2,7 +2,36 @@ import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { configurado, mensagemErro, supabase } from '../lib/supabase'
 import { Logo } from './Logo'
-import { Botao, Campo, Entrada, Erro } from './ui'
+import { Botao, Campo, Entrada, Erro, Modal, useAviso } from './ui'
+
+/** Janela para definir uma senha nova (quem está logado ou chegou pelo link de "esqueci a senha"). */
+export function TrocarSenha({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
+  const aviso = useAviso()
+  const [senha, setSenha] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  async function salvar(e: FormEvent) {
+    e.preventDefault()
+    setSalvando(true)
+    const { error } = await supabase.auth.updateUser({ password: senha })
+    setSalvando(false)
+    if (error) return aviso.erro(mensagemErro(error))
+    aviso.sucesso('Senha alterada')
+    setSenha('')
+    onFechar()
+  }
+  return (
+    <Modal aberto={aberto} titulo="Definir nova senha" onFechar={onFechar} largura="max-w-sm">
+      <form onSubmit={salvar} className="space-y-4">
+        <Campo rotulo="Nova senha" dica="Mínimo de 8 caracteres.">
+          <Entrada type="password" required minLength={8} autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+        </Campo>
+        <Botao type="submit" className="w-full" carregando={salvando}>
+          Salvar senha
+        </Botao>
+      </form>
+    </Modal>
+  )
+}
 
 export function Moldura({ children }: { children: ReactNode }) {
   return (

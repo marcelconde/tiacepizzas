@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from './auth'
-import { mensagemErro, supabase } from './supabase'
+import { mensagemErro, provedoresDeLogin, supabase } from './supabase'
 import type { Cliente, Endereco } from './tipos'
 
 export interface Conta extends Cliente {
@@ -35,6 +35,24 @@ export function useConta(ativo = true) {
   }, [carregandoSessao, recarregar])
 
   return { conta, carregando: carregando || carregandoSessao, erro, recarregar, logado: Boolean(usuarioId) }
+}
+
+/** Google e Facebook ligados no servidor. Enquanto não se sabe (ou se a consulta falhar), vale o que o painel diz. */
+export function useProvedores() {
+  const [ligados, setLigados] = useState<{ google: boolean; facebook: boolean } | null>(null)
+  const [pronto, setPronto] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    provedoresDeLogin().then((p) => {
+      if (!vivo) return
+      setLigados(p)
+      setPronto(true)
+    })
+    return () => {
+      vivo = false
+    }
+  }, [])
+  return { pronto, google: ligados?.google ?? true, facebook: ligados?.facebook ?? true }
 }
 
 /** Abre o login do Google ou do Facebook e volta para a página indicada. */

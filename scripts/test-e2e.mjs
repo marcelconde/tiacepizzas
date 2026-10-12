@@ -36,7 +36,12 @@ async function nova(tipo) {
   await p.setGeolocation({ latitude: -23.5612, longitude: -46.6561 })
   p.on('pageerror', (e) => erros.push(`exceção ${p.url()}: ${e.message.slice(0, 200)}`))
   p.on('console', (m) => m.type() === 'error' && !/WebSocket|realtime|favicon|openstreetmap|Failed to load resource/.test(m.text()) && erros.push(`console ${p.url()}: ${m.text().slice(0, 200)}`))
-  p.on('response', async (r) => r.url().startsWith(API) && r.status() >= 400 && !/realtime/.test(r.url()) && erros.push(`${r.status()} ${r.request().method()} ${r.url().replace(API, '').slice(0, 110)} ${(await r.text().catch(() => '')).slice(0, 160)}`))
+  p.on('response', async (r) => {
+    if (!r.url().startsWith(API) || r.status() < 400 || /realtime/.test(r.url())) return
+    const corpo = (await r.text().catch(() => '')).slice(0, 160)
+    if (/Invalid login credentials/.test(corpo)) return // senha errada digitada de propósito
+    erros.push(`${r.status()} ${r.request().method()} ${r.url().replace(API, '').slice(0, 110)} ${corpo}`)
+  })
   p.on('dialog', (d) => d.accept())
   const cdp = await p.createCDPSession()
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DL, browserContextId: ctx.id })
@@ -224,7 +229,12 @@ await teste('criar usuário motoboy já ligado a um entregador; metas salvas', a
   await clicar(pc, 'Criar usuário', 'button'); await dormir(1200)
   const perfil = (await api('perfis?select=*&email=eq.joao@teste.local'))[0]
   assert.deepEqual([perfil?.papel, perfil?.ativo], ['motoboy', true])
-  assert.equal((await api(`entregadores?select=nome&usuario_id=eq.${perfil.id}`))[0].nome, 'João Entregas')
+  const ent = (await api(`entregadores?select=nome,diaria,repasse&usuario_id=eq.${perfil.id}`))[0]
+  assert.deepEqual([ent.nome, Number(ent.diaria), ent.repasse], ['João Entregas', 50, 'taxa'], 'motoboy nasce com diária de R$ 50 + taxa das entregas')
+  // e consegue entrar no aplicativo de entregas com a senha criada
+  const joao = await nova('celular'); await entrar(joao, '/entregador', 'joao@teste.local')
+  assert.ok(await joao.evaluate(() => /entrega/i.test(document.body.innerText) && !document.querySelector('input[type=password]')), 'entrou no aplicativo de entregas')
+  await joao.close()
   await clicar(pc, 'Metas e indicadores', '[role=tab]')
   await preencher(pc, 'Faturamento por dia: ruim', '1200'); await clicar(pc, 'Salvar', 'button[type=submit]'); await dormir(900)
   assert.equal((await rpc('config_interna', {})).metas.faturamento_dia.ruim, 1200)
@@ -237,6 +247,79 @@ await teste('motoboy conclui a entrega pelo aplicativo', async () => {
   assert.deepEqual([(await situacao(rua.id)).status, (await situacao(rua.id)).pago], ['entregue', true])
   assert.ok(await moto.evaluate(() => document.body.innerText.includes('entrega(s) hoje')))
   await moto.close()
+})
+
+await teste('pagamentos: motoboy recebe diária + entregas, o dinheiro sai do caixa e desconta do líquido', async () => {
+  const hoje = new Date(), dia = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+  const acerto = async () => (await rpc('acerto_entregadores', { p_inicio: dia, p_fim: dia })).find((e) => e.nome === 'Carlos Moto')
+  const antes = await acerto()
+  assert.ok(antes.entregas >= 1 && Number(antes.diarias) === 50 && Number(antes.a_receber) === 50 + Number(antes.taxas), JSON.stringify(antes))
+  const saidasAntes = Number((await rpc('relatorio_faturamento', { p_inicio: dia, p_fim: dia, p_agrupar: 'dia' })).resumo.despesas)
+  await ir(pc, '/admin/pagamentos', 1800)
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('main tbody tr')].some((t) => t.innerText.includes('Carlos Moto') && t.innerText.includes('diária de R$') && t.innerText.includes('a taxa de cada entrega'))), 'regra do motoboy na tabela')
+  await pc.evaluate(() => [...[...document.querySelectorAll('main tbody tr')].find((t) => t.innerText.includes('Carlos Moto')).querySelectorAll('button')].find((b) => b.innerText.includes('Pagar')).click()); await dormir(1500)
+  // o valor que falta já vem preenchido e, com o caixa aberto, a origem é o dinheiro do caixa
+  assert.equal(Number((await pc.evaluate(() => [...document.querySelectorAll('[role=dialog] label')].find((l) => l.innerText.startsWith('Valor pago')).querySelector('input').value)).replace(',', '.')), Number(antes.falta))
+  await clicar(pc, 'Confirmar pagamento', '[role=dialog] button[type=submit]'); await dormir(1500)
+  const pg = (await api(`despesas?select=*&favorecido_tipo=eq.motoboy&data=eq.${dia}&order=criado_em.desc&limit=1`))[0]
+  assert.deepEqual([pg.favorecido, Number(pg.valor), pg.categoria, pg.caixa_movimento_id != null], ['Carlos Moto', Number(antes.falta), 'Motoboys', true])
+  const depois = await acerto()
+  assert.deepEqual([Number(depois.pago) - Number(antes.pago), Number(depois.falta)], [Number(antes.falta), 0])
+  assert.equal(Number((await rpc('relatorio_faturamento', { p_inicio: dia, p_fim: dia, p_agrupar: 'dia' })).resumo.despesas), saidasAntes + Number(antes.falta), 'entrou nas saídas do dia')
+  assert.ok(await pc.evaluate(() => document.querySelector('main').innerText.includes('Líquido de hoje')), 'mostra o líquido do dia')
+  // funcionário da cozinha, pago por Pix
+  await clicar(pc, 'Novo pagamento', 'main button'); await clicar(pc, 'Funcionário da cozinha', '[role=dialog] button')
+  await preencher(pc, 'Nome de quem recebeu', 'Dona Lúcia'); await preencher(pc, 'Valor pago', '80'); await preencher(pc, 'De onde saiu o dinheiro?', 'Pix'); await preencher(pc, 'Observação', 'Diária de teste')
+  await clicar(pc, 'Confirmar pagamento', '[role=dialog] button[type=submit]'); await dormir(1500)
+  const coz = (await api(`despesas?select=*&favorecido_tipo=eq.cozinha&observacao=eq.Di%C3%A1ria%20de%20teste`))[0]
+  assert.deepEqual([coz.favorecido, Number(coz.valor), coz.categoria, coz.forma_pagamento, coz.caixa_movimento_id], ['Dona Lúcia', 80, 'Salários', 'pix', null])
+  // apagar o pagamento do motoboy devolve o dinheiro ao caixa
+  await pc.evaluate(() => [...document.querySelectorAll('main tbody tr')].find((t) => t.innerText.includes('Carlos Moto') && t.innerText.includes('Dinheiro do caixa')).querySelector('[aria-label^="Apagar"]').click()); await dormir(1500)
+  assert.equal((await api(`despesas?select=id&id=eq.${pg.id}`)).length, 0)
+  assert.equal((await api(`caixa_movimentos?select=id&id=eq.${pg.caixa_movimento_id}`)).length, 0)
+  // a tela de Entregas mostra o mesmo acerto
+  await ir(pc, '/admin/entregas', 1200); await clicar(pc, 'Acerto de entregas', '[role=tab]'); await dormir(1200)
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('main tbody tr')].some((t) => t.innerText.includes('Carlos Moto') && t.innerText.includes('Pagar'))))
+})
+
+await teste('cliente cria conta com e-mail e senha, pede com Pix e recebe a chave com o envio do comprovante', async () => {
+  await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ cnpj: '41522638000170' }), headers: { prefer: 'return=minimal' } })
+  const cel = await nova('celular'); await ir(cel, '/', 1200)
+  // no celular: aberto/fechado, Instagram em destaque e CNPJ no rodapé
+  assert.ok(await cel.evaluate(() => [...document.querySelectorAll('[role=status]')].some((e) => e.offsetParent !== null && /Aberto agora|Fechado agora/.test(e.innerText))), 'faixa de aberto/fechado visível no celular')
+  assert.ok((await cel.evaluate(() => [...document.querySelectorAll('header a[href="https://instagram.com/tiacepizzas"], main a[href="https://instagram.com/tiacepizzas"]')].filter((e) => e.offsetParent !== null).length)) >= 2, 'Instagram no topo e na capa')
+  assert.ok(await cel.evaluate(() => document.querySelector('footer').innerText.includes('CNPJ 41.522.638/0001-70')), 'CNPJ no rodapé')
+  await ir(cel, '/entrar?criar')
+  await preencher(cel, 'Seu nome', 'Bia Nova'); await preencher(cel, 'E-mail', 'bia.nova@teste.local'); await preencher(cel, 'Crie uma senha', 'segredo-da-bia')
+  await clicar(cel, 'Criar minha conta', 'button[type=submit]'); await dormir(2500)
+  assert.ok(/\/conta#?$/.test(cel.url()), cel.url())
+  assert.equal((await api('perfis?select=id&email=eq.bia.nova@teste.local')).length, 0, 'conta de cliente não vira usuário do painel')
+  assert.equal((await api('clientes?select=nome&email=eq.bia.nova@teste.local'))[0].nome, 'Bia Nova')
+  await ir(cel, '/admin', 1200)
+  assert.ok(await cel.evaluate(() => document.body.innerText.includes('Acesso restrito')), 'cliente não entra no painel')
+  await ir(cel, '/cardapio'); await clicar(cel, 'Portuguesa', 'main button'); await clicar(cel, 'Adicionar ·', 'button')
+  await ir(cel, '/checkout', 1500)
+  await preencher(cel, 'WhatsApp', '11972223333'); await preencher(cel, 'Rua / avenida', 'Rua das Palmeiras'); await preencher(cel, 'Número', '12'); await preencher(cel, 'Bairro', 'Centro')
+  await clicar(cel, 'Pix', 'button'); await clicar(cel, 'Enviar pedido', 'button'); await dormir(2500)
+  assert.ok(cel.url().includes('/pedido?c='), cel.url())
+  const ult = (await api(`pedidos?select=numero,cliente_nome,forma_pagamento,total&order=criado_em.desc&limit=1`))[0]
+  assert.deepEqual([ult.cliente_nome, ult.forma_pagamento], ['Bia Nova', 'pix'])
+  const tela = await cel.evaluate(() => ({
+    texto: document.querySelector('main').innerText,
+    comprovante: [...document.querySelectorAll('main a')].find((a) => a.innerText.includes('Enviar comprovante'))?.href ?? '',
+    falar: [...document.querySelectorAll('main a')].find((a) => a.innerText.includes('Falar sobre este pedido'))?.href ?? '',
+  }))
+  assert.ok(tela.texto.includes('Pague com Pix') && tela.texto.includes('pix@tiacepizzas.com.br') && tela.texto.includes('comprovante'), 'chave Pix e pedido do comprovante na tela')
+  assert.ok(tela.comprovante.includes('wa.me/5511999990000') && decodeURIComponent(tela.comprovante).includes(`pedido #${ult.numero}`), tela.comprovante)
+  assert.ok(decodeURIComponent(tela.falar).includes(`pedido #${ult.numero}`), tela.falar)
+  // sai e entra de novo com a senha criada
+  await ir(cel, '/conta', 1200); await clicar(cel, 'Sair', 'button'); await dormir(1200)
+  await ir(cel, '/entrar'); await preencher(cel, 'E-mail', 'bia.nova@teste.local'); await preencher(cel, 'Senha', 'senha-errada')
+  await clicar(cel, 'Entrar', 'button[type=submit]'); await dormir(1500)
+  assert.ok(await cel.evaluate(() => document.body.innerText.includes('E-mail ou senha incorretos')))
+  await preencher(cel, 'Senha', 'segredo-da-bia'); await clicar(cel, 'Entrar', 'button[type=submit]'); await dormir(2500)
+  assert.ok(/\/conta#?$/.test(cel.url()), cel.url())
+  await cel.close()
 })
 
 await teste('cliente com conta: novo endereço, pedido e lista de pedidos', async () => {
@@ -263,7 +346,9 @@ await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', 
   await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'distancia' }), headers: { prefer: 'return=minimal' } })
   const cli = await nova('desktop'); await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'main button'); await clicar(cli, 'Adicionar ·', 'button'); await ir(cli, '/checkout', 1200)
   await preencher(cli, 'Nome', 'Teste Distância'); await preencher(cli, 'WhatsApp', '11973000000')
-  await preencher(cli, 'Rua / avenida', 'Rua Augusta'); await preencher(cli, 'Número', '1500'); await cli.keyboard.press('Tab'); await dormir(6000)
+  // a taxa aparece sozinha: a pessoa só preenche a rua e o número
+  assert.ok(await cli.evaluate(() => !document.querySelector('main select')), 'por distância o cliente não escolhe bairro nem taxa')
+  await preencher(cli, 'Rua / avenida', 'Rua Augusta'); await preencher(cli, 'Número', '1500'); await dormir(7000)
   const achou = await cli.evaluate(() => document.body.innerText.includes('Entregamos aí'))
   if (!achou) { await clicar(cli, 'Marcar manualmente', 'button'); await dormir(1500) }
   await clicar(cli, 'Enviar pedido', 'button'); await dormir(2200)

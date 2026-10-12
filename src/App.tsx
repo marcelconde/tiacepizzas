@@ -8,7 +8,8 @@ import { LojaProvider } from './lib/loja'
 import Acompanhar from './site/Acompanhar'
 import Cardapio from './site/Cardapio'
 import Checkout from './site/Checkout'
-import Conta, { Entrar } from './site/Conta'
+import Conta from './site/Conta'
+import Entrar from './site/Entrar'
 import Inicio from './site/Inicio'
 import SiteLayout from './site/SiteLayout'
 
@@ -24,6 +25,7 @@ const Estoque = lazy(() => import('./admin/Estoque'))
 const Caixa = lazy(() => import('./admin/Caixa'))
 const Entregas = lazy(() => import('./admin/Entregas'))
 const Financeiro = lazy(() => import('./admin/Financeiro'))
+const Pagamentos = lazy(() => import('./admin/Pagamentos'))
 const Fiscal = lazy(() => import('./admin/Fiscal'))
 const Configuracoes = lazy(() => import('./admin/Configuracoes'))
 const Analises = lazy(() => import('./admin/Analises'))
@@ -61,6 +63,7 @@ export default function App() {
                     <Route path="caixa" element={<Caixa />} />
                     <Route path="entregas" element={<Entregas />} />
                     <Route path="financeiro" element={<Financeiro />} />
+                    <Route path="pagamentos" element={<Pagamentos />} />
                     <Route path="fiscal" element={<Fiscal />} />
                     <Route path="configuracoes" element={<Configuracoes />} />
                     <Route path="analises" element={<Analises />} />

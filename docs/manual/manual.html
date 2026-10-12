@@ -89,9 +89,9 @@
   <li><a href="#c9"><b>9</b>Site e promoções</a><small>Página inicial, banners, promoções, cupons e tela do produto</small></li>
   <li><a href="#c10"><b>10</b>Estoque</a><small>Insumos, compras, perdas, desperdício e baixa automática</small></li>
   <li><a href="#c11"><b>11</b>Caixa</a><small>Abertura, sangria, suprimento e fechamento</small></li>
-  <li><a href="#c12"><b>12</b>Entregas</a><small>Taxa por bairro ou por distância, entregadores e acerto</small></li>
+  <li><a href="#c12"><b>12</b>Entregas</a><small>Taxa por bairro ou por distância, entregadores (diária + entregas) e acerto</small></li>
   <li><a href="#c13"><b>13</b>Aplicativo do motoboy</a><small>Entregas atribuídas, rota, problemas e localização</small></li>
-  <li><a href="#c14"><b>14</b>Financeiro</a><small>Entradas, saídas, resultado e relatórios em PDF, Excel e CSV</small></li>
+  <li><a href="#c14"><b>14</b>Financeiro</a><small>Entradas, saídas, pagamentos a motoboys e funcionários, resultado e relatórios</small></li>
   <li><a href="#c15"><b>15</b>Painel de indicadores</a><small>Faturamento, metas e gráficos</small></li>
   <li><a href="#c16"><b>16</b>Análises</a><small>Ranking de produtos e de clientes</small></li>
   <li><a href="#c17"><b>17</b>Nota fiscal (NFC-e)</a><small>O que é preciso e como ligar</small></li>
@@ -143,7 +143,7 @@
 <p>Vale conhecer o que o cliente vê, para ajudar quando alguém ligar com dúvida. O site foi pensado primeiro para o celular: botões grandes, poucos passos e a sacola sempre à mão.</p>
 
 <h2>Página inicial</h2>
-<p>Mostra a capa, os banners, as promoções que estão valendo, os produtos em destaque e a explicação de como funciona. Tudo isso é montado no painel, em <b class="ui">Site e promoções</b> (capítulo 9). No topo ficam o cardápio, o acompanhamento de pedido, a conta e o selo <b class="ui">Aberto</b> ou <b class="ui">Fechado</b>.</p>
+<p>Mostra a capa, os banners, as promoções que estão valendo, os produtos em destaque e a explicação de como funciona. Tudo isso é montado no painel, em <b class="ui">Site e promoções</b> (capítulo 9). No topo ficam o cardápio, o acompanhamento de pedido, a conta, o botão colorido do <b class="ui">Instagram</b> e o aviso <b class="ui">Aberto agora</b> ou <b class="ui">Fechado agora</b>. No celular esse aviso é uma faixa logo abaixo do topo, que também diz até que horas a loja fica aberta ou quando abre. No rodapé aparece o CNPJ.</p>
 <figure><img src="capturas/site-inicio.jpg" alt=""><figcaption>Página inicial no computador, com a capa e um banner.</figcaption></figure>
 
 <h2>Cardápio</h2>
@@ -179,29 +179,29 @@
 <p>A <b>taxa de entrega</b> depende de como a pizzaria configurou (capítulo 12):</p>
 <ul>
   <li><b>Por bairro:</b> o cliente escolhe o bairro em uma lista e vê a taxa na hora.</li>
-  <li><b>Por distância:</b> o site localiza o endereço no mapa, calcula a distância até a loja e mostra a taxa. Se o pino cair no lugar errado, o cliente arrasta. Se o endereço estiver fora do raio, aparece o aviso “Este endereço está fora da nossa área de entrega” e o pedido não é enviado.</li>
+  <li><b>Por distância:</b> o cliente só preenche a rua e o número. O site localiza o endereço no mapa sozinho, calcula a distância até a loja e mostra a taxa, sem o cliente escolher nada. Se o pino cair no lugar errado, o cliente arrasta. Se o endereço estiver fora do raio, aparece o aviso “Este endereço está fora da nossa área de entrega” e o pedido não é enviado.</li>
 </ul>
 <figure class="media"><img src="capturas/site-checkout-distancia.jpg" alt=""><figcaption>Entrega por distância: o endereço localizado no mapa e a taxa calculada.</figcaption></figure>
 <div class="dica"><p>O preço que vale é sempre o calculado pelo sistema no momento do envio. Se um preço ou promoção mudar enquanto o cliente monta a sacola, o total cobrado é o atual.</p></div>
 
 <h2>Acompanhando o pedido</h2>
-<p>Depois de enviar, o cliente cai na tela de acompanhamento. Ela mostra o número do pedido, a previsão, a linha do tempo com o horário de cada etapa e o resumo. A tela se atualiza sozinha. Quem escolheu Pix vê a chave para copiar. No fim da página há um botão de WhatsApp que já abre a conversa com a frase “Olá, gostaria de falar sobre o pedido #…”.</p>
+<p>Depois de enviar, o cliente cai na tela de acompanhamento. Ela mostra o número do pedido, a previsão, a linha do tempo com o horário de cada etapa e o resumo. A tela se atualiza sozinha. Quem escolheu <b>Pix</b> vê, logo no começo da tela, o valor, a chave para copiar e o botão <b class="ui">Enviar comprovante pelo WhatsApp</b>, que abre a conversa já dizendo o número do pedido e o valor. Assim que você marca o pedido como pago no painel, esse quadro some. No fim da página há outro botão de WhatsApp, que abre a conversa com a frase “Olá! Quero falar sobre o pedido #…”.</p>
 <div class="celulares">
   <figure><img src="capturas/site-acompanhar.jpg" alt=""><figcaption>Pedido recém-enviado.</figcaption></figure>
-  <figure><img src="capturas/site-acompanhar-pix.jpg" alt=""><figcaption>Chave Pix e resumo.</figcaption></figure>
+  <figure><img src="capturas/site-acompanhar-pix.jpg" alt=""><figcaption>Pix: valor, chave e envio do comprovante.</figcaption></figure>
   <figure><img src="capturas/site-acompanhar-mapa.jpg" alt=""><figcaption>Pedido na rua, com o mapa do motoboy.</figcaption></figure>
 </div>
 <p>Quando o pedido sai para entrega e o motoboy está com o aplicativo aberto, aparece um <b>mapa com a posição aproximada</b> dele. Se o motoboy registrar um problema, o cliente vê o aviso e é convidado a falar com a pizzaria.</p>
 <p>Para voltar ao acompanhamento depois, o cliente usa <b class="ui">Acompanhar pedido</b> no topo do site e digita o código de 8 letras e números que apareceu ao finalizar. Os pedidos feitos naquele aparelho ficam listados ali.</p>
 
 <h2>Conta do cliente</h2>
-<p>O cliente pode pedir sem cadastro, só com nome e telefone. Se preferir, entra com a conta do Google (ou do Facebook, se ligado): assim os endereços ficam guardados e todos os pedidos aparecem em <b class="ui">Minha conta</b>.</p>
+<p>O cliente pode pedir sem cadastro, só com nome e telefone. Se preferir, <b>cria uma conta com e-mail e senha</b> na hora (ou entra com o Google ou o Facebook, se ligados): assim os endereços ficam guardados e todos os pedidos aparecem em <b class="ui">Minha conta</b>. Quem esquecer a senha usa <b class="ui">Esqueci a senha</b> e recebe um link por e-mail. Quem cria conta no site é sempre cliente: nunca entra no painel.</p>
 <div class="celulares">
-  <figure><img src="capturas/site-entrar.jpg" alt=""><figcaption>Entrada com o Google.</figcaption></figure>
+  <figure><img src="capturas/site-entrar.jpg" alt=""><figcaption>Entrar ou criar conta.</figcaption></figure>
   <figure><img src="capturas/site-conta-celular.jpg" alt=""><figcaption>Minha conta: pedidos e endereços.</figcaption></figure>
   <figure><img src="capturas/site-acompanhar-problema.jpg" alt=""><figcaption>Aviso de problema na entrega.</figcaption></figure>
 </div>
-<div class="atencao"><p>A entrada com Google e Facebook só funciona depois de ligada no banco de dados (capítulo 22). Em <b class="ui">Configurações → Pedidos</b> você escolhe quais botões aparecem e se o pedido exige conta.</p></div>
+<div class="atencao"><p>Os botões do Google e do Facebook só aparecem depois de ligados no banco de dados (capítulo 22). Em <b class="ui">Configurações → Pedidos</b> você escolhe quais entradas oferecer e se o pedido exige conta.</p></div>
 
 <h2>WhatsApp</h2>
 <p>O botão do WhatsApp aparece na página inicial e no cardápio (botão verde flutuante), na sacola, na finalização, no acompanhamento e no rodapé. O número é o cadastrado em <b class="ui">Configurações → Loja</b>.</p>
@@ -448,10 +448,11 @@
 <div class="dica"><p>A distância é em linha reta, não o caminho pelas ruas. Na prática o trajeto real é um pouco maior; leve isso em conta ao definir as faixas.</p></div>
 
 <h2>Entregadores</h2>
-<p>A aba <b class="ui">Entregadores</b> lista quem faz entregas, quanto cada um recebe por entrega e se tem acesso ao aplicativo. Para dar acesso ao aplicativo, crie o usuário com a função <b>Motoboy</b> em Configurações → Usuários; ele entra nesta lista sozinho. A chave <b class="ui">Mostrar a posição do motoboy para o cliente</b> liga ou desliga o mapa do acompanhamento.</p>
+<p>A aba <b class="ui">Entregadores</b> lista quem faz entregas, como cada um recebe e se tem acesso ao aplicativo. Cada motoboy tem a sua regra: uma <b>diária</b> por dia trabalhado (R$ 50,00 ao cadastrar; você pode mudar) mais o valor das entregas, que pode ser <b>a taxa de entrega de cada pedido</b> ou <b>um valor fixo por entrega</b>. Para dar acesso ao aplicativo, crie o usuário com a função <b>Motoboy</b> em Configurações → Usuários; ele entra nesta lista sozinho. A chave <b class="ui">Mostrar a posição do motoboy para o cliente</b> liga ou desliga o mapa do acompanhamento.</p>
 <figure class="media"><img src="capturas/painel-entregadores.jpg" alt=""><figcaption>Entregadores e a situação do acesso ao aplicativo.</figcaption></figure>
 <h2>Acerto de entregas</h2>
-<p>Escolha o período e veja, por entregador, quantas entregas fez, quanto de taxa os clientes pagaram e quanto a pizzaria deve a ele (entregas × valor por entrega). Exporte em PDF, Excel ou CSV. Depois de pagar, lance a saída em Financeiro, na categoria Motoboys.</p>
+<p>Escolha o período e veja, por entregador, quantas entregas concluiu, o valor das diárias, o valor pelas entregas, o total a receber, o que já foi pago e quanto falta. O botão <b class="ui">Pagar</b> abre o pagamento já com o valor que falta. Exporte em PDF, Excel ou CSV.</p>
+<div class="dica"><p>A diária entra em cada dia em que o motoboy concluiu pelo menos uma entrega. Se ele trabalhou e não saiu nenhuma entrega, pague a diária pelo botão Pagar.</p></div>
 <figure class="media"><img src="capturas/painel-entregas-acerto.jpg" alt=""><figcaption>Acerto de entregas do período.</figcaption></figure>
 
 <!-- ============================================================ -->
@@ -500,6 +501,20 @@
 <figure class="media"><img src="capturas/painel-financeiro-saidas.jpg" alt=""><figcaption>Saídas, com o total conforme os filtros.</figcaption></figure>
 <figure class="media"><img src="capturas/painel-financeiro-despesa.jpg" alt=""><figcaption>Lançando uma despesa.</figcaption></figure>
 <p>As categorias (Motoboys, Ingredientes, Embalagens, Manutenção, Aluguel…) são definidas em Configurações → Financeiro.</p>
+
+<h2>Pagamentos a motoboys e funcionários</h2>
+<p>O menu <b class="ui">Pagamentos</b> é o lugar de registrar o que foi pago à equipe. No alto ficam as vendas, as saídas e o <b>líquido</b> do dia (vendas menos saídas). Logo abaixo, cada motoboy com o que tem a receber, e a lista dos pagamentos já feitos.</p>
+<figure class="media"><img src="capturas/painel-pagamentos.jpg" alt=""><figcaption>Pagamentos do dia: líquido, motoboys a pagar e pagamentos feitos.</figcaption></figure>
+<p>Para pagar, clique em <b class="ui">Pagar</b> na linha do motoboy ou em <b class="ui">Novo pagamento</b>:</p>
+<ol>
+  <li>Escolha para quem é: <b>Motoboy</b>, <b>Funcionário da cozinha</b> ou <b>Outro funcionário</b>.</li>
+  <li>Escolha o motoboy na lista (o sistema mostra a conta: diária + entregas, e o que falta) ou digite o nome do funcionário.</li>
+  <li>Confira o valor, a data e de onde saiu o dinheiro: <b>do caixa</b> (a retirada é lançada no caixa junto), dinheiro de fora do caixa ou Pix.</li>
+  <li>Clique em <b class="ui">Confirmar pagamento</b>.</li>
+</ol>
+<figure class="media"><img src="capturas/painel-pagamentos-novo.jpg" alt=""><figcaption>Pagando um motoboy: o valor que falta já vem preenchido.</figcaption></figure>
+<p>Ao confirmar, o valor entra nas saídas daquele dia e é descontado do líquido na hora. O pagamento também aparece em Financeiro → Saídas (categoria Motoboys ou Salários). Lançou errado? Apague pela lixeira; se o dinheiro tinha saído do caixa, ele volta. Depois que o caixa daquele dia é fechado, o pagamento que saiu dele não pode mais ser apagado.</p>
+<figure class="media"><img src="capturas/painel-pagamentos-mes.jpg" alt=""><figcaption>Pagamentos do mês.</figcaption></figure>
 
 <h2>Exportar relatórios</h2>
 <p>Os botões <b class="ui">PDF</b>, <b class="ui">Excel</b> e <b class="ui">CSV</b>, no alto, geram o relatório do período com os filtros escolhidos: resultado, entradas por forma de pagamento, faturamento por período, saídas por categoria e as listas detalhadas de entradas e saídas. No Excel, cada parte vem em uma aba.</p>
@@ -577,7 +592,7 @@
 <h1 id="c20"><span class="n">20</span>Configurações</h1>
 <p>Aqui ficam as regras da operação. Quase tudo o que varia na pizzaria muda por esta tela, sem programador.</p>
 <h2>Loja</h2>
-<p>Nome, telefone, WhatsApp, Instagram, chave Pix, endereço e um aviso opcional que aparece no topo do site (“Hoje abrimos às 19h”).</p>
+<p>Nome, telefone, WhatsApp, Instagram, chave Pix, CNPJ (aparece no rodapé do site), endereço e um aviso opcional que aparece no topo do site (“Hoje abrimos às 19h”).</p>
 <figure class="media"><img src="capturas/painel-config-loja.jpg" alt=""><figcaption>Dados da loja.</figcaption></figure>
 <h2>Horários</h2>
 <p>Marque os dias em que abre e os horários. Se fecha depois da meia-noite, basta informar (por exemplo, 18:00 às 01:00). Fora do horário, o site mostra “Fechado” e não aceita pedidos. <b>Situação da loja</b> permite forçar aberta ou fechada em um dia fora do normal; lembre de voltar para Automático.</p>
@@ -589,7 +604,7 @@
   <li><b>Pedido mínimo</b>, <b>tempo de preparo</b> e <b>tempo de entrega</b> (formam a previsão mostrada ao cliente).</li>
   <li><b>Preço da pizza com mais de um sabor:</b> o sabor mais caro ou a média.</li>
   <li><b>Alertas de pedido parado:</b> os minutos de Atenção, Atrasado e Crítico.</li>
-  <li><b>Conta do cliente:</b> quais entradas oferecer (Google, Facebook) e se só aceita pedidos de quem tem conta.</li>
+  <li><b>Conta do cliente:</b> quais entradas oferecer (e-mail e senha, Google, Facebook) e se só aceita pedidos de quem tem conta.</li>
 </ul>
 <h2>Metas e indicadores</h2>
 <p>Defina o que é ruim e o que é bom para faturamento por dia, pedidos por dia, ticket médio, tempo de preparo e cancelamentos. Entre os dois valores fica Médio. Exemplo do faturamento: abaixo de R$ 1.000 é Ruim, a partir de R$ 2.000 é Bom.</p>
@@ -635,7 +650,7 @@
 <h2>Toda semana</h2>
 <ul>
   <li>Registre as compras em <b>Estoque → Entrada</b>, com o custo.</li>
-  <li>Faça o <b>acerto dos motoboys</b> em Entregas.</li>
+  <li>Pague os <b>motoboys</b> e quem mais recebe no dia, em Pagamentos.</li>
   <li>Baixe a <b>cópia de segurança</b> em Configurações → Sistema.</li>
 </ul>
 

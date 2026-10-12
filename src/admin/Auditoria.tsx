@@ -30,9 +30,11 @@ const CAMPOS: Record<string, string> = {
   entregador_id: 'Entregador', pedido_minimo: 'Pedido mínimo', tempo_preparo_min: 'Tempo de preparo', tempo_entrega_min: 'Tempo de entrega', metas: 'Metas',
   alertas_pedido: 'Alertas de atraso', horarios: 'Horários', modo_entrega: 'Modo de entrega', valor_por_entrega: 'Valor por entrega', data_inicio: 'Início', data_fim: 'Fim',
   tipo: 'Tipo', selo: 'Selo', categoria: 'Categoria', data: 'Data', codigo: 'Código', loja_aberta_manual: 'Abertura manual', tempo_extra_min: 'Tempo extra',
+  diaria: 'Diária', repasse: 'Recebe pelas entregas', favorecido: 'Pago a', favorecido_tipo: 'Tipo de pagamento', observacao: 'Observação', cnpj: 'CNPJ',
+  login_email: 'Conta com e-mail e senha', login_google: 'Entrada com Google', login_facebook: 'Entrada com Facebook', chave_pix: 'Chave Pix',
 }
 const COR = { criou: 'bg-emerald-100 text-emerald-900', alterou: 'bg-sky-100 text-sky-900', excluiu: 'bg-red-100 text-red-900' }
-const MONETARIOS = new Set(['preco', 'taxa_entrega', 'taxa', 'valor', 'pedido_minimo', 'valor_por_entrega'])
+const MONETARIOS = new Set(['preco', 'taxa_entrega', 'taxa', 'valor', 'pedido_minimo', 'valor_por_entrega', 'diaria'])
 
 function mostrar(campo: string, v: unknown): string {
   if (v == null || v === '') return '—'

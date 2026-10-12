@@ -2,8 +2,8 @@
 
 Site de pedidos e sistema de gestão da pizzaria, em [tiacepizzas.com.br](https://tiacepizzas.com.br).
 
-- **Site público** — página inicial editável, cardápio, montagem de pizza (tamanho, vários sabores, borda, adicionais), promoções, sacola, finalização (entrega por bairro ou por distância) e acompanhamento do pedido com mapa. O cliente pode pedir sem cadastro ou entrar com Google/Facebook para guardar endereços e ver seus pedidos.
-- **Painel da equipe** (`/admin`) — pedidos em tempo real com alertas de atraso, venda de balcão/telefone, cozinha, clientes, cardápio com ficha técnica, site e promoções, estoque, caixa, entregas, financeiro, indicadores com metas, análises de produtos e clientes, nota fiscal (NFC-e), auditoria e configurações (usuários e permissões por função).
+- **Site público** — página inicial editável, cardápio, montagem de pizza (tamanho, vários sabores, borda, adicionais), promoções, sacola, finalização (entrega por bairro ou por distância) e acompanhamento do pedido com mapa. O cliente pode pedir sem cadastro, criar uma conta com e-mail e senha ou entrar com Google/Facebook para guardar endereços e ver seus pedidos. Quem escolhe Pix recebe a chave na tela de acompanhamento, com o botão de enviar o comprovante pelo WhatsApp.
+- **Painel da equipe** (`/admin`) — pedidos em tempo real com alertas de atraso, venda de balcão/telefone, cozinha, clientes, cardápio com ficha técnica, site e promoções, estoque, caixa, entregas, pagamentos a motoboys e funcionários, financeiro, indicadores com metas, análises de produtos e clientes, nota fiscal (NFC-e), auditoria e configurações (usuários e permissões por função).
 - **Aplicativo do entregador** (`/entregador`) — entregas do motoboy, atalho para o Waze e o Google Maps, WhatsApp do cliente, registro de entrega ou problema e envio da localização. No navegador o envio pausa enquanto o Waze estiver aberto; o **aplicativo Android** (`npm run app:android`, passo a passo em [docs/aplicativo-android.md](docs/aplicativo-android.md)) continua enviando em segundo plano.
 
 O **manual de uso**, com capturas de todas as telas, é gerado por `npm run manual` em `docs/manual-tia-ce-pizzas.pdf`.
@@ -26,7 +26,8 @@ Regras que valem a pena conhecer:
 - **Desperdício** (ingrediente que caiu, queimou ou foi usado errado) é registrado na aba própria do Estoque ou pelo botão da Cozinha, sempre com o motivo; sai do estoque e entra no resultado junto com as perdas.
 - **Confirmar um pedido** dá baixa no estoque pela ficha técnica; **cancelar** devolve o estoque e estorna o caixa; **reembolsar** estorna o caixa de um pedido já entregue.
 - **Marcar como pago** lança a venda no caixa aberto.
-- **Ninguém se cadastra sozinho com e-mail e senha.** A equipe é criada pela administradora; o banco recusa qualquer outro cadastro por e-mail. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.
+- **Quem cria conta no site é sempre cliente.** O acesso ao painel só existe para quem a administradora cadastra em Configurações → Usuários: o papel fica em `app_metadata`, que só o servidor grava. Configurações internas (metas, alertas, impressão) não são lidas pelo visitante.
+- **Motoboy recebe diária + entregas** (a taxa de cada pedido ou um valor fixo, por entregador). O acerto mostra o que cada um tem a receber, e o **pagamento** registrado em Pagamentos vira uma saída do dia; se o dinheiro saiu do caixa, a sangria é lançada junto.
 - **Auditoria**: mudanças de preço, estoque, situação de pedido, configurações, usuários e permissões ficam registradas com quem, quando, antes e depois. Ninguém apaga pelo painel.
 
 ## Colocar no ar (uma vez)
@@ -40,13 +41,14 @@ Regras que valem a pena conhecer:
    npx supabase login
    npx supabase link --project-ref SEU_PROJECT_REF
    npx supabase db push --include-seed      # cria as tabelas e o cardápio de exemplo
-   npx supabase config push                 # ajusta os links de login e fecha o cadastro público
+   npx supabase config push                 # ajusta os links de login e o cadastro de clientes por e-mail
    npx supabase functions deploy fiscal --use-api           # --use-api dispensa o Docker
    npx supabase functions deploy admin-usuarios --use-api
    ```
 
 3. No painel do Supabase, em **Authentication → Users → Add user**, crie o usuário da dona da loja.
-   **O primeiro usuário criado por e-mail vira administrador**; os demais são criados pelo painel em Configurações → Usuários.
+   **O primeiro usuário criado por e-mail vira administrador** (uma única vez); os demais são criados pelo painel em Configurações → Usuários.
+   Faça isso logo depois do passo anterior, antes de divulgar o site: enquanto não houver administrador, o primeiro cadastro por e-mail ganha esse acesso.
 
 ### 2. Site (GitHub Pages)
 
@@ -76,15 +78,22 @@ Depois, no GitHub: Settings → Pages → marque **Enforce HTTPS**.
 
 ### 4. Entrada do cliente com Google ou Facebook (opcional)
 
-Sem isto o cliente pede normalmente, só não tem conta.
+Sem isto o cliente pede normalmente e pode criar conta com e-mail e senha; só não aparecem os botões do Google e do Facebook
+(o site confere sozinho se cada um está ligado no Supabase).
 
 1. **Google**: no [Google Cloud Console](https://console.cloud.google.com), crie um projeto, configure a tela de consentimento e crie uma credencial *OAuth client ID* do tipo *Web application* com a URL de retorno `https://SEU-PROJETO.supabase.co/auth/v1/callback`.
 2. No Supabase, em **Authentication → Providers → Google**, ligue o provedor e cole o *Client ID* e o *Client Secret*.
 3. **Facebook**: o mesmo caminho, com um aplicativo em [developers.facebook.com](https://developers.facebook.com) (produto *Facebook Login*) e o provedor Facebook no Supabase.
-4. Em `supabase/config.toml`, troque `enable_signup = false` por `true` na seção `[auth]` e rode `npx supabase config push`. Sem isso o primeiro acesso de um cliente é recusado. (O cadastro por e-mail continua barrado pelo banco.)
-5. No painel da pizzaria, em **Configurações → Pedidos → Conta do cliente**, ligue os botões que devem aparecer no site.
+4. No painel da pizzaria, em **Configurações → Pedidos → Conta do cliente**, ligue os botões que devem aparecer no site.
 
 Quem entra com Google/Facebook é sempre cliente: nunca ganha acesso ao painel.
+
+### 5. E-mails de "esqueci a senha"
+
+A conta com e-mail e senha é criada sem e-mail de confirmação (`enable_confirmations = false` em `supabase/config.toml`),
+porque o envio de e-mails que vem com o Supabase serve só para testes: poucos e-mails por hora. O link de **esqueci a senha**
+usa esse mesmo envio. Quando houver clientes usando a conta, cadastre um serviço de e-mail próprio em
+**Authentication → Emails → SMTP Settings** no Supabase (há opções gratuitas, como Resend e Brevo).
 
 ## Nota fiscal (NFC-e)
 

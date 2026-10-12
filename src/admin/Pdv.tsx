@@ -4,6 +4,7 @@ import { MontarItem } from '../components/MontarItem'
 import { Alternar, AreaTexto, Botao, Campo, Cartao, Contador, Entrada, Selecao, cx, useAviso } from '../components/ui'
 import { itensParaPedido, subtotalDe } from '../lib/carrinho'
 import { ORIGEM, PAGAMENTO, brl, soDigitos } from '../lib/formato'
+import { localizarEndereco, type Ponto } from '../lib/geo'
 import { precoInicial, useLoja } from '../lib/loja'
 import { aposConfirmar } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
@@ -30,6 +31,8 @@ export default function Pdv() {
   const [salvos, setSalvos] = useState<Endereco[]>([])
   const [end, setEnd] = useState(enderecoVazio)
   const [taxa, setTaxa] = useState('')
+  const [ponto, setPonto] = useState<Ponto | null>(null)
+  const [distancia, setDistancia] = useState('')
   const [desconto, setDesconto] = useState('')
   const [pagamento, setPagamento] = useState<FormaPagamento>('dinheiro')
   const [troco, setTroco] = useState('')
@@ -48,6 +51,25 @@ export default function Pdv() {
   const bairro = catalogo.bairros.find((b) => b.id === end.bairro_id)
   const taxaFinal = tipo === 'entrega' ? (taxa !== '' ? numero(taxa) : Number(bairro?.taxa_entrega ?? 0)) : 0
   const total = Math.max(0, subtotal + taxaFinal - numero(desconto))
+
+  /** Entrega por distância: acha o endereço no mapa e já escolhe a faixa (a atendente pode trocar à mão). */
+  async function calcularEntrega(sabido?: Ponto | null, e = end) {
+    if (config?.modo_entrega !== 'distancia' || !e.logradouro.trim() || !e.numero.trim()) return
+    setDistancia('Calculando…')
+    const p = sabido ?? (await localizarEndereco({ logradouro: e.logradouro, numero: e.numero, bairro: e.bairro, cidade: config.cidade, uf: config.uf }))
+    if (!p) {
+      setPonto(null)
+      return setDistancia('Endereço não encontrado no mapa: escolha a distância.')
+    }
+    const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng })
+    if (error || !data?.dentro) {
+      setPonto(null)
+      return setDistancia(error ? mensagemErro(error) : (data?.mensagem ?? 'Fora da área de entrega.'))
+    }
+    setPonto(p)
+    setTaxa(String(data.taxa))
+    setDistancia(`${String(data.distancia_km).replace('.', ',')} km da loja`)
+  }
 
   function mudarTipo(t: TipoPedido) {
     setTipo(t)
@@ -76,10 +98,15 @@ export default function Pdv() {
   }
 
   function usarEndereco(e: Endereco) {
-    setEnd({
+    const novo = {
       cep: e.cep ?? '', logradouro: e.logradouro, numero: e.numero ?? '', complemento: e.complemento ?? '',
       bairro_id: e.bairro_id ?? '', bairro: e.bairro ?? '', referencia: e.referencia ?? '',
-    })
+    }
+    setEnd(novo)
+    setPonto(null)
+    setDistancia('')
+    // endereço salvo com o ponto no mapa dispensa a busca
+    calcularEntrega(e.lat != null && e.lng != null ? { lat: Number(e.lat), lng: Number(e.lng) } : null, novo)
   }
 
   function limpar() {
@@ -89,6 +116,8 @@ export default function Pdv() {
     setClienteAchado(false)
     setSalvos([])
     setEnd(enderecoVazio)
+    setPonto(null)
+    setDistancia('')
     setTaxa('')
     setDesconto('')
     setTroco('')
@@ -106,7 +135,7 @@ export default function Pdv() {
         tipo,
         origem,
         cliente: { nome: nome.trim() || 'Cliente balcão', telefone },
-        endereco: tipo === 'entrega' ? { ...end, bairro: bairro?.nome ?? end.bairro } : null,
+        endereco: tipo === 'entrega' ? { ...end, bairro: bairro?.nome ?? end.bairro, lat: ponto?.lat, lng: ponto?.lng } : null,
         itens: itensParaPedido(itens),
         forma_pagamento: pagamento,
         troco_para: pagamento === 'dinheiro' && troco ? numero(troco) : null,
@@ -222,8 +251,8 @@ export default function Pdv() {
                 </Selecao>
               )}
               <div className="grid grid-cols-[1fr_5rem] gap-2">
-                <Entrada required aria-label="Rua" placeholder="Rua / avenida" value={end.logradouro} onChange={(e) => setEnd({ ...end, logradouro: e.target.value })} />
-                <Entrada required aria-label="Número" placeholder="Nº" value={end.numero} onChange={(e) => setEnd({ ...end, numero: e.target.value })} />
+                <Entrada required aria-label="Rua" placeholder="Rua / avenida" value={end.logradouro} onChange={(e) => setEnd({ ...end, logradouro: e.target.value })} onBlur={() => calcularEntrega()} />
+                <Entrada required aria-label="Número" placeholder="Nº" value={end.numero} onChange={(e) => setEnd({ ...end, numero: e.target.value })} onBlur={() => calcularEntrega()} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Entrada aria-label="Complemento" placeholder="Complemento" value={end.complemento} onChange={(e) => setEnd({ ...end, complemento: e.target.value })} />
@@ -252,6 +281,7 @@ export default function Pdv() {
                 )}
                 <Entrada aria-label="Taxa de entrega" inputMode="decimal" placeholder={bairro ? String(bairro.taxa_entrega) : 'Taxa'} value={taxa} onChange={(e) => setTaxa(e.target.value)} />
               </div>
+              {config?.modo_entrega === 'distancia' && <p className="text-xs text-stone-600">{distancia || 'A taxa é calculada pela distância assim que a rua e o número são preenchidos.'}</p>}
             </div>
           )}
 

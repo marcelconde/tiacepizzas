@@ -356,6 +356,17 @@ await preencher(pc, 'Categoria', 'Energia')
 await foto(pc, 'painel-financeiro-despesa')
 await fecharModal(pc)
 
+// pagamentos a motoboys e funcionários
+await ir(pc, '/admin/pagamentos', 1800)
+await foto(pc, 'painel-pagamentos')
+await pc.evaluate(() => [...document.querySelectorAll('main tbody tr')].find((t) => t.innerText.includes('Pagar') && /R\$\s*[1-9]/.test(t.innerText))?.querySelector('button')?.click())
+await dormir(1500)
+await foto(pc, 'painel-pagamentos-novo')
+await fecharModal(pc)
+await clicar(pc, 'Mês', 'button')
+await dormir(1500)
+await foto(pc, 'painel-pagamentos-mes', { inteira: true })
+
 await ir(pc, '/admin/painel', 1800)
 await clicar(pc, '30 dias', 'button')
 await dormir(1500)

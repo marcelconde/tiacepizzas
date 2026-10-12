@@ -1,14 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { LogOut, MapPin, Plus, Trash2 } from 'lucide-react'
-import { Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Selo, Vazio, useAviso } from '../components/ui'
+import { KeyRound, LogOut, MapPin, Plus, Trash2 } from 'lucide-react'
+import { TrocarSenha } from '../components/Login'
+import { Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Selo, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { entrarCom, useConta } from '../lib/conta'
+import { useConta } from '../lib/conta'
 import { useConsulta } from '../lib/dados'
 import { STATUS, brl, dataHora, enderecoTexto, soDigitos } from '../lib/formato'
 import { localizarEndereco } from '../lib/geo'
 import { useLoja } from '../lib/loja'
-import { mensagemErro, supabase } from '../lib/supabase'
+import { mensagemErro, recuperacao, supabase } from '../lib/supabase'
 import type { StatusPedido } from '../lib/tipos'
 
 interface MeuPedido {
@@ -20,52 +21,35 @@ interface MeuPedido {
   itens: { nome: string; quantidade: number }[]
 }
 
-/** Entrada do cliente com Google ou Facebook. */
-export function Entrar() {
-  const { config } = useLoja()
-  const { sessao, carregando } = useAuth()
-  if (carregando) return <Carregando />
-  if (sessao) return <Navigate to="/conta" replace />
-  const nenhum = config && !config.login_google && !config.login_facebook
-  return (
-    <div className="mx-auto max-w-md px-4 py-16 text-center">
-      <h1 className="font-display text-4xl font-bold">Entrar</h1>
-      <p className="mt-2 text-stone-600">Guarde seus endereços e acompanhe todos os seus pedidos em um só lugar.</p>
-      <div className="mt-8 space-y-3">
-        {config?.login_google && (
-          <Botao variante="secundario" tamanho="g" className="w-full" onClick={() => entrarCom('google')}>
-            Continuar com Google
-          </Botao>
-        )}
-        {config?.login_facebook && (
-          <Botao variante="secundario" tamanho="g" className="w-full" onClick={() => entrarCom('facebook')}>
-            Continuar com Facebook
-          </Botao>
-        )}
-        {nenhum && <Vazio titulo="Entrada com conta indisponível" texto="Você pode fazer seu pedido normalmente, sem cadastro." />}
-      </div>
-      <p className="mt-8 text-sm text-stone-500">
-        Prefere não criar conta?{' '}
-        <Link to="/cardapio" className="font-semibold text-molho-700 hover:underline">
-          Peça sem cadastro
-        </Link>
-        .
-      </p>
-    </div>
-  )
-}
-
 const enderecoVazio = { cep: '', logradouro: '', numero: '', complemento: '', bairro_id: '', bairro: '', referencia: '', cidade: '', uf: '' }
 
 export default function Conta() {
-  const { sair } = useAuth()
+  const { sair, sessao } = useAuth()
   const { config, catalogo } = useLoja()
   const { conta, carregando, erro, recarregar, logado } = useConta()
   const aviso = useAviso()
   const [dados, setDados] = useState({ nome: '', telefone: '', cpf: '', nascimento: '' })
   const [salvando, setSalvando] = useState(false)
   const [novo, setNovo] = useState<typeof enderecoVazio | null>(null)
+  const [trocarSenha, setTrocarSenha] = useState(false)
+  // quem entrou com Google ou Facebook não tem senha aqui
+  const temSenha = (sessao?.user.app_metadata?.provider ?? 'email') === 'email'
   const { dados: pedidos } = useConsulta<MeuPedido[]>(() => (logado ? supabase.rpc('meus_pedidos') : Promise.resolve({ data: [], error: null })), [logado])
+
+  // chegou pelo link de "esqueci a senha": já abre a janela para criar a senha nova
+  useEffect(() => {
+    if (recuperacao.pendente) {
+      recuperacao.pendente = false
+      setTrocarSenha(true)
+    }
+    const { data } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === 'PASSWORD_RECOVERY') {
+        recuperacao.pendente = false
+        setTrocarSenha(true)
+      }
+    })
+    return () => data.subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     if (conta) setDados({ nome: conta.nome ?? '', telefone: conta.telefone ?? '', cpf: conta.cpf ?? '', nascimento: conta.nascimento ?? '' })
@@ -139,9 +123,16 @@ export default function Conta() {
           <h1 className="font-display text-4xl font-bold">Minha conta</h1>
           <p className="text-stone-600">{conta.email}</p>
         </div>
-        <Botao variante="secundario" onClick={sair}>
-          <LogOut className="size-4" /> Sair
-        </Botao>
+        <div className="flex flex-wrap gap-2">
+          {temSenha && (
+            <Botao variante="secundario" onClick={() => setTrocarSenha(true)}>
+              <KeyRound className="size-4" /> Trocar senha
+            </Botao>
+          )}
+          <Botao variante="secundario" onClick={sair}>
+            <LogOut className="size-4" /> Sair
+          </Botao>
+        </div>
       </div>
 
       <section className={secao}>
@@ -256,6 +247,7 @@ export default function Conta() {
           </div>
         </form>
       </Modal>
+      <TrocarSenha aberto={trocarSenha} onFechar={() => setTrocarSenha(false)} />
     </div>
   )
 }

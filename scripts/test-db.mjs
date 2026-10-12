@@ -77,8 +77,18 @@ const cozinha = await usuario('cozinha@x.com', { papel: 'cozinha', ativo: true }
 const financeiro = await usuario('fin@x.com', { papel: 'financeiro', ativo: true })
 const motoboy = await usuario('moto@x.com', { papel: 'motoboy', ativo: true }, { nome: 'Carlos Moto' })
 const outroMotoboy = await usuario('moto2@x.com', { papel: 'motoboy', ativo: true }, { nome: 'Outro Moto' })
-// depois que a dona existe, ninguém se cadastra sozinho por e-mail (o papel em user_metadata não vale nada)
-await falha(usuario('intruso@x.com', { provider: 'email' }, { papel: 'admin' }), 'Cadastro por e-mail não é permitido')
+// depois que a dona existe, quem se cadastra por e-mail é cliente: sem perfil (o papel em user_metadata não vale nada)
+const clienteEmail = await usuario('cida@x.com', { provider: 'email' }, { nome: 'Cida Cliente', papel: 'admin', ativo: true })
+// o Supabase cria os usuários do painel em dois passos: INSERT sem o papel e, em seguida, UPDATE do app_metadata
+const doisPassos = async (email, papel, nome) => {
+  const id = await usuario(email, { provider: 'email', providers: ['email'] }, { nome })
+  await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [id, JSON.stringify({ papel, ativo: true })])
+  return id
+}
+const cozinha2 = await doisPassos('cozinha2@x.com', 'cozinha', 'Zé Cozinha')
+// entregador cadastrado à mão antes de ter login: o usuário criado depois é ligado a ele, sem duplicar
+await db.exec(`insert into entregadores (nome, diaria) values ('Terceiro Moto', 70)`)
+const motoboy3 = await doisPassos('moto3@x.com', 'motoboy', '  terceiro moto ')
 
 const id = async (tabela, nome) => (await um(`select id from ${tabela} where nome = $1`, [nome])).id
 const grande = await id('tamanhos', 'Grande')
@@ -109,13 +119,36 @@ const balcao = (extra) => ({ painel: true, tipo: 'balcao', origem: 'balcao', cli
 await db.exec(`update configuracoes set loja_aberta_manual = true`)
 
 console.log('\nAcesso')
-await teste('só o primeiro usuário de e-mail vira administrador; cliente do Google não ganha perfil', async () => {
+await teste('só o primeiro usuário de e-mail vira administrador; cliente (Google ou e-mail) não ganha perfil; usuário do painel ganha', async () => {
   const perfis = await q(`select email, papel, ativo from perfis order by email`)
   assert.deepEqual(perfis.map((p) => `${p.email}:${p.papel}:${p.ativo}`), [
-    'atendente@x.com:atendente:true', 'cozinha@x.com:cozinha:true', 'dona@tiacepizzas.com.br:admin:true',
-    'fin@x.com:financeiro:true', 'moto2@x.com:motoboy:true', 'moto@x.com:motoboy:true',
+    'atendente@x.com:atendente:true', 'cozinha2@x.com:cozinha:true', 'cozinha@x.com:cozinha:true', 'dona@tiacepizzas.com.br:admin:true',
+    'fin@x.com:financeiro:true', 'moto2@x.com:motoboy:true', 'moto3@x.com:motoboy:true', 'moto@x.com:motoboy:true',
   ])
   assert.equal((await q(`select 1 from entregadores where usuario_id = $1`, [motoboy])).length, 1, 'motoboy ganha cadastro de entregador')
+  const terceiro = await q(`select usuario_id, diaria from entregadores where lower(nome) like '%terceiro moto%'`)
+  assert.deepEqual([terceiro.length, terceiro[0].usuario_id, Number(terceiro[0].diaria)], [1, motoboy3, 70], 'motoboy criado em dois passos é ligado ao entregador que já existia')
+  // ...e o painel pode indicar a qual entregador ligar, mesmo com outro nome
+  await db.exec(`begin`)
+  const avulso = (await um(`insert into entregadores (nome) values ('Apelido') returning id`)).id
+  const id4 = await usuario('moto4@x.com', { provider: 'email' }, { nome: 'Nome Completo' })
+  await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [id4, JSON.stringify({ papel: 'motoboy', ativo: true, entregador_id: avulso })])
+  assert.deepEqual((await q(`select nome from entregadores where usuario_id = $1`, [id4])).map((e) => e.nome), ['Apelido'])
+  await db.exec(`rollback`)
+  assert.equal((await um(`select nome from perfis where id = $1`, [cozinha2])).nome, 'Zé Cozinha')
+  assert.equal((await um(`select admin_criado from configuracoes`)).admin_criado, true)
+  // a conta por e-mail é só de cliente: tem cadastro próprio e não enxerga nada da equipe
+  await como('authenticated', clienteEmail, async () => {
+    assert.equal((await um(`select minha_conta() as r`)).r.nome, 'Cida Cliente')
+    assert.equal((await um(`select eh_staff() as r`)).r, false)
+    assert.equal((await q(`select 1 from pedidos`)).length, 0)
+    await falha(db.query(`select registrar_pagamento('outro', 10, null, 'Eu mesma')`), 'Acesso negado')
+  })
+  // apagados todos os perfis, um cadastro novo continua sendo cliente (o primeiro administrador só nasce uma vez)
+  await db.exec(`begin; delete from perfis`)
+  const tardio = await usuario('tardio@x.com', { provider: 'email' })
+  assert.equal((await q(`select 1 from perfis where id = $1`, [tardio])).length, 0)
+  await db.exec(`rollback`)
 })
 
 await teste('visitante lê cardápio, promoções e banners, mas nada da operação', async () => {
@@ -559,6 +592,63 @@ await teste('horário de funcionamento, incluindo turno que vira a madrugada', a
       'fecha', to_char((now() at time zone fuso_horario) + interval '30 minutes', 'HH24:MI')))
     from generate_series(0, 6) d)`)
   assert.equal((await um(`select loja_aberta() as r`)).r, true)
+})
+
+console.log('\nPagamentos à equipe')
+await teste('motoboy recebe diária + entregas; pagamento vira despesa, abate do acerto e pode sair do caixa', async () => {
+  const hoje = `(now() at time zone 'America/Sao_Paulo')::date`
+  const carlos = await um(`select id, diaria, repasse from entregadores where usuario_id = $1`, [motoboy])
+  assert.deepEqual([Number(carlos.diaria), carlos.repasse], [50, 'taxa'], 'padrão: diária de R$ 50 + taxas das entregas')
+  const feitas = await um(`select count(*)::int as n, sum(taxa_entrega) as taxas from pedidos where entregador_id = $1 and status = 'entregue'`, [carlos.id])
+  assert.ok(feitas.n >= 1 && Number(feitas.taxas) > 0)
+  const acerto = async () => (await um(`select acerto_entregadores(${hoje}, ${hoje}) as r`)).r.find((e) => e.id === carlos.id)
+  const despesasAntes = Number((await um(`select coalesce(sum(valor), 0) as v from despesas`)).v)
+
+  await como('authenticated', atendente, async () => {
+    await falha(db.query(`select acerto_entregadores(current_date, current_date)`), 'Acesso negado')
+    await falha(db.query(`select registrar_pagamento('motoboy', 10, $1)`, [carlos.id]), 'Acesso negado')
+  })
+  await como('authenticated', financeiro, async () => {
+    let a = await acerto()
+    assert.deepEqual(
+      [a.entregas, a.dias, Number(a.diarias), Number(a.por_entregas), Number(a.a_receber), Number(a.pago)],
+      [feitas.n, 1, 50, Number(feitas.taxas), 50 + Number(feitas.taxas), 0],
+    )
+    await falha(db.query(`select registrar_pagamento('motoboy', 10)`), 'Escolha o motoboy')
+    await falha(db.query(`select registrar_pagamento('cozinha', 10)`), 'Informe o nome')
+    await falha(db.query(`select registrar_pagamento('motoboy', 0, $1)`, [carlos.id]), 'Informe o valor')
+    await falha(db.query(`select registrar_pagamento('cozinha', 80, null, 'Zé', null, 'dinheiro', true)`), 'Não há caixa aberto')
+    await db.query(`select registrar_pagamento('motoboy', $2, $1)`, [carlos.id, a.a_receber])
+    a = await acerto()
+    assert.deepEqual([Number(a.pago), Number(a.falta)], [50 + Number(feitas.taxas), 0])
+    const d = await um(`select categoria, descricao, favorecido_tipo, data::text = (${hoje})::text as hoje from despesas where entregador_id = $1`, [carlos.id])
+    assert.deepEqual([d.categoria, d.descricao, d.favorecido_tipo, d.hoje], ['Motoboys', 'Pagamento — Carlos Moto', 'motoboy', true])
+    // o pagamento já entra nas saídas do dia
+    const r = (await um(`select relatorio_faturamento(${hoje}, ${hoje}) as r`)).r
+    assert.equal(Number(r.resumo.despesas), despesasAntes + 50 + Number(feitas.taxas))
+  })
+  // valor fixo por entrega, sem diária
+  await db.query(`update entregadores set repasse = 'fixo', valor_por_entrega = 6, diaria = 0 where id = $1`, [carlos.id])
+  await como('authenticated', financeiro, async () => {
+    const a = await acerto()
+    assert.deepEqual([Number(a.diarias), Number(a.por_entregas)], [0, 6 * feitas.n])
+  })
+  // pagamento em dinheiro do caixa lança a sangria junto; apagar o pagamento devolve o dinheiro
+  await como('authenticated', admin, async () => {
+    await db.query(`select abrir_caixa(200)`)
+    const caixa = (await um(`select id from caixas where fechado_em is null`)).id
+    const pg = (await um(`select registrar_pagamento('cozinha', 80, null, ' Zé da Cozinha ', null, 'pix', true, 'Diária de sábado') as r`)).r
+    assert.deepEqual([pg.nome, pg.do_caixa], ['Zé da Cozinha', true])
+    const d = await um(`select categoria, forma_pagamento, observacao from despesas where id = $1`, [pg.id])
+    assert.deepEqual([d.categoria, d.forma_pagamento, d.observacao], ['Salários', 'dinheiro', 'Diária de sábado'])
+    assert.equal(Number((await um(`select resumo_caixa($1) as r`, [caixa])).r.sangrias), 80)
+    await db.query(`delete from despesas where id = $1`, [pg.id])
+    assert.equal(Number((await um(`select resumo_caixa($1) as r`, [caixa])).r.sangrias), 0)
+    // com o caixa fechado, o pagamento que saiu dele não pode mais ser apagado
+    const outro = (await um(`select registrar_pagamento('outro', 30, null, 'Faxina', null, 'dinheiro', true) as r`)).r
+    await db.query(`select fechar_caixa(170)`)
+    await falha(db.query(`delete from despesas where id = $1`, [outro.id]), 'caixa que já foi fechado')
+  })
 })
 
 console.log(`\n${ok} testes passaram${process.exitCode ? ' (com falhas acima)' : ''}`)

@@ -34,7 +34,7 @@ const INTERVALO = 120_000
 // O visitante só pode ler estas colunas. O que é interno (metas, alertas, impressão…) vem de config_interna(),
 // que só responde à equipe; para os demais valem estes padrões, que o site não usa.
 const CONFIG_PUBLICA =
-  'id, nome_loja, slogan, telefone, whatsapp, instagram, cep, logradouro, numero, bairro, cidade, uf, fuso_horario, horarios, loja_aberta_manual, aceita_pedidos_online, pedido_minimo, tempo_preparo_min, tempo_entrega_min, regra_preco_sabores, chave_pix, mensagem_aviso, modo_entrega, loja_lat, loja_lng, rastreio_motoboy, exigir_login, login_google, login_facebook'
+  'id, nome_loja, slogan, telefone, whatsapp, instagram, cep, logradouro, numero, bairro, cidade, uf, fuso_horario, horarios, loja_aberta_manual, aceita_pedidos_online, pedido_minimo, tempo_preparo_min, tempo_entrega_min, regra_preco_sabores, chave_pix, mensagem_aviso, modo_entrega, loja_lat, loja_lng, rastreio_motoboy, exigir_login, login_google, login_facebook, login_email, cnpj'
 const CONFIG_INTERNA_PADRAO: Pick<Configuracoes, 'auto_aceitar' | 'impressao' | 'alertas_pedido' | 'metas' | 'categorias_despesa'> = {
   auto_aceitar: false,
   impressao: { largura: 80, auto: false, via_cozinha: true },

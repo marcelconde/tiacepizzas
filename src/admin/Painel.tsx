@@ -175,6 +175,21 @@ export default function Painel() {
             <Indicador rotulo="Clientes atendidos" valor={num(s.clientes_atendidos)} detalhe={`${s.clientes_novos} novo(s) no período`} />
           </div>
 
+          <Cartao className="flex flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3 text-sm">
+            <span>
+              Saídas {umDia ? 'do dia' : 'do período'}: <b className="tabular-nums">{brl(s.despesas)}</b> <span className="text-stone-500">(pagamentos à equipe e despesas)</span>
+            </span>
+            <span>
+              Líquido: <b className={cx('tabular-nums', Number(s.faturamento) - Number(s.despesas) < 0 && 'text-red-700')}>{brl(Number(s.faturamento) - Number(s.despesas))}</b>{' '}
+              <span className="text-stone-500">(faturamento menos saídas)</span>
+            </span>
+            {pode('financeiro') && (
+              <Link to="/admin/pagamentos" className="font-semibold text-molho-700 hover:underline">
+                Lançar pagamento →
+              </Link>
+            )}
+          </Cartao>
+
           {niveisDias.length > 0 && (
             <Cartao className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
               <b>Dias do período pela meta de faturamento:</b>

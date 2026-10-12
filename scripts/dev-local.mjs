@@ -8,7 +8,7 @@
 // Abre em http://localhost:5173. Todos os usuários de teste usam a senha "teste1234":
 //   dona@teste.local (administradora) · ana@teste.local (atendimento) · ze@teste.local (cozinha)
 //   fin@teste.local (financeiro) · carlos@teste.local (motoboy, em /entregador)
-// "Entrar com Google" entra como a cliente fictícia Carla, sem sair do computador.
+// "Entrar com Google" entra como a cliente fictícia Carla, sem sair do computador; criar conta com e-mail e senha também funciona.
 //
 // Não cobre: tempo real (o painel atualiza a cada 45 s) e nota fiscal. Os dados somem ao encerrar.
 import http from 'node:http'
@@ -48,8 +48,8 @@ await db.exec(`
     ('ze@teste.local', '{"nome":"Zé (cozinha)"}', '{"provider":"email","papel":"cozinha","ativo":true}'),
     ('fin@teste.local', '{"nome":"Bia (financeiro)"}', '{"provider":"email","papel":"financeiro","ativo":true}'),
     ('carlos@teste.local', '{"nome":"Carlos Moto"}', '{"provider":"email","papel":"motoboy","ativo":true}');
-  update entregadores set telefone = '11988881111', valor_por_entrega = 6 where nome = 'Carlos Moto';
-  insert into entregadores (nome, telefone, valor_por_entrega) values ('Rafa Entregas', '11977772222', 6);
+  update entregadores set telefone = '11988881111' where nome = 'Carlos Moto';
+  insert into entregadores (nome, telefone) values ('Rafa Entregas', '11977772222');
 `)
 // FUSO=<fuso horário>: usado só pelo roteiro do manual, para as capturas mostrarem horário de expediente
 if (process.env.FUSO) {
@@ -152,6 +152,8 @@ async function clienteSocial(provedor) {
     [email, JSON.stringify({ provider: provedor })])).rows[0]
 }
 
+const senhas = new Map() // senhas escolhidas nesta sessão (conta de cliente, usuário novo do painel, troca de senha)
+const senhaDe = (email) => senhas.get(String(email).toLowerCase()) ?? SENHA
 const arquivos = new Map() // fotos enviadas pelo painel: ficam só na memória
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS', 'Access-Control-Expose-Headers': 'Content-Range' }
 
@@ -217,11 +219,22 @@ http.createServer(async (req, res) => {
       const u = tipo === 'password' ? await usuarioPor('email', corpo.email)
         : tipo === 'pkce' ? await usuarioPor('id', corpo.auth_code)
         : await usuarioPor('id', String(corpo.refresh_token).slice(2))
-      if (!u || (tipo === 'password' && corpo.password !== SENHA)) return enviar(400, { error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' })
+      if (!u || (tipo === 'password' && corpo.password !== senhaDe(corpo.email))) return enviar(400, { error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' })
       return enviar(200, sessao(u))
     }
+    if (url.pathname === '/auth/v1/signup') {
+      // conta de cliente com e-mail e senha: já entra logada, como no Supabase sem confirmação de e-mail
+      const email = String(corpo.email ?? '').trim().toLowerCase()
+      if (await usuarioPor('email', email)) return enviar(422, { code: 422, error_code: 'user_already_exists', msg: 'User already registered' })
+      if (String(corpo.password ?? '').length < 8) return enviar(422, { code: 422, error_code: 'weak_password', msg: 'Password should be at least 8 characters.' })
+      const u = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2::jsonb, '{"provider":"email","providers":["email"]}') returning *`, [email, JSON.stringify(corpo.data ?? {})])).rows[0]
+      senhas.set(email, corpo.password)
+      return enviar(200, sessao(u))
+    }
+    if (url.pathname === '/auth/v1/settings') return enviar(200, { external: { email: true, google: true, facebook: true }, disable_signup: false, mailer_autoconfirm: true })
     if (url.pathname === '/auth/v1/user') {
       const u = claims && (await usuarioPor('id', claims.sub))
+      if (u && req.method === 'PUT' && corpo?.password) senhas.set(u.email, corpo.password)
       return u ? enviar(200, usuarioJson(u)) : enviar(401, { msg: 'invalid token' })
     }
     if (url.pathname === '/auth/v1/logout') return enviar(204)
@@ -232,9 +245,11 @@ http.createServer(async (req, res) => {
       const admin = claims && (await db.query(`select 1 from perfis where id = $1 and ativo and papel = 'admin'`, [claims.sub])).rows.length
       if (!admin) return enviar(403, { erro: 'Apenas administradores podem criar usuários.' })
       if (await usuarioPor('email', corpo.email)) return enviar(400, { erro: 'Já existe um usuário com este e-mail.' })
-      const u = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2::jsonb, $3::jsonb) returning id`, [
-        String(corpo.email).toLowerCase(), JSON.stringify({ nome: corpo.nome }), JSON.stringify({ provider: 'email', papel: corpo.papel, ativo: true }),
-      ])).rows[0]
+      // como o Supabase de verdade: o usuário nasce sem o papel, que é gravado logo em seguida no app_metadata
+      const email = String(corpo.email).trim().toLowerCase()
+      const u = (await db.query(`insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2::jsonb, '{"provider":"email","providers":["email"]}') returning id`, [email, JSON.stringify({ nome: corpo.nome })])).rows[0]
+      await db.query(`update auth.users set raw_app_meta_data = raw_app_meta_data || $2::jsonb where id = $1`, [u.id, JSON.stringify({ papel: corpo.papel, ativo: true, ...(corpo.entregador_id ? { entregador_id: corpo.entregador_id } : {}) })])
+      senhas.set(email, corpo.senha)
       return enviar(200, { id: u.id })
     }
     if (url.pathname.startsWith('/functions/v1/')) return enviar(400, { erro: 'A emissão de nota fiscal não existe no ambiente local de teste.' })

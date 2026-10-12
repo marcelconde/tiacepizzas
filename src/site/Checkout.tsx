@@ -3,12 +3,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Bike, MapPin, MessageCircle, Store } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Entrada, Erro, Selecao, Vazio, cx } from '../components/ui'
 import { itensParaPedido, useCarrinho } from '../lib/carrinho'
-import { entrarCom, useConta } from '../lib/conta'
+import { useConta } from '../lib/conta'
 import { PAGAMENTO, brl, enderecoTexto, soDigitos } from '../lib/formato'
 import { localizarEndereco, type Ponto } from '../lib/geo'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento } from '../lib/tipos'
+import { BotoesSociais, useLoginSocial } from './Entrar'
 import { linkWhatsApp } from './SiteLayout'
 
 const Mapa = lazy(() => import('../components/Mapa'))
@@ -48,12 +49,17 @@ interface Entrega {
 
 const formas: FormaPagamento[] = ['pix', 'credito', 'debito', 'dinheiro']
 
+/** O que identifica o endereço para o mapa: mudou isto, a entrega é calculada de novo. */
+const chaveEndereco = (x: typeof inicial) => [x.logradouro.trim(), x.numero.trim(), x.cidade, x.uf].join('|').toLowerCase()
+
 export default function Checkout() {
   const { itens, subtotal, limpar } = useCarrinho()
   const { config, catalogo, aberta } = useLoja()
   const { conta, logado } = useConta()
   const navegar = useNavigate()
   const chave = useRef(crypto.randomUUID()) // reenviar este mesmo pedido não o duplica
+  const social = useLoginSocial()
+  const localizado = useRef('') // endereço da última busca no mapa
 
   const [tipo, setTipo] = useState<'entrega' | 'retirada'>('entrega')
   const [d, setD] = useState(dadosSalvos)
@@ -83,6 +89,7 @@ export default function Checkout() {
   const total = subtotal + taxa - desconto
   const minimo = Number(config?.pedido_minimo ?? 0)
   const fechada = aberta === false || config?.aceita_pedidos_online === false
+  const temLogin = Boolean(config?.login_email) || social.google || social.facebook
   const precisaEntrar = Boolean(config?.exigir_login) && !logado
   const foraDaArea = tipo === 'entrega' && porDistancia && entrega != null && !entrega.dentro
 
@@ -101,20 +108,38 @@ export default function Checkout() {
   async function calcular(p: Ponto) {
     setPonto(p)
     const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng })
-    setEntrega(error ? { dentro: false, mensagem: mensagemErro(error) } : (data as Entrega))
+    const r: Entrega = error ? { dentro: false, mensagem: mensagemErro(error) } : (data as Entrega)
+    setEntrega(r)
+    return r
   }
 
+  /** Acha o endereço no mapa e calcula a taxa pela distância até a loja. */
   async function localizar(dados = d) {
-    if (!porDistancia || !dados.logradouro.trim() || !dados.numero.trim()) return
+    if (!porDistancia || !dados.logradouro.trim() || !dados.numero.trim()) return null
+    const endereco = chaveEndereco(dados)
+    localizado.current = endereco
     setLocalizando(true)
     const p = await localizarEndereco({ ...dados, cidade: dados.cidade || config?.cidade, uf: dados.uf || config?.uf })
+    if (localizado.current !== endereco) return null // o endereço mudou enquanto a busca corria: vale a busca mais nova
     setLocalizando(false)
-    if (p) await calcular(p)
-    else {
-      setPonto(null)
-      setEntrega({ dentro: false, mensagem: 'Não encontramos este endereço no mapa. Confira a rua e o número ou marque o local no mapa.' })
-    }
+    if (p) return { ponto: p as Ponto | null, entrega: await calcular(p) }
+    const r: Entrega = { dentro: false, mensagem: 'Não encontramos este endereço no mapa. Confira a rua e o número ou marque o local no mapa.' }
+    setPonto(null)
+    setEntrega(r)
+    return { ponto: null as Ponto | null, entrega: r }
   }
+
+  // por distância a taxa aparece sozinha: assim que a rua e o número estão preenchidos, sem a pessoa clicar em nada
+  const enderecoAtual = chaveEndereco(d)
+  const podeLocalizar = porDistancia && tipo === 'entrega' && Boolean(d.logradouro.trim() && d.numero.trim())
+  useEffect(() => {
+    if (!podeLocalizar || localizado.current === enderecoAtual) return
+    const t = setTimeout(() => {
+      if (localizado.current !== enderecoAtual) localizar()
+    }, 900)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enderecoAtual, podeLocalizar])
 
   async function buscarCep() {
     const cep = soDigitos(d.cep)
@@ -138,8 +163,12 @@ export default function Checkout() {
     }
     setD(novo)
     if (!porDistancia) return
-    if (e.lat != null && e.lng != null) calcular({ lat: Number(e.lat), lng: Number(e.lng) })
-    else localizar(novo)
+    if (e.lat != null && e.lng != null) {
+      // endereço salvo já tem o ponto certo no mapa
+      localizado.current = chaveEndereco(novo)
+      setLocalizando(false)
+      calcular({ lat: Number(e.lat), lng: Number(e.lng) })
+    } else localizar(novo)
   }
 
   async function aplicarCupom() {
@@ -154,7 +183,21 @@ export default function Checkout() {
   async function enviar(e: FormEvent) {
     e.preventDefault()
     setErro('')
-    if (tipo === 'entrega' && porDistancia && !entrega?.dentro) return setErro(entrega?.mensagem ?? 'Localize o endereço no mapa para calcular a entrega.')
+    let destino = ponto
+    if (tipo === 'entrega' && porDistancia) {
+      let calculo = entrega
+      if (!calculo || localizado.current !== chaveEndereco(d)) {
+        // a pessoa tocou em enviar antes de o cálculo terminar
+        setEnviando(true)
+        const r = await localizar()
+        setEnviando(false)
+        if (r) {
+          calculo = r.entrega
+          destino = r.ponto
+        }
+      }
+      if (!calculo?.dentro) return setErro(calculo?.mensagem ?? 'Preencha a rua e o número para calcularmos a entrega.')
+    }
     setEnviando(true)
     const { data, error } = await supabase.rpc('criar_pedido', {
       p: {
@@ -166,7 +209,7 @@ export default function Checkout() {
             ? {
                 cep: d.cep, logradouro: d.logradouro, numero: d.numero, complemento: d.complemento, bairro_id: porDistancia ? '' : d.bairro_id,
                 bairro: bairro?.nome ?? d.bairro, referencia: d.referencia, cidade: d.cidade || config?.cidade, uf: d.uf || config?.uf,
-                lat: ponto?.lat, lng: ponto?.lng,
+                lat: destino?.lat, lng: destino?.lng,
               }
             : null,
         itens: itensParaPedido(itens),
@@ -223,21 +266,22 @@ export default function Checkout() {
         <h1 className="font-display text-4xl font-bold">Finalizar pedido</h1>
         {fechada && <Erro>Estamos fechados no momento. Assim que abrirmos, é só enviar o pedido — sua sacola fica guardada.</Erro>}
 
-        {!logado && (config?.login_google || config?.login_facebook) && (
+        {!logado && temLogin && (
           <section className={secao}>
             <h2 className={titulo}>{precisaEntrar ? 'Entre para pedir' : 'Já tem conta?'}</h2>
             <p className="-mt-2 mb-4 text-sm text-stone-600">Com a conta você guarda seus endereços e vê todos os seus pedidos.{!precisaEntrar && ' Se preferir, é só preencher os dados abaixo.'}</p>
-            <div className="flex flex-wrap gap-3">
-              {config.login_google && (
-                <Botao variante="secundario" tamanho="g" onClick={() => entrarCom('google', '/checkout')}>
-                  Entrar com Google
-                </Botao>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {config?.login_email && (
+                <>
+                  <Botao variante="secundario" tamanho="g" className="w-full" onClick={() => navegar('/entrar?voltar=/checkout')}>
+                    Entrar com e-mail
+                  </Botao>
+                  <Botao variante="secundario" tamanho="g" className="w-full" onClick={() => navegar('/entrar?criar&voltar=/checkout')}>
+                    Criar conta
+                  </Botao>
+                </>
               )}
-              {config.login_facebook && (
-                <Botao variante="secundario" tamanho="g" onClick={() => entrarCom('facebook', '/checkout')}>
-                  Entrar com Facebook
-                </Botao>
-              )}
+              <BotoesSociais voltarPara="/checkout" className="contents" />
             </div>
           </section>
         )}
@@ -298,10 +342,10 @@ export default function Checkout() {
                     <Entrada className={alto} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" maxLength={9} {...campo('cep')} onBlur={buscarCep} />
                   </Campo>
                   <Campo rotulo="Rua / avenida" className="sm:col-span-4">
-                    <Entrada required className={alto} autoComplete="address-line1" maxLength={120} {...campo('logradouro')} onBlur={() => localizar()} />
+                    <Entrada required className={alto} autoComplete="address-line1" maxLength={120} {...campo('logradouro')} />
                   </Campo>
                   <Campo rotulo="Número" className="sm:col-span-2">
-                    <Entrada required className={alto} maxLength={10} {...campo('numero')} onBlur={() => localizar()} />
+                    <Entrada required className={alto} maxLength={10} {...campo('numero')} />
                   </Campo>
                   <Campo rotulo="Complemento" className="sm:col-span-4">
                     <Entrada className={alto} placeholder="Apto, bloco, casa…" maxLength={60} {...campo('complemento')} />
@@ -327,12 +371,17 @@ export default function Checkout() {
 
                 {porDistancia && (
                   <div className="mt-4 space-y-3">
-                    {entrega?.dentro && (
-                      <p className="rounded-lg bg-manjericao-100 px-3 py-2 text-sm font-semibold text-manjericao-700">
-                        Entregamos aí! Distância de {String(entrega.distancia_km).replace('.', ',')} km · taxa de {Number(entrega.taxa) > 0 ? brl(entrega.taxa) : 'entrega grátis'}.
+                    {localizando ? (
+                      <p role="status" className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-700">Calculando a taxa de entrega…</p>
+                    ) : entrega?.dentro ? (
+                      <p role="status" className="rounded-lg bg-manjericao-100 px-3 py-2 text-sm font-semibold text-manjericao-700">
+                        Entregamos aí! Fica a {String(entrega.distancia_km).replace('.', ',')} km da loja · taxa de entrega: {Number(entrega.taxa) > 0 ? brl(entrega.taxa) : 'grátis'}.
                       </p>
+                    ) : entrega ? (
+                      <Erro>{entrega.mensagem}</Erro>
+                    ) : (
+                      <p className="text-sm text-stone-600">Preencha a rua e o número: a taxa de entrega é calculada na hora, pela distância até a loja.</p>
                     )}
-                    {entrega && !entrega.dentro && <Erro>{entrega.mensagem}</Erro>}
                     {marcadores.length > 0 && ponto && (
                       <Suspense fallback={null}>
                         <Mapa marcadores={marcadores} className="h-56" />
@@ -340,9 +389,11 @@ export default function Checkout() {
                       </Suspense>
                     )}
                     <div className="flex flex-wrap gap-2">
-                      <Botao variante="secundario" carregando={localizando} onClick={() => localizar()}>
-                        <MapPin className="size-4" /> Localizar endereço no mapa
-                      </Botao>
+                      {entrega && (
+                        <Botao variante="secundario" carregando={localizando} onClick={() => localizar()}>
+                          <MapPin className="size-4" /> Localizar de novo
+                        </Botao>
+                      )}
                       {!ponto && loja && (
                         <Botao variante="sutil" onClick={() => calcular(loja)}>
                           Marcar manualmente
@@ -415,7 +466,7 @@ export default function Checkout() {
               <div className="flex justify-between">
                 <dt>Entrega</dt>
                 <dd className="tabular-nums">
-                  {porDistancia ? (entrega?.dentro ? (taxa > 0 ? brl(taxa) : 'Grátis') : 'Informe o endereço') : bairro ? (taxa > 0 ? brl(taxa) : 'Grátis') : 'Escolha o bairro'}
+                  {porDistancia ? (localizando ? 'Calculando…' : entrega?.dentro ? (taxa > 0 ? brl(taxa) : 'Grátis') : 'Informe o endereço') : bairro ? (taxa > 0 ? brl(taxa) : 'Grátis') : 'Escolha o bairro'}
                 </dd>
               </div>
             )}

@@ -35,9 +35,15 @@ const METAS: { id: string; nome: string; unidade: string; explicacao: string }[]
 function Usuarios() {
   const { perfil } = useAuth()
   const aviso = useAviso()
-  const [novo, setNovo] = useState<{ nome: string; email: string; senha: string; papel: Papel } | null>(null)
+  const [novo, setNovo] = useState<{ nome: string; email: string; senha: string; papel: Papel; entregador_id: string } | null>(null)
   const [salvando, setSalvando] = useState(false)
   const { dados, carregando, erro, recarregar } = useConsulta<Perfil[]>(() => supabase.from('perfis').select('*').order('criado_em'), [])
+  // motoboys já cadastrados em Entregas que ainda não têm login
+  const { dados: entregadores, recarregar: recarregarEntregadores } = useConsulta<{ id: string; nome: string }[]>(
+    () => supabase.from('entregadores').select('id, nome').is('usuario_id', null).eq('ativo', true).order('nome'),
+    [],
+  )
+  const semLogin = entregadores ?? []
 
   async function alterar(p: Perfil, valores: Partial<Perfil>) {
     const { error } = await supabase.from('perfis').update(valores).eq('id', p.id)
@@ -49,10 +55,11 @@ function Usuarios() {
     e.preventDefault()
     setSalvando(true)
     try {
-      await chamarFuncao('admin-usuarios', { acao: 'criar', ...novo })
+      await chamarFuncao('admin-usuarios', { acao: 'criar', ...novo, entregador_id: novo?.papel === 'motoboy' && novo.entregador_id ? novo.entregador_id : undefined })
       aviso.sucesso('Usuário criado')
       setNovo(null)
       recarregar()
+      recarregarEntregadores()
     } catch (err) {
       aviso.erro(mensagemErro(err))
     }
@@ -64,7 +71,7 @@ function Usuarios() {
   return (
     <>
       <div className="mb-3 flex justify-end">
-        <Botao onClick={() => setNovo({ nome: '', email: '', senha: '', papel: 'atendente' })}>
+        <Botao onClick={() => setNovo({ nome: '', email: '', senha: '', papel: 'atendente', entregador_id: '' })}>
           <Plus className="size-4" /> Novo usuário
         </Botao>
       </div>
@@ -108,8 +115,16 @@ function Usuarios() {
             <Campo rotulo="Senha inicial" dica="Mínimo de 8 caracteres. A pessoa pode trocar depois de entrar.">
               <Entrada required type="password" minLength={8} autoComplete="new-password" value={novo.senha} onChange={(e) => setNovo({ ...novo, senha: e.target.value })} />
             </Campo>
-            <Campo rotulo="Função" dica={novo.papel === 'motoboy' ? 'O motoboy já entra na lista de entregadores.' : undefined}>
-              <Selecao value={novo.papel} onChange={(e) => setNovo({ ...novo, papel: e.target.value as Papel })}>
+            <Campo rotulo="Função" dica={novo.papel === 'motoboy' && semLogin.length === 0 ? 'O motoboy já entra na lista de entregadores.' : undefined}>
+              <Selecao
+                value={novo.papel}
+                onChange={(e) => {
+                  const papel = e.target.value as Papel
+                  // se o nome digitado é o de um entregador já cadastrado, já sugere ligar o login a ele
+                  const mesmo = semLogin.find((x) => x.nome.trim().toLowerCase() === novo.nome.trim().toLowerCase())
+                  setNovo({ ...novo, papel, entregador_id: papel === 'motoboy' ? (mesmo?.id ?? '') : '' })
+                }}
+              >
                 {Object.entries(PAPEIS).map(([v, r]) => (
                   <option key={v} value={v}>
                     {r}
@@ -117,6 +132,18 @@ function Usuarios() {
                 ))}
               </Selecao>
             </Campo>
+            {novo.papel === 'motoboy' && semLogin.length > 0 && (
+              <Campo rotulo="Este motoboy já está cadastrado em Entregas?" dica="Escolha o cadastro dele para o login ficar ligado ao mesmo entregador, sem duplicar.">
+                <Selecao value={novo.entregador_id} onChange={(e) => setNovo({ ...novo, entregador_id: e.target.value })}>
+                  <option value="">Não, é um entregador novo</option>
+                  {semLogin.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      Sim: {x.nome}
+                    </option>
+                  ))}
+                </Selecao>
+              </Campo>
+            )}
             <Botao type="submit" className="w-full" carregando={salvando}>
               Criar usuário
             </Botao>
@@ -334,6 +361,9 @@ export default function Configuracoes() {
             <Campo rotulo="Chave Pix" dica="Mostrada ao cliente que escolhe pagar com Pix.">
               <Entrada {...texto('chave_pix')} />
             </Campo>
+            <Campo rotulo="CNPJ" dica="Aparece no rodapé do site.">
+              <Entrada inputMode="numeric" placeholder="00.000.000/0000-00" maxLength={18} {...texto('cnpj')} />
+            </Campo>
             <Campo rotulo="CEP">
               <Entrada {...texto('cep')} />
             </Campo>
@@ -437,12 +467,17 @@ export default function Configuracoes() {
 
             <h2 className="mt-2 font-display text-lg font-semibold sm:col-span-2">Conta do cliente</h2>
             <div className="space-y-3 sm:col-span-2">
+              <Alternar ativo={c.login_email} onChange={(v) => setC({ ...c, login_email: v })} rotulo="Deixar o cliente criar conta com e-mail e senha" />
+              <br />
               <Alternar ativo={c.login_google} onChange={(v) => setC({ ...c, login_google: v })} rotulo="Oferecer entrada com Google" />
               <br />
               <Alternar ativo={c.login_facebook} onChange={(v) => setC({ ...c, login_facebook: v })} rotulo="Oferecer entrada com Facebook" />
               <br />
               <Alternar ativo={c.exigir_login} onChange={(v) => setC({ ...c, exigir_login: v })} rotulo="Só aceitar pedidos de clientes com conta" />
-              <p className="text-xs text-stone-500">Os botões só funcionam depois que o Google e o Facebook forem ligados no painel do banco de dados (passo a passo no README).</p>
+              <p className="text-xs text-stone-500">
+                Os botões do Google e do Facebook só aparecem no site depois que forem ligados no painel do banco de dados (passo a passo no README). Quem cria conta no site é sempre cliente:
+                nunca entra no painel.
+              </p>
             </div>
           </>,
         )}

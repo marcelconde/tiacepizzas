@@ -7,16 +7,17 @@ sql_paths = ["./seed.sql"]
 [auth]
 site_url = "https://tiacepizzas.com.br"
 additional_redirect_urls = ["https://tiacepizzas.com.br/**", "http://localhost:5173/**"]
-# Clientes entram com Google/Facebook e a equipe com e-mail e senha.
-# O provedor de e-mail precisa ficar ligado: no Supabase, desligar o cadastro por e-mail desliga também a entrada.
-# Quem impede o cadastro avulso por e-mail é o banco (migração cadastro_por_email).
-# Fica "false" (ninguém novo entra, só quem a administradora cria) até a entrada com Google/Facebook ser ligada:
-# aí precisa ser "true", senão o primeiro acesso de um cliente é recusado. Depois de mudar: npx supabase config push
-enable_signup = false
+# A equipe entra com e-mail e senha; o cliente cria a conta dele no site (e-mail e senha, Google ou Facebook).
+# Quem se cadastra pelo site é sempre cliente: o acesso ao painel depende do papel em app_metadata, que só o
+# servidor grava (migração conta_email_pagamentos). Depois de mudar algo aqui: npx supabase config push
+enable_signup = true
 minimum_password_length = 8
 
 [auth.email]
 enable_signup = true
+# A conta do cliente já nasce confirmada: o envio de e-mails que vem com o Supabase é limitado a poucos por hora
+# e travaria o cadastro. Para confirmar por e-mail, configure antes um SMTP próprio no painel do Supabase.
+enable_confirmations = false
 
 # Entrada social dos clientes (Google e Facebook): ligue em Authentication > Providers no painel do Supabase,
 # com as credenciais criadas no Google Cloud e na Meta. O passo a passo está no README.

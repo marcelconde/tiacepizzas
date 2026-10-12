@@ -1,17 +1,17 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
-  BarChart3, Bike, BookOpen, ChefHat, ClipboardList, FileText, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
+  BarChart3, Bike, BookOpen, ChefHat, ClipboardList, FileText, HandCoins, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
   PlusCircle, Settings, Users, Volume2, VolumeX, Wallet, Wallet2, Wifi, WifiOff, X, type LucideIcon,
 } from 'lucide-react'
-import { Login, Moldura } from '../components/Login'
+import { Login, Moldura, TrocarSenha } from '../components/Login'
 import { Logo } from '../components/Logo'
-import { Botao, Campo, Carregando, Entrada, Modal, cx, useAviso } from '../components/ui'
+import { Botao, Carregando, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { PAPEIS } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { aceitarPedido } from '../lib/pedidos'
-import { mensagemErro, supabase } from '../lib/supabase'
+import { mensagemErro, recuperacao, supabase } from '../lib/supabase'
 import type { ConfigFiscal, Configuracoes } from '../lib/tipos'
 
 // ------------------------------------------------------------------ módulos e menu
@@ -36,6 +36,7 @@ export const MENU: ItemMenu[] = [
   { para: '/admin/estoque', rotulo: 'Estoque', icone: Package, modulo: 'estoque' },
   { para: '/admin/caixa', rotulo: 'Caixa', icone: Wallet, modulo: 'caixa' },
   { para: '/admin/entregas', rotulo: 'Entregas', icone: Bike, modulo: 'entregas' },
+  { para: '/admin/pagamentos', rotulo: 'Pagamentos', icone: HandCoins, modulo: 'financeiro' },
   { para: '/admin/financeiro', rotulo: 'Financeiro', icone: Wallet2, modulo: 'financeiro' },
   { para: '/admin/analises', rotulo: 'Análises', icone: LineChart, modulo: 'analises' },
   { para: '/admin/fiscal', rotulo: 'Fiscal', icone: FileText, modulo: 'fiscal' },
@@ -54,7 +55,7 @@ export const MODULOS: { id: Modulo; rotulo: string; descricao: string }[] = [
   { id: 'estoque', rotulo: 'Estoque', descricao: 'Insumos, entradas e perdas' },
   { id: 'caixa', rotulo: 'Caixa', descricao: 'Abertura, sangria e fechamento' },
   { id: 'entregas', rotulo: 'Entregas', descricao: 'Área de entrega, taxas e entregadores' },
-  { id: 'financeiro', rotulo: 'Financeiro', descricao: 'Despesas, resultado e relatórios' },
+  { id: 'financeiro', rotulo: 'Financeiro e pagamentos', descricao: 'Despesas, pagamentos à equipe, resultado e relatórios' },
   { id: 'analises', rotulo: 'Análises', descricao: 'Rankings de clientes e produtos' },
   { id: 'fiscal', rotulo: 'Fiscal', descricao: 'Notas fiscais e configuração' },
   { id: 'auditoria', rotulo: 'Auditoria', descricao: 'Registro de alterações' },
@@ -120,34 +121,6 @@ function tocarAlerta() {
   }
 }
 
-function TrocarSenha({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
-  const aviso = useAviso()
-  const [senha, setSenha] = useState('')
-  const [salvando, setSalvando] = useState(false)
-  async function salvar(e: FormEvent) {
-    e.preventDefault()
-    setSalvando(true)
-    const { error } = await supabase.auth.updateUser({ password: senha })
-    setSalvando(false)
-    if (error) return aviso.erro(mensagemErro(error))
-    aviso.sucesso('Senha alterada')
-    setSenha('')
-    onFechar()
-  }
-  return (
-    <Modal aberto={aberto} titulo="Definir nova senha" onFechar={onFechar} largura="max-w-sm">
-      <form onSubmit={salvar} className="space-y-4">
-        <Campo rotulo="Nova senha" dica="Mínimo de 8 caracteres.">
-          <Entrada type="password" required minLength={8} autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} />
-        </Campo>
-        <Botao type="submit" className="w-full" carregando={salvando}>
-          Salvar senha
-        </Botao>
-      </form>
-    </Modal>
-  )
-}
-
 // ------------------------------------------------------------------ layout
 export default function AdminLayout() {
   const { sessao, perfil, carregando, sair } = useAuth()
@@ -192,8 +165,16 @@ export default function AdminLayout() {
   }, [contarNovos])
 
   useEffect(() => {
+    // o painel é carregado depois do site: o aviso do link de "esqueci a senha" pode já ter passado
+    if (recuperacao.pendente) {
+      recuperacao.pendente = false
+      setTrocarSenha(true)
+    }
     const { data } = supabase.auth.onAuthStateChange((evento) => {
-      if (evento === 'PASSWORD_RECOVERY') setTrocarSenha(true)
+      if (evento === 'PASSWORD_RECOVERY') {
+        recuperacao.pendente = false
+        setTrocarSenha(true)
+      }
     })
     return () => data.subscription.unsubscribe()
   }, [])

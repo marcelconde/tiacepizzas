@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Copy, MessageCircle } from 'lucide-react'
 import { Botao, Carregando, Entrada, Erro, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { PAGAMENTO, brl, dataHora, haQuanto, hora } from '../lib/formato'
+import { PAGAMENTO, brl, cnpj, dataHora, haQuanto, hora, soDigitos } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { FormaPagamento, StatusPedido, TipoPedido } from '../lib/tipos'
@@ -74,7 +74,7 @@ function etapas(p: Acompanhamento): Etapa[] {
   // o pagamento entra na linha do tempo no momento em que foi confirmado
   const pagamento: Etapa = {
     id: 'pagamento', titulo: 'Pagamento confirmado', quando: p.pago_em, feito: p.pago,
-    texto: p.pago ? 'Recebemos o seu pagamento.' : `Pagamento ${p.tipo === 'entrega' ? 'na entrega' : 'na retirada'}.`,
+    texto: p.pago ? 'Recebemos o seu pagamento.' : p.forma_pagamento === 'pix' ? 'Aguardando o seu Pix e o comprovante.' : `Pagamento ${p.tipo === 'entrega' ? 'na entrega' : 'na retirada'}.`,
   }
   const antesDe = p.pago && p.pago_em ? lista.findIndex((e) => !e.quando || e.quando > p.pago_em!) : lista.length - 1
   lista.splice(antesDe < 0 ? lista.length : Math.max(1, antesDe), 0, pagamento)
@@ -189,8 +189,11 @@ export default function Acompanhar() {
     cancelado: 'Pedido cancelado',
     reembolsado: 'Pedido reembolsado',
   }
-  const whats = linkWhatsApp(config?.whatsapp, mensagemPedido(pedido.numero))
+  const whats = linkWhatsApp(config?.whatsapp, mensagemPedido(pedido.numero, pedido.nome))
   const pix = pedido.forma_pagamento === 'pix' && !pedido.pago && !encerradoSemEntrega ? config?.chave_pix : null
+  // chave que é um CNPJ aparece pontuada (mais fácil de conferir); o botão copia como foi cadastrada
+  const pixEhCnpj = Boolean(pix) && /^[\d./-]+$/.test(pix!) && soDigitos(pix).length === 14
+  const comprovante = linkWhatsApp(config?.whatsapp, `Olá! Segue o comprovante do Pix do pedido #${pedido.numero} (${brl(pedido.total)}), em nome de ${pedido.nome}.`)
   const marcadores = [
     ...(pedido.loja ? [{ id: 'loja', ponto: { lat: Number(pedido.loja.lat), lng: Number(pedido.loja.lng) }, tipo: 'loja' as const, rotulo: config?.nome_loja }] : []),
     ...(pedido.motoboy ? [{ id: 'motoboy', ponto: { lat: Number(pedido.motoboy.lat), lng: Number(pedido.motoboy.lng) }, tipo: 'motoboy' as const, rotulo: pedido.entregador ?? 'Entregador' }] : []),
@@ -206,6 +209,35 @@ export default function Acompanhar() {
         <p className="mt-2 text-stone-600">
           Previsão de {pedido.tipo === 'entrega' ? 'entrega' : 'retirada'}: <b className="text-forno-900">por volta das {hora(pedido.previsao_em)}</b>
         </p>
+      )}
+
+      {pix && (
+        <section className="mt-6 rounded-2xl border border-queijo-400 bg-queijo-300/20 p-5">
+          <h2 className="font-display text-xl font-semibold">Pague com Pix</h2>
+          <p className="mt-1 text-sm text-forno-700">
+            Envie <b>{brl(pedido.total)}</b> para a chave abaixo. Depois de pagar, <b>mande o comprovante pelo nosso WhatsApp</b> para confirmarmos o seu pedido.
+          </p>
+          <p className="mt-4 text-xs font-semibold tracking-wide text-forno-600 uppercase">Chave Pix{pixEhCnpj ? ' (CNPJ)' : ''}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <code className="rounded-lg bg-white px-3 py-2 text-base font-semibold break-all">{pixEhCnpj ? cnpj(pix) : pix}</code>
+            <Botao
+              variante="secundario"
+              onClick={() =>
+                navigator.clipboard.writeText(pix).then(() => {
+                  setCopiado(true)
+                  setTimeout(() => setCopiado(false), 2500)
+                })
+              }
+            >
+              {copiado ? <Check className="size-4" /> : <Copy className="size-4" />} {copiado ? 'Copiada' : 'Copiar chave'}
+            </Botao>
+          </div>
+          {comprovante && (
+            <a href={comprovante} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-manjericao-600 px-4 py-2.5 text-center leading-tight font-semibold text-white hover:bg-manjericao-700 sm:w-auto">
+              <MessageCircle className="size-5" /> Enviar comprovante pelo WhatsApp
+            </a>
+          )}
+        </section>
       )}
 
       {pedido.status === 'problema_entrega' && (
@@ -260,29 +292,6 @@ export default function Acompanhar() {
             ))}
           </ol>
         </>
-      )}
-
-      {pix && (
-        <section className="mt-8 rounded-2xl border border-queijo-400 bg-queijo-300/20 p-5">
-          <h2 className="font-display text-xl font-semibold">Pague com Pix</h2>
-          <p className="mt-1 text-sm text-forno-700">
-            Envie <b>{brl(pedido.total)}</b> para a chave abaixo e mande o comprovante pelo WhatsApp.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <code className="rounded-lg bg-white px-3 py-2 text-sm break-all">{pix}</code>
-            <Botao
-              variante="secundario"
-              onClick={() =>
-                navigator.clipboard.writeText(pix).then(() => {
-                  setCopiado(true)
-                  setTimeout(() => setCopiado(false), 2500)
-                })
-              }
-            >
-              {copiado ? <Check className="size-4" /> : <Copy className="size-4" />} {copiado ? 'Copiada' : 'Copiar chave'}
-            </Botao>
-          </div>
-        </section>
       )}
 
       <section className="mt-8 rounded-2xl border border-massa-200 bg-white p-5">

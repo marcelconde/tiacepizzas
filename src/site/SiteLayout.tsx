@@ -1,28 +1,87 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AtSign, Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2, UserRound } from 'lucide-react'
+import { Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2, UserRound } from 'lucide-react'
 import { Logo } from '../components/Logo'
 import { Botao, Contador, Erro, Modal, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useCarrinho } from '../lib/carrinho'
-import { DIAS_SEMANA, brl, soDigitos, telefone } from '../lib/formato'
+import { DIAS_SEMANA, brl, cnpj, soDigitos, telefone } from '../lib/formato'
 import { useLoja } from '../lib/loja'
+import type { Configuracoes } from '../lib/tipos'
 
 export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
   numero ? `https://wa.me/55${soDigitos(numero)}${texto ? `?text=${encodeURIComponent(texto)}` : ''}` : null
 
 /** Mensagem que já identifica o pedido para a equipe. */
-export const mensagemPedido = (numero: number) => `Olá, gostaria de falar sobre o pedido #${numero}.`
+export const mensagemPedido = (numero: number, nome?: string | null) => `Olá! Quero falar sobre o pedido #${numero}${nome ? `, em nome de ${nome}` : ''}.`
 
-export function SeloAberta({ curto }: { curto?: boolean }) {
+export const linkInstagram = (usuario: string | null | undefined) => {
+  const u = (usuario ?? '').trim().replace(/^@/, '')
+  return u ? `https://instagram.com/${u}` : null
+}
+
+/** Cores da marca do Instagram: o botão é reconhecido de longe. */
+export const CORES_INSTAGRAM = 'bg-linear-to-tr from-[#f9a23f] via-[#dd2a7b] to-[#8134af] text-white'
+
+export function IconeInstagram({ className = 'size-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <rect x="2.5" y="2.5" width="19" height="19" rx="5.5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="17.4" cy="6.6" r="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** "até 23:00" quando aberta, "abre hoje às 18:00" quando fechada. Vazio se a situação foi forçada no painel. */
+function detalheHorario(config: Configuracoes | null, aberta: boolean) {
+  if (!config || config.loja_aberta_manual != null) return ''
+  try {
+    const partes = new Intl.DateTimeFormat('en-US', { timeZone: config.fuso_horario, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date())
+    const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? ''
+    const hoje = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parte('weekday'))
+    const agora = `${parte('hour')}:${parte('minute')}`
+    if (hoje < 0) return ''
+    const dia = (n: number) => config.horarios[String((hoje + n + 7) % 7)]
+    if (aberta) {
+      // o turno em vigor é o de hoje ou, de madrugada, o que começou ontem
+      const h = [dia(0), dia(-1)].find((x, i) => x?.aberto && (i === 0 ? x.abre <= agora && (x.fecha > agora || x.fecha < x.abre) : x.fecha < x.abre && agora < x.fecha))
+      return h ? `até ${h.fecha.slice(0, 5)}` : ''
+    }
+    for (let n = 0; n <= 7; n++) {
+      const h = dia(n)
+      if (!h?.aberto || (n === 0 && h.abre <= agora)) continue
+      const quando = n === 0 ? 'hoje' : n === 1 ? 'amanhã' : DIAS_SEMANA[(hoje + n) % 7].toLowerCase()
+      return `abre ${quando} às ${h.abre.slice(0, 5)}`
+    }
+  } catch {
+    /* navegador sem suporte a fuso horário: mostra só aberto ou fechado */
+  }
+  return ''
+}
+
+export function SeloAberta() {
   const { aberta } = useLoja()
   if (aberta == null) return null
   return (
     <span className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap', aberta ? 'bg-manjericao-100 text-manjericao-700' : 'bg-stone-200 text-stone-700')}>
       <span className={cx('size-2 rounded-full', aberta ? 'bg-manjericao-500' : 'bg-stone-500')} />
-      {aberta ? 'Aberto' : 'Fechado'}
-      {!curto && ' agora'}
+      {aberta ? 'Aberto agora' : 'Fechado agora'}
     </span>
+  )
+}
+
+/** Faixa de aberto/fechado no celular e no tablet: fica logo abaixo do cabeçalho, em todas as páginas. */
+function FaixaAberta() {
+  const { config, aberta } = useLoja()
+  if (aberta == null) return null
+  const detalhe = detalheHorario(config, aberta)
+  return (
+    <p role="status" className={cx('flex items-center justify-center gap-2 px-4 py-2 text-center text-sm font-semibold lg:hidden', aberta ? 'bg-manjericao-100 text-manjericao-700' : 'bg-stone-200 text-stone-700')}>
+      <span className={cx('size-2.5 shrink-0 rounded-full', aberta ? 'bg-manjericao-500' : 'bg-stone-500')} />
+      {aberta ? 'Aberto agora' : 'Fechado agora'}
+      {detalhe && <span className="font-normal">· {detalhe}</span>}
+    </p>
   )
 }
 
@@ -103,7 +162,8 @@ export default function SiteLayout() {
   // o botão flutuante do WhatsApp fica onde a pessoa está escolhendo; nas outras telas há um link próprio
   const comBotaoWhats = pathname === '/' || pathname.startsWith('/cardapio')
   const whats = linkWhatsApp(config?.whatsapp, 'Olá! Vim pelo site.')
-  const temLogin = config?.login_google || config?.login_facebook
+  const insta = linkInstagram(config?.instagram)
+  const temLogin = config?.login_google || config?.login_facebook || config?.login_email
 
   useEffect(() => {
     window.scrollTo(0, 0) // em navegadores novos scrollTo devolve uma Promise: não pode ser o retorno do efeito
@@ -139,6 +199,18 @@ export default function SiteLayout() {
           <div className="hidden lg:block">
             <SeloAberta />
           </div>
+          {insta && (
+            <a
+              href={insta}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Instagram da pizzaria"
+              title="Siga a gente no Instagram"
+              className={cx('inline-flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold transition-opacity hover:opacity-90', CORES_INSTAGRAM)}
+            >
+              <IconeInstagram /> <span className="hidden sm:inline">Instagram</span>
+            </a>
+          )}
           {!noCheckout && (
             <Botao onClick={() => setSacola(true)} aria-label={`Abrir sacola, ${quantidade} itens`}>
               <ShoppingBag className="size-4" />
@@ -155,11 +227,9 @@ export default function SiteLayout() {
             Acompanhar
           </NavLink>
           {conta}
-          <span className="ml-auto pr-2">
-            <SeloAberta curto />
-          </span>
         </nav>
       </header>
+      <FaixaAberta />
 
       <main className="flex-1">
         {erro && (
@@ -229,9 +299,9 @@ export default function SiteLayout() {
                 <MessageCircle className="mt-0.5 size-4 shrink-0" /> WhatsApp {telefone(config?.whatsapp)}
               </a>
             )}
-            {config?.instagram && (
-              <a className="flex gap-2 hover:text-white" href={`https://instagram.com/${config.instagram.replace('@', '')}`} target="_blank" rel="noreferrer">
-                <AtSign className="mt-0.5 size-4 shrink-0" /> {config.instagram.replace('@', '')} no Instagram
+            {insta && (
+              <a className="flex gap-2 hover:text-white" href={insta} target="_blank" rel="noreferrer">
+                <IconeInstagram className="mt-0.5 size-4 shrink-0" /> @{insta.split('/').pop()} no Instagram
               </a>
             )}
           </div>
@@ -254,7 +324,7 @@ export default function SiteLayout() {
           </div>
         </div>
         <div className="border-t border-white/10 px-4 py-4 text-center text-xs text-massa-400">
-          © {new Date().getFullYear()} Tia Cê Pizzas ·{' '}
+          © {new Date().getFullYear()} Tia Cê Pizzas{config?.cnpj ? ` · CNPJ ${cnpj(config.cnpj)}` : ''} ·{' '}
           <Link to="/admin" className="hover:text-white">
             Área da equipe
           </Link>{' '}

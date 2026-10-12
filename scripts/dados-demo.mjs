@@ -130,7 +130,18 @@ export async function popular(db) {
       for (const [insumo, qtd, custo] of [['Farinha de trigo', 25, 4.6], ['Mussarela', 28, 38.5], ['Molho de tomate', 10, 9.2], ['Calabresa', 9, 26.5], ['Frango desfiado', 5, 22], ['Catupiry', 6, 32.5], ['Bacon', 3, 43], ['Caixa de pizza', 120, 1.8], ['Chocolate ao leite', 2, 45]]) {
         await db.query(`insert into estoque_movimentos (insumo_id, tipo, quantidade, custo_unitario, observacao, criado_em) select id, 'entrada', $2::numeric, $3::numeric, 'Compra da semana', $4::timestamptz from insumos where nome = $1`, [insumo, qtd, custo, noDia(dia, 15, 0)])
       }
-      await db.query(`insert into despesas (descricao, categoria, valor, data, forma_pagamento) values ('Compra da semana — atacado', 'Ingredientes', $1, $2, 'pix'), ('Acerto dos motoboys', 'Motoboys', $3, $2, 'dinheiro')`, [entre(1650, 2050), iso(dia), entre(380, 520)])
+      await db.query(`insert into despesas (descricao, categoria, valor, data, forma_pagamento) values ('Compra da semana — atacado', 'Ingredientes', $1, $2, 'pix')`, [entre(1650, 2050), iso(dia)])
+      // pagamento da semana a cada motoboy e à ajudante da cozinha (aparecem em Pagamentos)
+      await db.query(
+        `insert into despesas (descricao, categoria, valor, data, forma_pagamento, favorecido_tipo, favorecido, entregador_id)
+         select 'Pagamento — ' || nome, 'Motoboys', $2::numeric + (row_number() over (order by nome)) * 15, $1::date, 'dinheiro', 'motoboy', nome, id from entregadores`,
+        [iso(dia), entre(190, 250)],
+      )
+      await db.query(
+        `insert into despesas (descricao, categoria, valor, data, forma_pagamento, favorecido_tipo, favorecido, observacao)
+         values ('Pagamento — Dona Lúcia', 'Salários', 240, $1, 'pix', 'cozinha', 'Dona Lúcia', 'Diárias de sexta e sábado')`,
+        [iso(dia)],
+      )
     }
     if (semana === 2 && atras % 2 === 0) await db.query(`insert into despesas (descricao, categoria, valor, data, forma_pagamento) values ('Botijão de gás P45', 'Gás', 420, $1, 'pix'), ('Caixas e sacolas', 'Embalagens', $2, $1, 'credito')`, [iso(dia), entre(180, 260)])
   }
