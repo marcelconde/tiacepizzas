@@ -35,10 +35,19 @@ export async function carregarPedido(id: string) {
 
 const AVISO_SEM_CAIXA = 'Nenhum caixa aberto: o recebimento ficou registrado só no pedido. Abra o caixa para controlar o dinheiro.'
 
+/**
+ * Manda o aviso "pedido pronto" para o celular do motoboy (aplicativo Tia Cê Entregas). O servidor confere se o
+ * pedido está mesmo pronto e tem motoboy; se o aviso não sair, o painel segue normalmente.
+ */
+const avisarEntregador = (pedidoId: string) =>
+  void supabase.functions.invoke('avisar-entregador', { body: { pedido_id: pedidoId } }).then(() => {}, () => {})
+
 /** Atualiza o pedido. Devolve um aviso quando um recebimento é registrado sem caixa aberto. */
 export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promise<string | null> {
   const { error } = await supabase.from('pedidos').update(dados).eq('id', id)
   if (error) throw error
+  // ficou pronto, ou o motoboy foi escolhido (o pedido pode já estar pronto)
+  if (dados.status === 'pronto' || dados.entregador_id) avisarEntregador(id)
   if (!dados.pago) return null
   const { count } = await supabase.from('caixas').select('id', { count: 'exact', head: true }).is('fechado_em', null)
   return count ? null : AVISO_SEM_CAIXA

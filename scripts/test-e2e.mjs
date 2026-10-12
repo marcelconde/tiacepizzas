@@ -242,6 +242,22 @@ await teste('criar usuário motoboy já ligado a um entregador; metas salvas', a
   assert.equal((await rpc('config_interna', {})).metas.faturamento_dia.ruim, 1200)
 })
 
+await teste('marcar pronto avisa o celular do motoboy que entrou no aplicativo', async () => {
+  // o aplicativo Android registra o aparelho ao entrar; aqui o registro é feito direto, como o motoboy
+  const aparelho = 'aparelho-e2e-'.padEnd(60, 'x')
+  const moto = (await (await fetch(`${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'carlos@teste.local', password: SENHA }) })).json()).access_token
+  const registrar = (ligar) => fetch(`${API}/rest/v1/rpc/entrega_aparelho`, { method: 'POST', headers: { authorization: `Bearer ${moto}`, 'content-type': 'application/json' }, body: JSON.stringify({ p_token: aparelho, p_ligar: ligar }) })
+  assert.ok((await registrar(true)).ok)
+  const carlos = (await api(`entregadores?select=id&nome=eq.${encodeURIComponent('Carlos Moto')}`))[0]
+  const p = (await api(`pedidos?select=id,numero&status=eq.em_preparo&tipo=eq.entrega&entregador_id=eq.${carlos.id}&limit=1`))[0]
+  await ir(pc, '/admin/pedidos', 1200)
+  const aviso = pc.waitForResponse((r) => r.url().includes('/functions/v1/avisar-entregador') && r.request().method() === 'POST', { timeout: 10000 })
+  await pc.evaluate((n) => [...[...document.querySelectorAll('article')].find((a) => a.innerText.includes(`#${n}`)).querySelectorAll('button')].find((b) => b.innerText.includes('Marcar pronto')).click(), p.numero)
+  assert.deepEqual(await (await aviso).json(), { avisados: 1 })
+  assert.equal((await situacao(p.id)).status, 'pronto')
+  assert.ok((await registrar(false)).ok)
+})
+
 await teste('motoboy conclui a entrega pelo aplicativo', async () => {
   const moto = await nova('celular'); await entrar(moto, '/entregador', 'carlos@teste.local'); await dormir(1200)
   const rua = await numero('saiu_entrega')

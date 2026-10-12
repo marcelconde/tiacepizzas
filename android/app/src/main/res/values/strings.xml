@@ -6,4 +6,6 @@
     <string name="custom_url_scheme">br.com.tiacepizzas.entregas</string>
     <!-- nome do aviso fixo que aparece enquanto a localização é enviada em segundo plano -->
     <string name="capacitor_background_geolocation_notification_channel_name">Localização da entrega</string>
+    <!-- ícone desse aviso: o plugin pede um de uma cor só; com o ícone do aplicativo o aviso se comporta mal -->
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_aviso</string>
 </resources>

@@ -501,6 +501,27 @@ await teste('motoboy: vê e move só as entregas dele, registra problema e posi�
   await db.exec(`update configuracoes set rastreio_motoboy = false`)
 })
 
+await teste('aviso de pedido pronto: só o motoboy registra e remove o aparelho dele; ninguém lê a lista pelo site', async () => {
+  const aparelho = 'aparelho-de-teste-'.padEnd(60, 'x')
+  const dono = async () => (await um(`select e.usuario_id from entregador_aparelhos a join entregadores e on e.id = a.entregador_id where a.token = $1`, [aparelho]))?.usuario_id
+  await como('authenticated', atendente, () => falha(db.query(`select entrega_aparelho($1)`, [aparelho]), 'restrito aos entregadores'))
+  await como('anon', null, () => falha(db.query(`select entrega_aparelho($1)`, [aparelho]), 'permission denied'))
+  await como('authenticated', motoboy, async () => {
+    await falha(db.query(`select entrega_aparelho('curto')`), 'Aparelho inválido')
+    await db.query(`select entrega_aparelho($1)`, [aparelho])
+    await db.query(`select entrega_aparelho($1)`, [aparelho]) // entrar de novo no aplicativo não duplica
+    await falha(db.query(`select * from entregador_aparelhos`), 'permission denied')
+  })
+  assert.deepEqual([await dono(), (await q(`select 1 from entregador_aparelhos`)).length], [motoboy, 1])
+  // outro motoboy entra no mesmo celular: o aparelho passa a avisar só ele, e o primeiro não consegue removê-lo
+  await como('authenticated', outroMotoboy, () => db.query(`select entrega_aparelho($1)`, [aparelho]))
+  await como('authenticated', motoboy, () => db.query(`select entrega_aparelho($1, false)`, [aparelho]))
+  assert.equal(await dono(), outroMotoboy)
+  await como('authenticated', outroMotoboy, () => db.query(`select entrega_aparelho($1, false)`, [aparelho]))
+  assert.equal((await q(`select 1 from entregador_aparelhos`)).length, 0)
+  for (const papel of [admin, atendente]) await como('authenticated', papel, () => falha(db.query(`select * from entregador_aparelhos`), 'permission denied'))
+})
+
 await teste('auditoria: registra quem mudou preço, status e permissões, com antes e depois', async () => {
   await como('authenticated', admin, async () => {
     await db.query(`update produto_precos set preco = 60 where produto_id = $1 and tamanho_id = $2`, [mussarela, grande])

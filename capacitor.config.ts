@@ -16,6 +16,8 @@ const config: CapacitorConfig = {
     // Em segundo plano o Android segura as chamadas de rede feitas pela página; por aqui elas saem pelo
     // lado nativo do aplicativo e a posição chega ao servidor na hora.
     CapacitorHttp: { enabled: true },
+    // O aviso "pedido pronto" também aparece e toca com o aplicativo aberto na tela.
+    PushNotifications: { presentationOptions: ['alert', 'sound'] },
   },
 }
 

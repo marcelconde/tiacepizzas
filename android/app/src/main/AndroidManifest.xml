@@ -25,6 +25,14 @@
 
         </activity>
 
+        <!-- aviso "pedido pronto": ícone e canal usados quando ele chega com o aplicativo fechado -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_aviso" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="pedidos" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

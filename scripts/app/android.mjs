@@ -65,7 +65,13 @@ if (faltas.length) {
   console.error(`Ainda não dá para gerar o aplicativo neste computador.\n\n${faltas.join('\n\n')}\n\nDepois rode de novo: npm run app:android`)
   process.exit(1)
 }
-const ambiente = { ...process.env, JAVA_HOME: JAVA, ANDROID_HOME: SDK }
+// O aviso "pedido pronto" depende do arquivo do Firebase (fora do git). Sem ele o aplicativo sai sem os avisos.
+const temFirebase = existsSync(join(android, 'app', 'google-services.json'))
+if (!temFirebase) {
+  console.log('⚠ Sem android/app/google-services.json: este aplicativo NÃO vai receber o aviso de pedido pronto.')
+  console.log('  Para ligar os avisos, veja "Avisos de pedido pronto" em docs/aplicativo-android.md.')
+}
+const ambiente = { ...process.env, JAVA_HOME: JAVA, ANDROID_HOME: SDK, VITE_AVISOS: temFirebase ? '1' : '' }
 function rodar(comando, args, pasta = raiz, descricao = `${comando} ${args.join(' ')}`) {
   console.log(`\n› ${descricao}`)
   // No Windows, npm, npx e gradlew são arquivos .cmd/.bat e só rodam pelo interpretador de comandos.

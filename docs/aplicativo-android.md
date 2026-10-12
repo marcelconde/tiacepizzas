@@ -78,6 +78,36 @@ Quando a tela do entregador mudar:
 2. `git pull`, `npm install`, `npm run app:android`.
 3. Envie o novo APK; ele instala por cima do antigo.
 
+## 5. Avisos de pedido pronto
+
+Quando o painel marca um pedido de entrega como **Pronto** (ou escolhe o motoboy de um pedido que já está pronto), o
+celular do motoboy toca e mostra **"Pedido #123 está pronto — Pode retirar na pizzaria."**, com o aplicativo aberto,
+em segundo plano ou fechado. O aviso viaja pelo Firebase, o serviço gratuito do Google para notificações no Android.
+
+> **Escrito e testado só no ambiente local** (o painel chama o servidor e o servidor acha o aparelho do motoboy).
+> O envio de verdade pelo Firebase e a chegada no celular ainda não foram testados.
+
+Para ligar (uma vez):
+
+1. **Projeto no Firebase** — em https://console.firebase.google.com, *Adicionar projeto* (pode desligar o Google
+   Analytics). Dentro dele, *Adicionar app* → **Android**, com o nome do pacote `br.com.tiacepizzas.entregas`.
+   Baixe o **`google-services.json`** e coloque em `android/app/`. Ele não vai para o GitHub; se perder, baixa de novo.
+2. **Chave do servidor** — no mesmo projeto: engrenagem → *Configurações do projeto* → *Contas de serviço* →
+   **Gerar nova chave privada**. Vem um arquivo `.json`: é uma **senha**. No Supabase, em *Edge Functions* → *Secrets*,
+   crie o segredo **`FIREBASE_CONTA`** e cole o conteúdo inteiro do arquivo. Depois apague o arquivo do computador.
+   Nunca o coloque na pasta do projeto.
+3. **Banco e servidor** — `npx supabase db push` (cria o cadastro dos aparelhos) e
+   `npx supabase functions deploy avisar-entregador --use-api`.
+4. **Aplicativo** — `npm run app:android` e instale o APK novo. Sem o `google-services.json` o comando avisa que o
+   aplicativo vai sair sem os avisos.
+
+No celular: ao entrar no aplicativo, o motoboy aceita as **notificações**. Para testar, deixe um pedido de entrega
+com ele escolhido como motoboy e marque **Pronto** no painel.
+
+- O aviso só sai para quem **entrou** no aplicativo naquele celular; ao **sair** da conta, o celular para de receber.
+- Quem usa pelo navegador (iPhone) não recebe aviso.
+- Aparelhos com economia de bateria agressiva podem atrasar o aviso com o aplicativo fechado (passo 5 de "Instalar").
+
 ## Limites
 
 - **iPhone**: não há aplicativo. No iPhone o entregador usa o site, e o envio pausa enquanto o Waze estiver aberto.
@@ -96,6 +126,10 @@ Quando a tela do entregador mudar:
 - `android.useLegacyBridge: true` (em `capacitor.config.ts`) é exigência do plugin de GPS: sem isso as posições
   param de chegar à página depois de uns 5 minutos em segundo plano.
 - `scripts/app/android.mjs`: empacota o site, sincroniza e chama o Gradle. `scripts/app/icones.mjs` refaz os ícones.
+- Aviso de pedido pronto: `src/lib/avisos.ts` (o aplicativo registra o aparelho com `@capacitor/push-notifications`) →
+  função do banco `entrega_aparelho` e tabela `entregador_aparelhos` (fechada para o site) → `src/lib/pedidos.ts`
+  chama a função de servidor `avisar-entregador` quando o pedido fica pronto → ela confere o pedido e envia pelo
+  Firebase. O painel nunca trava nem mostra erro por causa do aviso.
 
 ## O que já foi comprovado
 

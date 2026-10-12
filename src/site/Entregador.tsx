@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, LocateFixed, LogOut, MapPinned, MessageCir
 import { Login, Moldura } from '../components/Login'
 import { AreaTexto, Botao, Carregando, Erro, Modal, Selo, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
+import { desligarAvisos, ligarAvisos } from '../lib/avisos'
 import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, soDigitos, telefone } from '../lib/formato'
 import { linkRota, linkWaze } from '../lib/geo'
 import { acompanharPosicao, noAplicativo } from '../lib/rastreio'
@@ -72,6 +73,23 @@ export default function Entregador() {
     return () => clearInterval(t)
   }, [usuarioId, carregar])
 
+  // no aplicativo, este aparelho passa a receber o aviso "pedido pronto" do motoboy que entrou
+  const ehEntregador = Boolean(painel)
+  useEffect(() => {
+    if (!ehEntregador) return
+    let parar = () => {}
+    let saiu = false
+    ligarAvisos(carregar).then((p) => (saiu ? p() : (parar = p)), () => {})
+    return () => {
+      saiu = true
+      parar()
+    }
+  }, [ehEntregador, carregar])
+  const sairDaConta = async () => {
+    await desligarAvisos()
+    await sair()
+  }
+
   // a posição só é enviada enquanto há entrega na rua
   const naRua = Boolean(painel?.entregas.some((e) => e.status === 'saiu_entrega'))
   useEffect(() => {
@@ -131,7 +149,7 @@ export default function Entregador() {
         <Erro>{erro}</Erro>
         <p className="mt-3 text-sm text-stone-600">Esta área é só para entregadores cadastrados. Peça para a administradora liberar seu acesso.</p>
         <div className="mt-5 flex gap-2">
-          <Botao variante="secundario" className="flex-1" onClick={sair}>
+          <Botao variante="secundario" className="flex-1" onClick={sairDaConta}>
             Sair
           </Botao>
           <Link to="/admin" className="inline-flex h-10 flex-1 items-center justify-center rounded-lg border border-stone-300 text-sm font-semibold">
@@ -167,7 +185,7 @@ export default function Entregador() {
           <button type="button" aria-label="Atualizar" onClick={carregar} className="grid size-11 place-items-center rounded-lg hover:bg-white/10">
             <RefreshCw className="size-5" />
           </button>
-          <button type="button" aria-label="Sair" onClick={sair} className="grid size-11 place-items-center rounded-lg hover:bg-white/10">
+          <button type="button" aria-label="Sair" onClick={sairDaConta} className="grid size-11 place-items-center rounded-lg hover:bg-white/10">
             <LogOut className="size-5" />
           </button>
         </div>

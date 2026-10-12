@@ -215,5 +215,10 @@ Regras, para um envio nunca apagar o outro:
    novo. Por isso as funções do banco que o motoboy usa (`minhas_entregas`, `entrega_acao`, `entrega_posicao`) não
    podem mudar de nome, de parâmetros nem perder campos da resposta — só ganhar campos novos. Mudou a tela
    `/entregador` ou `src/lib/rastreio.ts`? Diga no commit que o APK precisa ser gerado de novo.
-9. **Os scripts rodam nos dois sistemas.** Nada de `VAR=1 comando` no `package.json`, de caminho fixo do Chrome ou de
+9. **Migração nova leva a data e a hora de verdade no nome** (`AAAAMMDDHHMMSS_nome.sql`), não uma sequência
+   `000001`: assim as dos dois computadores nunca ganham o mesmo número. Antes de `npx supabase db push`, traga as
+   migrações do outro lado (`git fetch`; na `main`, se faltar uma da `app-android`:
+   `git checkout origin/app-android -- supabase/migrations/<arquivo>`) — o comando recusa quando o banco tem uma
+   migração que a pasta não tem.
+10. **Os scripts rodam nos dois sistemas.** Nada de `VAR=1 comando` no `package.json`, de caminho fixo do Chrome ou de
    programas que só existem no Mac (`unzip`, `open`…) fora de `scripts/video/`: use `scripts/plataforma.mjs`.

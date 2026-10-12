@@ -40,3 +40,6 @@ verify_jwt = false
 
 [functions.admin-usuarios]
 verify_jwt = false
+
+[functions.avisar-entregador]
+verify_jwt = false

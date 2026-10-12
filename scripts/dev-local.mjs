@@ -252,6 +252,15 @@ http.createServer(async (req, res) => {
       senhas.set(email, corpo.senha)
       return enviar(200, { id: u.id })
     }
+    if (url.pathname === '/functions/v1/avisar-entregador') {
+      // sem Firebase no ambiente local: confere quem pode chamar e conta os aparelhos que seriam avisados
+      const equipe = claims && (await db.query(`select 1 from perfis where id = $1 and ativo and papel <> 'motoboy'`, [claims.sub])).rows.length
+      if (!equipe) return enviar(403, { erro: 'Acesso negado' })
+      const { rows } = await db.query(
+        `select count(a.token)::int as avisados from pedidos p join entregador_aparelhos a on a.entregador_id = p.entregador_id
+         where p.id = $1 and p.tipo = 'entrega' and p.status = 'pronto'`, [corpo.pedido_id])
+      return enviar(200, { avisados: rows[0].avisados })
+    }
     if (url.pathname.startsWith('/functions/v1/')) return enviar(400, { erro: 'A emissão de nota fiscal não existe no ambiente local de teste.' })
 
     const executar = (fn) => db.transaction(async (tx) => {
