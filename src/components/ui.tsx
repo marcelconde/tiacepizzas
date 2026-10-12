@@ -8,6 +8,7 @@ import {
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
+  type Ref,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
@@ -76,7 +77,8 @@ export function Campo({ rotulo, dica, children, className }: { rotulo: string; d
   )
 }
 
-export const Entrada = ({ className, ...p }: InputHTMLAttributes<HTMLInputElement>) => (
+// aceita `ref` (para levar o cursor a um campo depois de um preenchimento automático)
+export const Entrada = ({ className, ...p }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) => (
   <input {...p} className={mesclar(`${baseCampo} h-10`, className)} />
 )
 
