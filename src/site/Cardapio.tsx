@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Tag } from 'lucide-react'
 import { Banners } from '../components/Banners'
 import { MontarItem, Preco } from '../components/MontarItem'
@@ -15,6 +16,10 @@ export default function Cardapio() {
   const aviso = useAviso()
   const [busca, setBusca] = useState('')
   const [montando, setMontando] = useState<Produto | null>(null)
+  // "/cardapio?promocoes=1" (banner ou botão da página inicial) mostra só o que está em promoção agora
+  const [params] = useSearchParams()
+  const soPromocoes = params.has('promocoes')
+  const { hash } = useLocation()
 
   const secoes = useMemo(() => {
     const termo = semAcento(busca.trim())
@@ -22,11 +27,21 @@ export default function Cardapio() {
       .map((c) => ({
         categoria: c,
         produtos: catalogo.produtos.filter(
-          (p) => p.categoria_id === c.id && (!termo || semAcento(`${p.nome} ${p.descricao ?? ''} ${p.ingredientes ?? ''}`).includes(termo)),
+          (p) =>
+            p.categoria_id === c.id &&
+            (!termo || semAcento(`${p.nome} ${p.descricao ?? ''} ${p.ingredientes ?? ''}`).includes(termo)) &&
+            (!soPromocoes || (p.disponivel && promocoesDo(catalogo, p.id).length > 0)),
         ),
       }))
       .filter((s) => s.produtos.length > 0)
-  }, [catalogo, busca])
+  }, [catalogo, busca, soPromocoes])
+
+  // quem chega por um link de categoria ("/cardapio#cat-…") já cai nela (depois de o site rolar a página para o topo)
+  useEffect(() => {
+    if (carregando || !hash.startsWith('#cat-')) return
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView(), 80)
+    return () => clearTimeout(t)
+  }, [hash, carregando])
 
   if (carregando) return <Carregando texto="Abrindo o cardápio…" />
   if (erro) return null
@@ -80,8 +95,19 @@ export default function Cardapio() {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-4xl font-bold">Cardápio</h1>
-          <p className="mt-1 text-stone-600">Toque em um item para montar do seu jeito.</p>
+          <h1 className="font-display text-4xl font-bold">{soPromocoes ? 'Promoções de hoje' : 'Cardápio'}</h1>
+          <p className="mt-1 text-stone-600">
+            {soPromocoes ? (
+              <>
+                Só os itens com promoção valendo agora.{' '}
+                <Link to="/cardapio" className="font-semibold text-molho-700 hover:underline">
+                  Ver o cardápio completo
+                </Link>
+              </>
+            ) : (
+              'Toque em um item para montar do seu jeito.'
+            )}
+          </p>
         </div>
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute top-3.5 left-3 size-4 text-stone-400" />
@@ -101,7 +127,13 @@ export default function Cardapio() {
 
       {secoes.length === 0 && (
         <div className="mt-8">
-          <Vazio titulo="Nada por aqui" texto={busca ? `Não encontramos “${busca}” no cardápio.` : 'O cardápio ainda não foi cadastrado.'} />
+          <Vazio titulo="Nada por aqui" texto={busca ? `Não encontramos “${busca}” ${soPromocoes ? 'entre as promoções' : 'no cardápio'}.` : soPromocoes ? 'Nenhuma promoção valendo agora.' : 'O cardápio ainda não foi cadastrado.'}>
+            {soPromocoes && (
+              <Link to="/cardapio" className="font-semibold text-molho-700 underline">
+                Ver o cardápio completo
+              </Link>
+            )}
+          </Vazio>
         </div>
       )}
 

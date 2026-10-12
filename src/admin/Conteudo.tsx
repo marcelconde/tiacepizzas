@@ -1,23 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowDown, ArrowUp, ExternalLink, ImagePlus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { ArrowDown, ArrowUp, ExternalLink, LayoutTemplate, Pencil, Plus, Shapes, Trash2 } from 'lucide-react'
 import { Banners as VerBanners } from '../components/Banners'
 import { Crud } from '../components/Crud'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Selo, Tabela, Vazio, cx, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { DIAS_SEMANA, brl, dataCurta } from '../lib/formato'
-import { enviarImagem } from '../lib/imagens'
+import { SECOES, blocosDaPaginaPadrao } from '../lib/blocos'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
-import type { Banner, Categoria, PosicaoBanner, Produto, Promocao, SecaoId, SiteConteudo, Tamanho, Tamanho3 } from '../lib/tipos'
+import type { Banner, Categoria, PosicaoBanner, Produto, Promocao, SiteConteudo, Tamanho, Tamanho3 } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
+import { EditorBlocos, EnviarImagem as Imagem, PreviaDaPagina } from './EditorBlocos'
 
-const SECOES: Record<SecaoId, { nome: string; descricao: string }> = {
-  hero: { nome: 'Capa', descricao: 'Título grande, frase de apresentação e botões' },
-  banners: { nome: 'Banners', descricao: 'Banners cadastrados na posição “meio da página inicial”' },
-  promocoes: { nome: 'Promoções', descricao: 'Produtos com promoção valendo agora' },
-  destaques: { nome: 'Destaques', descricao: 'Produtos marcados como “destaque na capa” no cardápio' },
-  como_funciona: { nome: 'Como funciona', descricao: 'Os três passos explicando o pedido' },
-}
 const TAMANHOS: { valor: Tamanho3; rotulo: string }[] = [
   { valor: 'pequeno', rotulo: 'Pequeno' },
   { valor: 'medio', rotulo: 'Médio' },
@@ -32,54 +26,37 @@ const POSICOES: Record<PosicaoBanner, string> = {
   cardapio_fim: 'Cardápio — no fim',
 }
 
-function Imagem({ url, onChange, rotulo }: { url: string | null; onChange: (url: string | null) => void; rotulo: string }) {
-  const aviso = useAviso()
-  const [enviando, setEnviando] = useState(false)
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      {url && <img src={url} alt="" className="h-16 max-w-40 rounded-lg border border-stone-200 object-contain" />}
-      <label className="inline-flex h-10 items-center gap-2 rounded-lg border border-stone-300 px-4 text-sm font-semibold hover:bg-stone-50">
-        <ImagePlus className="size-4" /> {enviando ? 'Enviando…' : url ? 'Trocar' : rotulo}
-        <input
-          type="file"
-          accept="image/*"
-          className="sr-only"
-          onChange={(e) => {
-            const arquivo = e.target.files?.[0]
-            if (!arquivo) return
-            setEnviando(true)
-            enviarImagem(arquivo)
-              .then(onChange, (erro) => aviso.erro(mensagemErro(erro)))
-              .finally(() => setEnviando(false))
-          }}
-        />
-      </label>
-      {url && (
-        <Botao variante="sutil" onClick={() => onChange(null)}>
-          Remover
-        </Botao>
-      )}
-    </div>
-  )
-}
-
 // ------------------------------------------------------------------ página inicial e tela do produto
 function Aparencia({ so }: { so: 'inicio' | 'produto' }) {
   const { conteudo, recarregar } = useLoja()
   const aviso = useAviso()
   const [c, setC] = useState<SiteConteudo | null>(conteudo)
   const [salvando, setSalvando] = useState(false)
+  // O painel busca os dados do site de novo a cada 2 minutos e quando a pessoa volta para a aba (depois de ir ao
+  // Canva, por exemplo). Isso não pode apagar o que está sendo editado: só acompanha o servidor quem não mexeu em nada.
+  const base = useRef(JSON.stringify(conteudo))
   useEffect(() => {
-    setC(conteudo)
+    const antes = base.current
+    base.current = JSON.stringify(conteudo)
+    setC((atual) => (atual == null || JSON.stringify(atual) === antes ? conteudo : { ...atual }))
   }, [conteudo])
+  const sujo = c != null && JSON.stringify(c) !== base.current
+  useEffect(() => {
+    if (!sujo) return
+    const avisar = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [sujo])
   if (!c) return <Carregando />
 
   async function salvar(e: FormEvent) {
     e.preventDefault()
+    if (c!.modo === 'blocos' && !c!.blocos?.some((b) => b.ativo)) return aviso.erro('A página inicial ficaria vazia. Adicione pelo menos um bloco ou volte para o modo padrão.')
     setSalvando(true)
     const { error } = await supabase.from('site_conteudo').update({ dados: c }).eq('id', 1)
     setSalvando(false)
     if (error) return aviso.erro(mensagemErro(error))
+    base.current = JSON.stringify(c)
     aviso.sucesso('Site atualizado')
     recarregar()
   }
@@ -124,89 +101,148 @@ function Aparencia({ so }: { so: 'inicio' | 'produto' }) {
     )
   }
 
+  const livre = c.modo === 'blocos'
+  const logoECapa = (
+    <Cartao className="space-y-4 p-5">
+      <h2 className="font-display text-lg font-semibold">Logo e capa</h2>
+      <Campo rotulo="Logo" dica="Em branco, o site usa a marca padrão da Tia Cê.">
+        <Imagem url={c.logo_url} onChange={(logo_url) => setC({ ...c, logo_url })} rotulo="Enviar logo" />
+      </Campo>
+      <Campo rotulo="Título da capa">
+        <Entrada required value={c.hero.titulo} onChange={(e) => setC({ ...c, hero: { ...c.hero, titulo: e.target.value } })} />
+      </Campo>
+      <Campo rotulo="Trecho do título em destaque" dica="Aparece em amarelo. Precisa estar escrito igual no título.">
+        <Entrada value={c.hero.destaque} onChange={(e) => setC({ ...c, hero: { ...c.hero, destaque: e.target.value } })} />
+      </Campo>
+      <Campo rotulo="Frase de apresentação">
+        <AreaTexto value={c.hero.subtitulo} onChange={(e) => setC({ ...c, hero: { ...c.hero, subtitulo: e.target.value } })} />
+      </Campo>
+      <Campo rotulo="Imagem da capa" dica="Em branco, aparece a pizza ilustrada.">
+        <Imagem url={c.hero.imagem_url} onChange={(imagem_url) => setC({ ...c, hero: { ...c.hero, imagem_url } })} rotulo="Enviar imagem" />
+      </Campo>
+    </Cartao>
+  )
+  const textos = (
+    <Cartao className={cx('space-y-4 p-5', !livre && 'xl:col-span-2')}>
+      <h2 className="font-display text-lg font-semibold">Textos</h2>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo rotulo="Título da seção de destaques">
+          <Entrada value={c.destaques_titulo} onChange={(e) => setC({ ...c, destaques_titulo: e.target.value })} />
+        </Campo>
+        <Campo rotulo="Título da seção de promoções">
+          <Entrada value={c.promocoes_titulo} onChange={(e) => setC({ ...c, promocoes_titulo: e.target.value })} />
+        </Campo>
+      </div>
+      <div className={cx('grid gap-4', !livre && 'md:grid-cols-3')}>
+        {c.passos.map((p, i) => (
+          <div key={i} className="space-y-2 rounded-lg bg-stone-50 p-3">
+            <Campo rotulo={`Passo ${i + 1} — título`}>
+              <Entrada value={p.titulo} onChange={(e) => setC({ ...c, passos: c.passos.map((x, j) => (j === i ? { ...x, titulo: e.target.value } : x)) })} />
+            </Campo>
+            <Campo rotulo="Texto">
+              <AreaTexto rows={3} value={p.texto} onChange={(e) => setC({ ...c, passos: c.passos.map((x, j) => (j === i ? { ...x, texto: e.target.value } : x)) })} />
+            </Campo>
+          </div>
+        ))}
+      </div>
+    </Cartao>
+  )
+
   return (
-    <form onSubmit={salvar} className="grid gap-4 xl:grid-cols-2">
-      <Cartao className="space-y-4 p-5">
-        <h2 className="font-display text-lg font-semibold">Logo e capa</h2>
-        <Campo rotulo="Logo" dica="Em branco, o site usa a marca padrão da Tia Cê.">
-          <Imagem url={c.logo_url} onChange={(logo_url) => setC({ ...c, logo_url })} rotulo="Enviar logo" />
-        </Campo>
-        <Campo rotulo="Título da capa">
-          <Entrada required value={c.hero.titulo} onChange={(e) => setC({ ...c, hero: { ...c.hero, titulo: e.target.value } })} />
-        </Campo>
-        <Campo rotulo="Trecho do título em destaque" dica="Aparece em amarelo. Precisa estar escrito igual no título.">
-          <Entrada value={c.hero.destaque} onChange={(e) => setC({ ...c, hero: { ...c.hero, destaque: e.target.value } })} />
-        </Campo>
-        <Campo rotulo="Frase de apresentação">
-          <AreaTexto value={c.hero.subtitulo} onChange={(e) => setC({ ...c, hero: { ...c.hero, subtitulo: e.target.value } })} />
-        </Campo>
-        <Campo rotulo="Imagem da capa" dica="Em branco, aparece a pizza ilustrada.">
-          <Imagem url={c.hero.imagem_url} onChange={(imagem_url) => setC({ ...c, hero: { ...c.hero, imagem_url } })} rotulo="Enviar imagem" />
-        </Campo>
-      </Cartao>
-
-      <Cartao className="space-y-3 p-5">
-        <h2 className="font-display text-lg font-semibold">Seções da página inicial</h2>
-        <p className="text-sm text-stone-600">Ligue, desligue, mude a ordem e o tamanho de cada parte.</p>
-        <ul className="space-y-2">
-          {c.secoes.map((s, i) => (
-            <li key={s.id} className={cx('flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 p-3', !s.ativo && 'bg-stone-50 text-stone-500')}>
-              <div className="flex flex-col">
-                <button type="button" aria-label={`Subir ${SECOES[s.id].nome}`} disabled={i === 0} onClick={() => mover(i, -1)} className="rounded p-0.5 hover:bg-stone-100 disabled:opacity-25">
-                  <ArrowUp className="size-4" />
-                </button>
-                <button type="button" aria-label={`Descer ${SECOES[s.id].nome}`} disabled={i === c.secoes.length - 1} onClick={() => mover(i, 1)} className="rounded p-0.5 hover:bg-stone-100 disabled:opacity-25">
-                  <ArrowDown className="size-4" />
-                </button>
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">{SECOES[s.id].nome}</p>
-                <p className="text-xs text-stone-500">{SECOES[s.id].descricao}</p>
-              </div>
-              <Selecao aria-label={`Tamanho de ${SECOES[s.id].nome}`} className="w-auto" value={s.tamanho} onChange={(e) => secao(i, { tamanho: e.target.value as Tamanho3 })}>
-                {TAMANHOS.map((t) => (
-                  <option key={t.valor} value={t.valor}>
-                    {t.rotulo}
-                  </option>
-                ))}
-              </Selecao>
-              <Alternar ativo={s.ativo} onChange={(v) => secao(i, { ativo: v })} rotulo={s.ativo ? 'Ligada' : 'Desligada'} />
-            </li>
-          ))}
-        </ul>
-      </Cartao>
-
-      <Cartao className="space-y-4 p-5 xl:col-span-2">
-        <h2 className="font-display text-lg font-semibold">Textos</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo rotulo="Título da seção de destaques">
-            <Entrada value={c.destaques_titulo} onChange={(e) => setC({ ...c, destaques_titulo: e.target.value })} />
-          </Campo>
-          <Campo rotulo="Título da seção de promoções">
-            <Entrada value={c.promocoes_titulo} onChange={(e) => setC({ ...c, promocoes_titulo: e.target.value })} />
-          </Campo>
+    <form onSubmit={salvar} className="space-y-4">
+      <Cartao className="p-5">
+        <h2 className="font-display text-lg font-semibold">Como montar a página inicial</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {(
+            [
+              ['padrao', 'Padrão', 'Seções prontas (capa, banners, promoções, destaques, como funciona). Você escolhe a ordem, o tamanho e o que aparece.', LayoutTemplate],
+              ['blocos', 'Livre, com blocos', 'Você monta do seu jeito: arrasta blocos de texto, imagens e banners (clicáveis ou não), botões e as seções prontas.', Shapes],
+            ] as const
+          ).map(([modo, nome, texto, Icone]) => {
+            const emUso = (c.modo ?? 'padrao') === modo
+            return (
+              <button
+                key={modo}
+                type="button"
+                aria-pressed={emUso}
+                onClick={() => !emUso && setC({ ...c, modo, blocos: modo === 'blocos' && !c.blocos?.length ? blocosDaPaginaPadrao(c) : c.blocos })}
+                className={cx('rounded-xl border-2 p-4 text-left', emUso ? 'border-molho-500 bg-molho-50' : 'border-stone-200 hover:border-stone-300')}
+              >
+                <span className="flex items-center gap-2 font-semibold">
+                  <Icone className="size-5" /> {nome} {emUso && <Selo className="bg-molho-600 text-white">Escolhido</Selo>}
+                </span>
+                <span className="mt-1 block text-sm text-stone-600">{texto}</span>
+              </button>
+            )
+          })}
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {c.passos.map((p, i) => (
-            <div key={i} className="space-y-2 rounded-lg bg-stone-50 p-3">
-              <Campo rotulo={`Passo ${i + 1} — título`}>
-                <Entrada value={p.titulo} onChange={(e) => setC({ ...c, passos: c.passos.map((x, j) => (j === i ? { ...x, titulo: e.target.value } : x)) })} />
-              </Campo>
-              <Campo rotulo="Texto">
-                <AreaTexto rows={3} value={p.texto} onChange={(e) => setC({ ...c, passos: c.passos.map((x, j) => (j === i ? { ...x, texto: e.target.value } : x)) })} />
-              </Campo>
+        <p className="mt-3 text-xs text-stone-500">Trocar de um modo para o outro não apaga nada: o que você montou em cada um fica guardado.</p>
+      </Cartao>
+
+      {livre ? (
+        <>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_27rem]">
+            <EditorBlocos conteudo={c} onChange={setC} />
+            <div className="xl:sticky xl:top-4 xl:self-start">
+              <PreviaDaPagina conteudo={c} />
             </div>
-          ))}
+          </div>
+          <details className="rounded-xl border border-stone-200 bg-white">
+            <summary className="cursor-pointer px-5 py-3 font-display text-lg font-semibold">Logo, capa e textos das seções prontas</summary>
+            <div className="grid gap-4 border-t border-stone-200 p-4 xl:grid-cols-2">
+              {logoECapa}
+              {textos}
+            </div>
+          </details>
+        </>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {logoECapa}
+          <Cartao className="space-y-3 p-5">
+            <h2 className="font-display text-lg font-semibold">Seções da página inicial</h2>
+            <p className="text-sm text-stone-600">Ligue, desligue, mude a ordem e o tamanho de cada parte.</p>
+            <ul className="space-y-2">
+              {c.secoes.map((s, i) => (
+                <li key={s.id} className={cx('flex flex-wrap items-center gap-3 rounded-lg border border-stone-200 p-3', !s.ativo && 'bg-stone-50 text-stone-500')}>
+                  <div className="flex flex-col">
+                    <button type="button" aria-label={`Subir ${SECOES[s.id].nome}`} disabled={i === 0} onClick={() => mover(i, -1)} className="rounded p-0.5 hover:bg-stone-100 disabled:opacity-25">
+                      <ArrowUp className="size-4" />
+                    </button>
+                    <button type="button" aria-label={`Descer ${SECOES[s.id].nome}`} disabled={i === c.secoes.length - 1} onClick={() => mover(i, 1)} className="rounded p-0.5 hover:bg-stone-100 disabled:opacity-25">
+                      <ArrowDown className="size-4" />
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">{SECOES[s.id].nome}</p>
+                    <p className="text-xs text-stone-500">{SECOES[s.id].descricao}</p>
+                  </div>
+                  <Selecao aria-label={`Tamanho de ${SECOES[s.id].nome}`} className="w-auto" value={s.tamanho} onChange={(e) => secao(i, { tamanho: e.target.value as Tamanho3 })}>
+                    {TAMANHOS.map((t) => (
+                      <option key={t.valor} value={t.valor}>
+                        {t.rotulo}
+                      </option>
+                    ))}
+                  </Selecao>
+                  <Alternar ativo={s.ativo} onChange={(v) => secao(i, { ativo: v })} rotulo={s.ativo ? 'Ligada' : 'Desligada'} />
+                </li>
+              ))}
+            </ul>
+          </Cartao>
+          {textos}
         </div>
-        <div className="flex items-center justify-end gap-3">
-          <a href="/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-molho-700 hover:underline">
-            Ver o site <ExternalLink className="size-3.5" />
-          </a>
-          <Botao type="submit" carregando={salvando}>
-            Salvar página inicial
-          </Botao>
-        </div>
-      </Cartao>
+      )}
+
+      <div className="sticky bottom-0 z-20 -mx-4 flex flex-wrap items-center justify-end gap-3 border-t border-stone-200 bg-white/95 px-4 py-3 backdrop-blur lg:-mx-6 lg:px-6">
+        <span role="status" className={cx('mr-auto text-sm font-semibold', sujo ? 'text-molho-700' : 'text-stone-500')}>
+          {sujo ? 'Há alterações que ainda não foram salvas.' : 'Tudo salvo.'}
+        </span>
+        <a href="/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-molho-700 hover:underline">
+          Ver o site <ExternalLink className="size-3.5" />
+        </a>
+        <Botao type="submit" carregando={salvando} disabled={!sujo}>
+          Salvar página inicial
+        </Botao>
+      </div>
     </form>
   )
 }

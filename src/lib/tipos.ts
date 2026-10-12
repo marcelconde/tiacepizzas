@@ -107,8 +107,54 @@ export interface Banner {
 
 export type SecaoId = 'hero' | 'banners' | 'promocoes' | 'destaques' | 'como_funciona'
 
+/** O que acontece quando o cliente toca em uma imagem ou em um botão da página inicial. */
+export interface Destino {
+  tipo: 'nenhum' | 'cardapio' | 'promocoes' | 'categoria' | 'produto' | 'acompanhar' | 'whatsapp' | 'instagram' | 'link'
+  /** Categoria ou produto escolhido, ou o endereço do link. */
+  valor?: string
+}
+
+/** Largura no computador; no celular os blocos ficam um embaixo do outro (imagens estreitas ficam duas por linha). */
+export type LarguraBloco = 'inteira' | 'metade' | 'terco'
+
+interface BlocoBase {
+  id: string
+  ativo: boolean
+  largura: LarguraBloco
+}
+export interface BlocoTexto extends BlocoBase {
+  tipo: 'texto'
+  titulo: string
+  texto: string
+  alinhamento: 'esquerda' | 'centro'
+  fundo: 'nenhum' | 'claro' | 'escuro' | 'destaque'
+}
+export interface BlocoImagem extends BlocoBase {
+  tipo: 'imagem'
+  imagem_url: string | null
+  descricao: string
+  destino: Destino
+}
+export interface BlocoBotao extends BlocoBase {
+  tipo: 'botao'
+  texto: string
+  destino: Destino
+  estilo: 'principal' | 'claro' | 'whatsapp'
+  alinhamento: 'esquerda' | 'centro'
+}
+/** Uma das seções prontas (capa, banners, promoções, destaques, como funciona) usada como bloco. */
+export interface BlocoSecao extends BlocoBase {
+  tipo: 'secao'
+  secao: SecaoId
+  tamanho: Tamanho3
+}
+export type Bloco = BlocoTexto | BlocoImagem | BlocoBotao | BlocoSecao
+
 export interface SiteConteudo {
   logo_url: string | null
+  /** "padrao" = seções prontas na ordem escolhida; "blocos" = página montada bloco a bloco. */
+  modo?: 'padrao' | 'blocos'
+  blocos?: Bloco[]
   hero: { titulo: string; destaque: string; subtitulo: string; imagem_url: string | null }
   secoes: { id: SecaoId; ativo: boolean; tamanho: Tamanho3 }[]
   destaques_titulo: string

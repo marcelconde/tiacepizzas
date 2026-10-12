@@ -344,6 +344,52 @@ await teste('cliente com conta: novo endereço, pedido e lista de pedidos', asyn
   await cel.close()
 })
 
+await teste('página inicial em blocos: imagem clicável, texto e botão, arrastar, prévia e site', async () => {
+  const blocos = () => pc.evaluate(() => [...document.querySelectorAll('ol > li[data-bloco]')].map((li) => li.querySelector('button[aria-expanded] .font-semibold').innerText.trim()))
+  const adicionar = async (tipo) => { await pc.evaluate((tipo) => [...[...document.querySelectorAll('p')].find((p) => p.innerText.includes('Adicionar no fim da página')).parentElement.querySelectorAll('button')].find((b) => b.innerText.trim() === tipo).click(), tipo); await dormir(500) }
+  await ir(pc, '/admin/conteudo', 1200)
+  await clicar(pc, 'Livre, com blocos', 'button')
+  assert.deepEqual(await blocos(), ['Capa', 'Banners cadastrados', 'Produtos em promoção', 'Destaques', 'Como funciona'], 'começa pela página padrão')
+  // imagem enviada do computador, que leva para as promoções
+  await adicionar('Imagem ou banner')
+  await (await pc.$('ol input[type=file]')).uploadFile(join(PROJ, 'public/icone-192.png')); await dormir(1500)
+  await preencher(pc, 'Ao tocar na imagem', 'promocoes'); await preencher(pc, 'O que a imagem mostra', 'Promoções do dia')
+  await adicionar('Texto'); await preencher(pc, 'Título (opcional)', 'Bloco de teste'); await preencher(pc, 'Texto', 'Linha escrita no teste')
+  await adicionar('Botão'); await preencher(pc, 'Texto do botão', 'Pedir agora')
+  // arrasta a imagem (6ª) para o topo da página
+  assert.equal((await blocos()).length, 8)
+  const alca = await pc.evaluate(() => { const h = document.querySelector('[aria-label="Arrastar Imagem ou banner"]'); h.scrollIntoView({ block: 'center', behavior: 'instant' }); const r = h.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })
+  await pc.mouse.move(alca.x, alca.y); await pc.mouse.down()
+  for (let y = alca.y; y > 20; y -= 25) { await pc.mouse.move(alca.x, y); await dormir(40) }
+  await pc.mouse.move(alca.x, 5); await dormir(900) // perto do topo a página rola sozinha
+  for (let i = 0; i < 12; i++) { await pc.mouse.move(alca.x + (i % 2), 5); await dormir(60) }
+  await pc.mouse.up(); await dormir(400)
+  assert.equal((await blocos())[0], 'Imagem ou banner', (await blocos()).join(' > '))
+  // a prévia mostra o rascunho antes de salvar
+  const previa = pc.frames().find((f) => f.url().includes('previa'))
+  assert.ok(previa && (await previa.evaluate(() => document.querySelector('main')?.innerText.includes('Bloco de teste'))), 'prévia com o que ainda não foi salvo')
+  assert.equal((await api('site_conteudo?select=dados'))[0].dados.modo ?? 'padrao', 'padrao', 'nada muda no site antes de salvar')
+  await clicar(pc, 'Salvar página inicial', 'button[type=submit]'); await dormir(1200)
+  const dados = (await api('site_conteudo?select=dados'))[0].dados
+  assert.deepEqual([dados.modo, dados.blocos.length, dados.blocos[0].tipo, dados.blocos[0].destino.tipo, Boolean(dados.blocos[0].imagem_url)], ['blocos', 8, 'imagem', 'promocoes', true])
+  // no site: a imagem vem primeiro, é clicável e abre só as promoções
+  const cel = await nova('celular'); await ir(cel, '/', 1200)
+  const tela = await cel.evaluate(() => ({
+    primeiro: document.querySelector('main a')?.getAttribute('href'), alt: document.querySelector('main a img')?.alt,
+    texto: document.querySelector('main').innerText.includes('Bloco de teste') && document.querySelector('main').innerText.includes('Linha escrita no teste'),
+    botao: [...document.querySelectorAll('main a')].find((a) => a.innerText.trim() === 'Pedir agora')?.getAttribute('href'),
+  }))
+  assert.deepEqual(tela, { primeiro: '/cardapio?promocoes=1', alt: 'Promoções do dia', texto: true, botao: '/cardapio' })
+  await cel.evaluate(() => document.querySelector('main a img').closest('a').click()); await dormir(1200)
+  const promo = await cel.evaluate(() => ({ url: location.pathname + location.search, titulo: document.querySelector('main h1').innerText, itens: document.querySelectorAll('main section button').length, selos: [...document.querySelectorAll('main section button')].filter((b) => /OFF|promo/i.test(b.innerText)).length }))
+  assert.ok(promo.url === '/cardapio?promocoes=1' && promo.titulo === 'Promoções de hoje' && promo.itens >= 1 && promo.itens === promo.selos, JSON.stringify(promo))
+  await cel.close()
+  // volta ao padrão: os blocos ficam guardados e o site volta a mostrar as seções prontas
+  await clicar(pc, 'Padrão', 'button'); await clicar(pc, 'Salvar página inicial', 'button[type=submit]'); await dormir(1200)
+  const volta = (await api('site_conteudo?select=dados'))[0].dados
+  assert.deepEqual([volta.modo, volta.blocos.length], ['padrao', 8])
+})
+
 await teste('entrega por distância: taxa pela faixa e bloqueio fora da área', async () => {
   await api('configuracoes?id=eq.1', { method: 'PATCH', body: JSON.stringify({ modo_entrega: 'distancia' }), headers: { prefer: 'return=minimal' } })
   const cli = await nova('desktop'); await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'main button'); await clicar(cli, 'Adicionar ·', 'button'); await ir(cli, '/checkout', 1200)

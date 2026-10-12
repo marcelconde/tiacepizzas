@@ -259,6 +259,61 @@ await foto(pc, 'painel-cardapio-adicionais')
 
 await ir(pc, '/admin/conteudo', 1200)
 await foto(pc, 'painel-site-inicio', { inteira: true })
+
+// modo livre: a página montada em blocos. Nada é salvo aqui: a demonstração continua no modo padrão.
+await clicar(pc, 'Livre, com blocos', 'button')
+const adicionarBloco = async (tipo) => {
+  await pc.evaluate((tipo) => [...[...document.querySelectorAll('p')].find((p) => p.innerText.includes('Adicionar no fim da página')).parentElement.querySelectorAll('button')].find((b) => b.innerText.trim() === tipo)?.click(), tipo)
+  await dormir(500)
+}
+await adicionarBloco('Imagem ou banner')
+// uma arte de exemplo, como se tivesse vindo do Canva
+await pc.evaluate(async () => {
+  const tela = document.createElement('canvas')
+  tela.width = 1600
+  tela.height = 560
+  const c = tela.getContext('2d')
+  const fundo = c.createLinearGradient(0, 0, 1600, 560)
+  fundo.addColorStop(0, '#a02a17')
+  fundo.addColorStop(1, '#f0b93f')
+  c.fillStyle = fundo
+  c.fillRect(0, 0, 1600, 560)
+  c.fillStyle = '#fdfaf5'
+  c.font = 'bold 120px Georgia'
+  c.fillText('Promoções do dia', 90, 270)
+  c.font = '52px Arial'
+  c.fillText('Toque e veja tudo o que está com desconto hoje', 90, 370)
+  const blob = await new Promise((r) => tela.toBlob(r, 'image/jpeg', 0.9))
+  const campo = document.querySelector('ol input[type=file]')
+  const dt = new DataTransfer()
+  dt.items.add(new File([blob], 'promocoes-do-dia.jpg', { type: 'image/jpeg' }))
+  campo.files = dt.files
+  campo.dispatchEvent(new Event('change', { bubbles: true }))
+})
+await dormir(2500)
+await preencher(pc, 'Ao tocar na imagem', 'promocoes')
+await preencher(pc, 'O que a imagem mostra', 'Promoções do dia: toque para ver os itens com desconto')
+for (let i = 0; i < 4; i++) {
+  await pc.click('[aria-label="Subir Imagem ou banner"]')
+  await dormir(150)
+}
+await pc.evaluate(() => document.querySelector('[aria-label="Arrastar Imagem ou banner"]').scrollIntoView({ block: 'start', behavior: 'instant' }))
+await pc.evaluate(() => window.scrollBy({ top: -150, behavior: 'instant' }))
+await dormir(1200)
+await foto(pc, 'painel-site-blocos-imagem')
+await adicionarBloco('Texto')
+await preencher(pc, 'Título (opcional)', 'Massa feita todo dia')
+await preencher(pc, 'Texto', 'Fermentação lenta e forno bem quente. Peça pelo site e acompanhe até a sua porta.')
+await preencher(pc, 'Fundo', 'destaque')
+await adicionarBloco('Botão')
+await preencher(pc, 'Texto do botão', 'Falar com a gente')
+await preencher(pc, 'Ao tocar no botão', 'whatsapp')
+await preencher(pc, 'Cor', 'whatsapp')
+await pc.evaluate(() => [...document.querySelectorAll('ol > li[data-bloco] button[aria-expanded="true"]')].forEach((b) => b.click()))
+await pc.evaluate(() => [...document.querySelectorAll('h2')].find((h) => h.innerText.includes('Blocos da página inicial')).scrollIntoView({ block: 'start', behavior: 'instant' }))
+await pc.evaluate(() => window.scrollBy({ top: -20, behavior: 'instant' }))
+await dormir(1500)
+await foto(pc, 'painel-site-blocos')
 await clicar(pc, 'Banners', '[role=tab]')
 await clicar(pc, 'Pré-visualizar', 'summary')
 await foto(pc, 'painel-site-banners')
