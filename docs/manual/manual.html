@@ -130,7 +130,7 @@
   <tr><td><b>Novo</b></td><td>Chega do site</td><td>Toca um aviso sonoro no painel.</td></tr>
   <tr><td><b>Confirmado</b></td><td>Atendimento clica em Aceitar</td><td>Dá baixa dos ingredientes no estoque, calcula a previsão de entrega, emite a nota e imprime (se ligados).</td></tr>
   <tr><td><b>Em preparo</b></td><td>Quem está no quadro de Pedidos clica em Iniciar preparo</td><td>—</td></tr>
-  <tr><td><b>Pronto</b></td><td>Quem está no quadro de Pedidos clica em Marcar pronto</td><td>—</td></tr>
+  <tr><td><b>Pronto</b></td><td>Quem está no quadro de Pedidos clica em Marcar pronto</td><td>Em entregas, avisa o motoboy escolhido no aplicativo Android dele (capítulo 12).</td></tr>
   <tr><td><b>Saiu para entrega</b></td><td>Atendimento ou motoboy</td><td>Mostra o mapa com a posição do motoboy ao cliente.</td></tr>
   <tr><td><b>Entregue</b></td><td>Atendimento ou motoboy</td><td>Marca como pago e lança a venda no caixa aberto.</td></tr>
 </table>
@@ -503,8 +503,12 @@
 <h2>Localização</h2>
 <p>Enquanto há uma entrega na rua, o celular envia a posição a cada 15 segundos e o cliente acompanha no mapa. Na primeira vez o navegador pede permissão; é preciso aceitar. A faixa verde “Enviando sua localização ao cliente” confirma que está funcionando, e a tela não apaga sozinha durante a entrega.</p>
 <div class="atencao"><p><b>No navegador, o envio pausa quando o motoboy abre o Waze ou o Google Maps</b> (ou bloqueia o celular), e volta quando ele retorna a esta tela. É um limite de qualquer site: só um aplicativo instalado consegue usar o GPS em segundo plano. O mapa do cliente some depois de 5 minutos sem atualização. A entrega em si não é afetada.</p></div>
-<h2>Aplicativo para Android (em testes)</h2>
-<p>Para o rastreio continuar com o Waze aberto, como nos aplicativos de corrida, existe o aplicativo <b>Tia Cê Entregas</b> para Android: é esta mesma tela, instalada no celular, com um aviso fixo nas notificações enquanto a localização é enviada. Ele é instalado por um arquivo (não está na loja de aplicativos) e ainda precisa ser gerado e testado em um celular; o passo a passo está no arquivo <code>docs/aplicativo-android.md</code> do projeto. No iPhone, por enquanto, o entregador usa a versão do navegador.</p>
+<h2>Aplicativo para Android</h2>
+<p>Existe o aplicativo <b>Tia Cê Entregas</b> para Android: é esta mesma tela, instalada no celular. Ele é instalado por um arquivo (não está na loja de aplicativos); o passo a passo está no arquivo <code>docs/aplicativo-android.md</code> do projeto. No iPhone, por enquanto, o entregador usa a versão do navegador. O aplicativo faz duas coisas que o navegador não consegue:</p>
+<ul>
+  <li><b>Aviso de pedido pronto.</b> Quando a pizzaria marca um pedido de entrega como <b>Pronto</b> (ou escolhe o motoboy de um pedido que já está pronto), o celular dele toca e mostra “Pedido #123 está pronto — Pode retirar na pizzaria.”, mesmo com o aplicativo fechado. Só recebe quem entrou no aplicativo naquele celular e aceitou as notificações.</li>
+  <li><b>Rastreio com o Waze aberto</b>, como nos aplicativos de corrida, com um aviso fixo nas notificações enquanto a localização é enviada. Esta parte ainda está em testes.</li>
+</ul>
 
 <!-- ============================================================ -->
 <h1 id="c13"><span class="n">13</span>Financeiro</h1>
