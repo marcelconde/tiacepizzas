@@ -452,6 +452,36 @@ await teste('entrega por distância: CEP preenche e troca o endereço, taxa pelo
   await cli.close()
 })
 
+await teste('novo pedido: busca o cliente pelo nome ou pelo telefone, puxa o endereço, e o CEP preenche a rua', async () => {
+  const at = await nova('desktop'); await entrar(at, '/admin', 'ana@teste.local')
+  await at.setRequestInterception(true)
+  at.on('request', (r) => {
+    if (!r.url().includes('viacep.com.br')) return r.continue()
+    r.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(r.url().includes('01310100') ? { logradouro: 'Avenida Paulista', bairro: 'Bela Vista', localidade: 'São Paulo', uf: 'SP' } : { erro: true }) })
+  })
+  // duas clientes da demonstração que já receberam entrega
+  const ends = await api('enderecos?select=cliente_id,logradouro,numero,criado_em&order=criado_em.desc&limit=400')
+  const ids = [...new Set(ends.map((e) => e.cliente_id))]
+  const [a, b] = await Promise.all(ids.slice(0, 2).map(async (id) => ({ ...(await api('clientes?select=id,nome,telefone&id=eq.' + id))[0], endereco: ends.find((e) => e.cliente_id === id) })))
+  const campo = (rotulo) => at.evaluate((rotulo) => (document.querySelector('form [aria-label="' + rotulo + '"]') ?? [...document.querySelectorAll('form label')].find((l) => l.innerText.trim().startsWith(rotulo))?.querySelector('input'))?.value, rotulo)
+  await ir(at, '/admin/pdv', 1500); await clicar(at, 'Entrega', 'form button')
+  // pelo nome, sem acento e em maiúsculas
+  await preencher(at, 'Nome', a.nome.slice(0, 6).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()); await dormir(400)
+  await clicar(at, a.nome, '[role=option]'); await dormir(1200)
+  assert.deepEqual([await campo('Nome'), (await campo('Telefone')).replace(/\D/g, ''), await campo('Rua'), await campo('Número')], [a.nome, a.telefone, a.endereco.logradouro, a.endereco.numero])
+  assert.ok(await at.evaluate(() => document.body.innerText.includes('Cliente já cadastrado')))
+  // pelo fim do telefone: troca de cliente e de endereço
+  await preencher(at, 'Telefone', b.telefone.slice(-7)); await dormir(400)
+  await clicar(at, b.nome, '[role=option]'); await dormir(1200)
+  assert.deepEqual([await campo('Nome'), (await campo('Telefone')).replace(/\D/g, ''), await campo('Rua'), await campo('Número')], [b.nome, b.telefone, b.endereco.logradouro, b.endereco.numero])
+  // endereço novo: o CEP preenche a rua, limpa o número antigo e leva o cursor para ele
+  await preencher(at, 'CEP', '01310100'); await dormir(700)
+  assert.deepEqual([await campo('Rua'), await campo('Número'), await at.evaluate(() => document.activeElement?.getAttribute('aria-label'))], ['Avenida Paulista', '', 'Número'])
+  await preencher(at, 'CEP', '99999999'); await dormir(500)
+  assert.ok(await at.evaluate(() => document.body.innerText.includes('CEP não encontrado')))
+  await at.close()
+})
+
 await teste('ponto da loja: colar do Google Maps, conferir no mapa e só então salvar', async () => {
   const lido = async () => { const c = (await api('configuracoes?select=loja_lat,loja_lng&id=eq.1'))[0]; return [Number(c.loja_lat), Number(c.loja_lng)] }
   const antes = await lido()
