@@ -1,4 +1,4 @@
-// Gera os ícones do aplicativo Android do entregador a partir de public/icone-512.png.
+// Gera os ícones do aplicativo Android do entregador a partir da logo (public/logo.png, feita por scripts/marca.mjs).
 // Uso: node scripts/app/icones.mjs   (só é preciso rodar de novo se o ícone mudar)
 import puppeteer from 'puppeteer-core'
 import { readFileSync } from 'node:fs'
@@ -8,7 +8,7 @@ import { CHROME } from '../plataforma.mjs'
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const res = join(raiz, 'android/app/src/main/res')
-const pizza = 'data:image/png;base64,' + readFileSync(join(raiz, 'public/icone-512.png')).toString('base64')
+const pizza = 'data:image/png;base64,' + readFileSync(join(raiz, 'public/logo.png')).toString('base64')
 const FUNDO = '#261912'
 const densidades = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 }
 

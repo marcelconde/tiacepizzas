@@ -1,16 +1,6 @@
-export function Marca({ className = 'size-9' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} aria-hidden="true">
-      <circle cx="32" cy="32" r="30" fill="#dcb377" />
-      <circle cx="32" cy="32" r="25" fill="#c0351d" />
-      <circle cx="32" cy="32" r="22" fill="#f0b93f" />
-      <circle cx="23" cy="24" r="5" fill="#a02a17" />
-      <circle cx="41" cy="27" r="5" fill="#a02a17" />
-      <circle cx="29" cy="42" r="5" fill="#a02a17" />
-      <circle cx="44" cy="42" r="3" fill="#3f7a3a" />
-      <circle cx="33" cy="31" r="2.5" fill="#3f7a3a" />
-    </svg>
-  )
+/** A logo redonda da pizzaria (public/logo.png, gerada por scripts/marca.mjs). */
+export function Marca({ className = 'size-11' }: { className?: string }) {
+  return <img src="/logo.png" alt="" aria-hidden="true" className={`${className} shrink-0 rounded-full`} />
 }
 
 export function Logo({ claro = false, url }: { claro?: boolean; url?: string | null }) {
