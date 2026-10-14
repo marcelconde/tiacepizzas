@@ -37,6 +37,7 @@ interface Props<T> {
   acoes?: (linha: T, recarregar: () => void) => ReactNode
   topo?: ReactNode
   preparar?: (valores: Record<string, unknown>) => Record<string, unknown>
+  aoEditar?: (linha: T) => Record<string, unknown> // o inverso de preparar: do registro para os campos do formulário
   deps?: unknown[]
 }
 
@@ -44,7 +45,7 @@ type Linha = { id: string } & Record<string, unknown>
 
 /** Listagem com criar, editar e excluir para os cadastros simples do painel. */
 export function Crud<T extends { id: string }>({
-  tabela, nome, feminino, colunas, campos, ordem = 'nome', crescente = true, select = '*', filtrar, texto, aoMudar, acoes, topo, preparar, deps = [],
+  tabela, nome, feminino, colunas, campos, ordem = 'nome', crescente = true, select = '*', filtrar, texto, aoMudar, acoes, topo, preparar, aoEditar, deps = [],
 }: Props<T>) {
   const aviso = useAviso()
   const g = feminino
@@ -124,7 +125,7 @@ export function Crud<T extends { id: string }>({
               ))}
               <td className="text-right whitespace-nowrap">
                 {acoes?.(l, recarregar)}
-                <Botao variante="sutil" tamanho="p" aria-label="Editar" onClick={() => setEditando({ ...(l as unknown as Linha) })}>
+                <Botao variante="sutil" tamanho="p" aria-label="Editar" onClick={() => setEditando({ ...(l as unknown as Linha), ...aoEditar?.(l) })}>
                   <Pencil className="size-4" />
                 </Botao>
                 <Botao variante="sutil" tamanho="p" aria-label="Excluir" onClick={() => excluir(l as unknown as Linha)}>

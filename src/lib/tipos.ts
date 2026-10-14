@@ -230,6 +230,8 @@ export interface Adicional {
   nome: string
   tipo: 'borda' | 'extra'
   preco: number
+  /** Preço próprio por tamanho de pizza ({ id do tamanho: preço }); tamanho sem preço próprio usa `preco`. */
+  precos_tamanho: Record<string, number> | null
   ordem: number
   ativo: boolean
 }

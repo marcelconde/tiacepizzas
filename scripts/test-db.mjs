@@ -224,6 +224,25 @@ await teste('preço é calculado no servidor (meio a meio = maior preço + borda
   assert.equal(itens[0].nome, '1/2 Mussarela + 1/2 Quatro Queijos (Grande)')
 })
 
+await teste('borda com preço por tamanho: vale o do tamanho da pizza; sem preço próprio, o padrão', async () => {
+  const media = await id('tamanhos', 'Média')
+  // padrão 10; na grande custa 14. O navegador não manda preço: quem decide é o servidor
+  await db.query(`update adicionais set precos_tamanho = $2::jsonb where id = $1`, [bordaCatupiry, JSON.stringify({ [grande]: 14 })])
+  const pizza = (tamanho) => criar({ ...pedidoSite, chave: undefined, tipo: 'retirada', endereco: null, itens: [{ produto_id: mussarela, tamanho_id: tamanho, adicionais: [bordaCatupiry], quantidade: 2 }] })
+  let g, m
+  await como('anon', null, async () => {
+    g = await pizza(grande)
+    m = await pizza(media)
+  })
+  // Mussarela G 58 + borda 14 = 72 (x2); Mussarela M 48 + borda 10 = 58 (x2)
+  assert.deepEqual([Number(g.total), Number(m.total)], [144, 116])
+  const item = await um(`select adicionais from pedido_itens where pedido_id = $1`, [g.id])
+  assert.equal(Number(item.adicionais[0].preco), 14)
+  await falha(db.query(`update adicionais set precos_tamanho = '[]'::jsonb where id = $1`, [bordaCatupiry]), 'check')
+  await db.query(`update adicionais set precos_tamanho = '{}'::jsonb where id = $1`, [bordaCatupiry])
+  await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where id in ($1, $2)`, [g.id, m.id])
+})
+
 await teste('recusa: loja fechada, sabores demais, bairro inválido, produto indisponível', async () => {
   await como('anon', null, async () => {
     await falha(criar({ ...pedidoSite, itens: [{ produto_id: mussarela, tamanho_id: broto, sabores: [mussarela, calabresa] }] }), 'aceita até 1 sabor')

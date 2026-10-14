@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Tag } from 'lucide-react'
 import { brl } from '../lib/formato'
-import { nomeItem, precoComPromocao, precoNoTamanho, precoPizza, promocoesDo, useLoja } from '../lib/loja'
+import { nomeItem, precoAdicional, precoComPromocao, precoNoTamanho, precoPizza, promocoesDo, useLoja } from '../lib/loja'
 import type { ItemCarrinho, Produto } from '../lib/tipos'
 import { AreaTexto, Botao, Contador, Modal, Selecao, cx } from './ui'
 
@@ -85,7 +85,8 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
   const precoBase = pizza
     ? precoPizza(catalogo, saboresEscolhidos, tamanhoId, config?.regra_preco_sabores ?? 'maior')
     : precoComPromocao(catalogo, produto.id, null, Number(produto.preco ?? 0))
-  const precoUnitario = precoBase + adicionais.reduce((s, a) => s + Number(a.preco), 0)
+  // borda e adicionais valem o preço do tamanho escolhido (o servidor refaz esta conta ao receber o pedido)
+  const precoUnitario = precoBase + adicionais.reduce((s, a) => s + precoAdicional(a, tamanhoId), 0)
   const completo = !pizza || (tamanho != null && saboresEscolhidos.length === Math.min(sabores.length, maxSabores) && saboresEscolhidos.length > 0)
   const n = produto.nutricional
   const temNutricional = exibir.nutricional && n && Object.values(n).some((v) => v !== '' && v != null)
@@ -197,7 +198,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
                 {bordas.map((b) => (
                   <button key={b.id} type="button" className={opcao(bordaId === b.id)} onClick={() => setBordaId(b.id)}>
                     {b.nome.replace(/^Borda (de )?/i, '').replace(/^./, (c) => c.toUpperCase())}
-                    <span className="tabular-nums">+ {brl(b.preco)}</span>
+                    <span className="tabular-nums">+ {brl(precoAdicional(b, tamanhoId))}</span>
                   </button>
                 ))}
               </div>
@@ -213,7 +214,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
                   return (
                     <button key={a.id} type="button" aria-pressed={ativo} className={opcao(ativo)} onClick={() => setExtras((e) => (ativo ? e.filter((x) => x !== a.id) : [...e, a.id]))}>
                       {a.nome}
-                      <span className="tabular-nums">+ {brl(a.preco)}</span>
+                      <span className="tabular-nums">+ {brl(precoAdicional(a, tamanhoId))}</span>
                     </button>
                   )
                 })}

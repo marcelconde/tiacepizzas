@@ -137,6 +137,12 @@ export const precoNoTamanho = (p: Produto, tamanhoId: string) => {
   return v == null ? null : Number(v)
 }
 
+/** Preço da borda ou do adicional no tamanho da pizza: o preço próprio do tamanho ou, sem ele, o padrão. */
+export const precoAdicional = (a: Adicional, tamanhoId?: string | null) => {
+  const proprio = tamanhoId ? a.precos_tamanho?.[tamanhoId] : null
+  return Number(proprio ?? a.preco)
+}
+
 /** Promoções vigentes que valem para o produto (e, se informado, para o tamanho). */
 export const promocoesDo = (c: Catalogo, produtoId: string, tamanhoId?: string | null) =>
   c.promocoes.filter((pr) => pr.produtos.includes(produtoId) && (tamanhoId === undefined || !pr.tamanho_id || pr.tamanho_id === tamanhoId))

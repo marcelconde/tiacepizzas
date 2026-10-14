@@ -119,6 +119,25 @@ await teste('editar produto: preço por tamanho e ingredientes (com registro na 
   assert.deepEqual([aud[0].descricao, aud[0].depois.preco, aud[0].usuario_nome], ['Marguerita (Grande)', 61, 'Tia Cê'])
 })
 
+await teste('borda com preço por tamanho: o painel grava e o site mostra o preço do tamanho escolhido', async () => {
+  const filtro = `nome=eq.${encodeURIComponent('Borda de catupiry')}`
+  await ir(pc, '/admin/cardapio', 1200); await clicar(pc, 'Bordas e adicionais', '[role=tab]'); await dormir(600)
+  await pc.evaluate(() => [...document.querySelectorAll('tr')].find((l) => l.innerText.includes('Borda de catupiry')).querySelector('[aria-label=Editar]').click()); await dormir(700)
+  await preencher(pc, 'Preço na pizza Grande', '14'); await clicar(pc, 'Salvar', '[role=dialog] button[type=submit]'); await dormir(1200)
+  const borda = (await api(`adicionais?select=preco,precos_tamanho&${filtro}`))[0], grande = (await api('tamanhos?select=id&nome=eq.Grande'))[0].id
+  assert.deepEqual([Number(borda.preco), borda.precos_tamanho], [10, { [grande]: 14 }])
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('tr')].some((l) => /Grande R\$\s14,00 · outros tamanhos R\$\s10,00/.test(l.innerText))), 'lista de adicionais mostra os dois preços')
+  // no site, a mesma borda custa 14 na grande e o preço padrão (10) na média; o total acompanha
+  const cli = await nova('celular'); await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'button')
+  const texto = (inicio) => cli.evaluate((inicio) => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.innerText.trim().startsWith(inicio)).innerText, inicio)
+  const valor = (t) => Number(t.match(/R\$\s*([\d.,]+)\s*$/)[1].replace('.', '').replace(',', '.'))
+  await clicar(cli, 'Grande', '[role=dialog] button'); assert.match(await texto('Catupiry'), /14,00/)
+  const semBorda = valor(await texto('Adicionar ·')); await clicar(cli, 'Catupiry', '[role=dialog] button'); assert.equal(valor(await texto('Adicionar ·')), semBorda + 14)
+  await clicar(cli, 'Média', '[role=dialog] button'); assert.match(await texto('Catupiry'), /10,00/)
+  await cli.close()
+  await api(`adicionais?${filtro}`, { method: 'PATCH', body: JSON.stringify({ precos_tamanho: {} }), headers: { prefer: 'return=minimal' } })
+})
+
 await teste('criar promoção e ver o preço cair no site', async () => {
   await ir(pc, '/admin/conteudo', 1000); await clicar(pc, 'Promoções', '[role=tab]'); await clicar(pc, 'Nova promoção', 'button')
   await preencher(pc, 'Nome da promoção', 'Quarta da Mussarela'); await preencher(pc, 'Desconto (%)', '20')

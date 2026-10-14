@@ -24,7 +24,7 @@ const TABELAS: Record<string, string> = {
   configuracoes: 'Configurações', config_fiscal: 'Configuração fiscal', perfis: 'Usuário', permissoes: 'Permissão',
 }
 const CAMPOS: Record<string, string> = {
-  preco: 'Preço', nome: 'Nome', descricao: 'Descrição', disponivel: 'Disponível', ativo: 'Ativo', destaque: 'Destaque', status: 'Situação', pago: 'Pago',
+  preco: 'Preço', precos_tamanho: 'Preço por tamanho', nome: 'Nome', descricao: 'Descrição', disponivel: 'Disponível', ativo: 'Ativo', destaque: 'Destaque', status: 'Situação', pago: 'Pago',
   taxa_entrega: 'Taxa de entrega', taxa: 'Taxa', ate_km: 'Até (km)', quantidade: 'Quantidade', estoque_minimo: 'Estoque mínimo', valor: 'Valor', papel: 'Função',
   forma_pagamento: 'Forma de pagamento', motivo_cancelamento: 'Motivo do cancelamento', motivo_reembolso: 'Motivo do reembolso', problema_entrega: 'Problema na entrega',
   entregador_id: 'Entregador', pedido_minimo: 'Pedido mínimo', tempo_preparo_min: 'Tempo de preparo', tempo_entrega_min: 'Tempo de entrega', metas: 'Metas',

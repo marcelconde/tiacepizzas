@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ImagePlus, Pencil, Plus, Scale, Star, Trash2 } from 'lucide-react'
-import { Crud } from '../components/Crud'
+import { Crud, type CampoCrud } from '../components/Crud'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Vazio, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { brl } from '../lib/formato'
@@ -395,8 +395,12 @@ const simNao = (v: boolean) => (v ? 'Sim' : 'Não')
 
 export default function CardapioAdmin() {
   const [aba, setAba] = useState<'produtos' | 'categorias' | 'tamanhos' | 'adicionais'>('produtos')
-  const { recarregar } = useLoja()
+  const { recarregar, catalogo } = useLoja()
   const [ficha, setFicha] = useState<{ adicional_id: string; nome: string; usaTamanhos: boolean } | null>(null)
+  // borda e adicional podem ter um preço próprio para cada tamanho de pizza
+  const tamanhos = catalogo.tamanhos
+  const campoTamanho = (id: string) => `preco_tamanho_${id}`
+  const precosProprios = (a: Adicional) => tamanhos.filter((t) => a.precos_tamanho?.[t.id] != null)
 
   return (
     <Pagina titulo="Cardápio" descricao="Produtos, preços e o que está disponível hoje.">
@@ -471,16 +475,38 @@ export default function CardapioAdmin() {
             colunas={[
               { rotulo: 'Nome', render: (a) => <b>{a.nome}</b> },
               { rotulo: 'Tipo', render: (a) => (a.tipo === 'borda' ? 'Borda recheada' : 'Adicional') },
-              { rotulo: 'Preço', render: (a) => brl(a.preco) },
+              {
+                rotulo: 'Preço',
+                render: (a) => {
+                  const proprios = precosProprios(a)
+                  if (!proprios.length) return brl(a.preco)
+                  return [
+                    ...proprios.map((t) => `${t.nome} ${brl(a.precos_tamanho![t.id])}`),
+                    ...(proprios.length < tamanhos.length ? [`outros tamanhos ${brl(a.preco)}`] : []),
+                  ].join(' · ')
+                },
+              },
               { rotulo: 'Ativo', render: (a) => simNao(a.ativo) },
             ]}
             campos={[
               { nome: 'nome', rotulo: 'Nome', obrigatorio: true },
               { nome: 'tipo', rotulo: 'Tipo', tipo: 'selecao', obrigatorio: true, padrao: 'extra', opcoes: [{ valor: 'borda', rotulo: 'Borda recheada' }, { valor: 'extra', rotulo: 'Adicional' }] },
-              { nome: 'preco', rotulo: 'Preço (R$)', tipo: 'moeda', obrigatorio: true },
+              { nome: 'preco', rotulo: 'Preço (R$)', tipo: 'moeda', obrigatorio: true, dica: tamanhos.length ? 'Vale para os tamanhos que ficarem em branco abaixo.' : undefined },
               { nome: 'ordem', rotulo: 'Ordem', tipo: 'numero', padrao: 0 },
+              ...tamanhos.map((t): CampoCrud => ({ nome: campoTamanho(t.id), rotulo: `Preço na pizza ${t.nome} (R$)`, tipo: 'moeda', dica: 'Em branco, vale o preço acima.' })),
               { nome: 'ativo', rotulo: 'Ativo', tipo: 'booleano' },
             ]}
+            // os campos "Preço na pizza …" são guardados juntos, em precos_tamanho
+            preparar={(valores) => {
+              const precos_tamanho: Record<string, number> = {}
+              for (const t of tamanhos) {
+                const v = valores[campoTamanho(t.id)]
+                if (v != null) precos_tamanho[t.id] = Number(v)
+                delete valores[campoTamanho(t.id)]
+              }
+              return { ...valores, precos_tamanho }
+            }}
+            aoEditar={(a) => Object.fromEntries(tamanhos.map((t) => [campoTamanho(t.id), a.precos_tamanho?.[t.id] ?? '']))}
             acoes={(a) => (
               <Botao variante="sutil" tamanho="p" title="Ficha técnica" aria-label="Ficha técnica" onClick={() => setFicha({ adicional_id: a.id, nome: a.nome, usaTamanhos: true })}>
                 <Scale className="size-4" />
