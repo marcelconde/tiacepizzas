@@ -253,6 +253,44 @@ await teste('borda com preço por tamanho: vale o do tamanho da pizza; sem preç
   await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where cliente_telefone = '11955550001'`)
 })
 
+await teste('combo: vários produtos por um preço só, com o desconto calculado no servidor', async () => {
+  const media = await id('tamanhos', 'Média')
+  // preço de cada pizza comprada solta, já com as promoções comuns do cardápio de exemplo
+  const preco = async (produto, tamanho) => Number((await um(`select preco_com_promocao(produto_id, tamanho_id, preco) as preco from produto_precos where produto_id = $1 and tamanho_id = $2`, [produto, tamanho])).preco)
+  const cheio = (await preco(calabresa, grande)) + (await preco(mussarela, media))
+  const refri = Number((await um(`select preco from produtos where id = $1`, [coca])).preco)
+  // Calabresa grande + Mussarela média por 20 a menos que separadas
+  const combo = (await um(`insert into promocoes (nome, tipo, valor, selo) values ('Combo de Quinta', 'combo', $1, 'Combo') returning id`, [cheio - 20])).id
+  await db.query(`insert into promocao_itens (promocao_id, produto_id, tamanho_id) values ($1, $2, $3), ($1, $4, $5)`, [combo, calabresa, grande, mussarela, media])
+  const G = { produto_id: calabresa, tamanho_id: grande, quantidade: 1 }, M = { produto_id: mussarela, tamanho_id: media, quantidade: 1 }
+  // telefone próprio e cancelamento a cada pedido: o limite de pedidos pendentes não pode pesar aqui nem nos outros testes
+  const pedir = async (itens) => {
+    let r
+    await como('anon', null, async () => { r = await criar({ ...pedidoSite, chave: undefined, tipo: 'retirada', endereco: null, cliente: { nome: 'Teste Combo', telefone: '11955550002' }, itens }) })
+    const p = await um(`select total, desconto, combo from pedidos where id = $1`, [r.id])
+    await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where id = $1`, [r.id])
+    return [Number(p.total), Number(p.desconto), p.combo]
+  }
+  assert.deepEqual(await pedir([G, M, { produto_id: coca, quantidade: 1 }]), [cheio - 20 + refri, 20, 'Combo de Quinta'])
+  assert.deepEqual(await pedir([G]), [await preco(calabresa, grande), 0, null], 'falta um item: sem desconto')
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { ...M, quantidade: 2 }, M]), [2 * (cheio - 20) + (await preco(mussarela, media)), 40, '2x Combo de Quinta'], 'o combo vale mais de uma vez')
+  assert.deepEqual((await pedir([{ ...G, sabores: [calabresa, mussarela] }, M])).slice(1), [0, null], 'meio a meio não entra no combo')
+  assert.deepEqual(await pedir([{ ...G, adicionais: [bordaCatupiry] }, M]), [cheio - 20 + 10, 20, 'Combo de Quinta'], 'borda é cobrada à parte')
+  // o site recebe os itens do combo que está valendo
+  await como('anon', null, async () => {
+    const vigente = (await um(`select promocoes_vigentes() as r`)).r.find((x) => x.id === combo)
+    assert.deepEqual([vigente.tipo, vigente.itens.length, vigente.produtos.length], ['combo', 2, 0])
+  })
+  // fora do dia da semana não vale; combo mais caro que os itens soltos também não
+  await db.query(`update promocoes set dias_semana = array[(extract(dow from now() at time zone fuso())::int + 1) % 7] where id = $1`, [combo])
+  assert.deepEqual((await pedir([G, M])).slice(1), [0, null])
+  await db.query(`update promocoes set dias_semana = null, valor = $2 where id = $1`, [combo, cheio + 5])
+  assert.deepEqual((await pedir([G, M])).slice(1), [0, null])
+  await falha(db.query(`insert into promocao_itens (promocao_id, produto_id, quantidade) values ($1, $2, 0)`, [combo, coca]), 'check')
+  await db.query(`delete from promocoes where id = $1`, [combo])
+  assert.equal((await q(`select 1 from promocao_itens where promocao_id = $1`, [combo])).length, 0)
+})
+
 await teste('recusa: loja fechada, sabores demais, bairro inválido, produto indisponível', async () => {
   await como('anon', null, async () => {
     await falha(criar({ ...pedidoSite, itens: [{ produto_id: mussarela, tamanho_id: broto, sabores: [mussarela, calabresa] }] }), 'aceita até 1 sabor')

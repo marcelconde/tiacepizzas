@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { isoDia } from './formato'
 import { configurado, mensagemErro, supabase } from './supabase'
-import type { Adicional, Bairro, Banner, Categoria, Configuracoes, FaixaEntrega, PosicaoBanner, Produto, Promocao, SiteConteudo, Tamanho } from './tipos'
+import type { Adicional, Bairro, Banner, Categoria, Configuracoes, FaixaEntrega, ItemCarrinho, PosicaoBanner, Produto, Promocao, SiteConteudo, Tamanho } from './tipos'
 
 export interface Catalogo {
   categorias: Categoria[]
@@ -155,6 +155,65 @@ export function precoComPromocao(c: Catalogo, produtoId: string, tamanhoId: stri
     if (v < melhor) melhor = v
   }
   return melhor
+}
+
+/** Combos que estão valendo agora: vários produtos por um preço só. */
+export const combosVigentes = (c: Catalogo) => c.promocoes.filter((pr) => pr.tipo === 'combo' && (pr.itens?.length ?? 0) > 0)
+
+const chaveCombo = (produtoId: string, tamanhoId: string | null) => `${produtoId}|${tamanhoId ?? ''}`
+
+/** Quanto os itens do combo custam comprados soltos (com as promoções comuns); null se algum não está à venda. */
+export function precoCheioDoCombo(c: Catalogo, combo: Promocao) {
+  let soma = 0
+  for (const i of combo.itens ?? []) {
+    const p = c.produtos.find((x) => x.id === i.produto_id && x.disponivel)
+    const tabela = !p ? null : i.tamanho_id ? precoNoTamanho(p, i.tamanho_id) : p.preco != null ? Number(p.preco) : null
+    if (tabela == null) return null
+    soma += i.quantidade * precoComPromocao(c, i.produto_id, i.tamanho_id, tabela)
+  }
+  return soma
+}
+
+/** Os itens do combo prontos para entrar na sacola (pizzas inteiras, sem borda nem adicionais). */
+export function itensDoCombo(c: Catalogo, combo: Promocao): ItemCarrinho[] {
+  return (combo.itens ?? []).flatMap((i) => {
+    const p = c.produtos.find((x) => x.id === i.produto_id)
+    if (!p) return []
+    const tamanho = c.tamanhos.find((t) => t.id === i.tamanho_id) ?? null
+    const tabela = i.tamanho_id ? (precoNoTamanho(p, i.tamanho_id) ?? 0) : Number(p.preco ?? 0)
+    return [{
+      uid: crypto.randomUUID(), produto_id: p.id, nome: nomeItem([p], tamanho), tamanho_id: i.tamanho_id, sabores: [p.id], adicionais: [],
+      quantidade: i.quantidade, preco_unitario: precoComPromocao(c, p.id, i.tamanho_id, tabela), observacoes: '',
+    }]
+  })
+}
+
+/** "1 Calabresa (Grande) + 1 Mussarela (Média)" */
+export const textoDoCombo = (c: Catalogo, combo: Promocao) => itensDoCombo(c, combo).map((i) => `${i.quantidade} ${i.nome}`).join(' + ')
+
+/**
+ * Mesmo cálculo do servidor (combos_do_pedido): os combos que cabem nos itens e o desconto de cada um.
+ * Só contam pizzas inteiras (um sabor) e produtos simples; cada unidade entra em um combo só.
+ */
+export function combosDaSacola(c: Catalogo, itens: { produto_id: string; tamanho_id: string | null; sabores: string[]; quantidade: number }[]) {
+  const livres = new Map<string, number>()
+  for (const i of itens) {
+    if (i.sabores.length > 1) continue
+    const k = chaveCombo(i.produto_id, i.tamanho_id)
+    livres.set(k, (livres.get(k) ?? 0) + i.quantidade)
+  }
+  const aplicados: { id: string; nome: string; vezes: number; desconto: number }[] = []
+  for (const combo of combosVigentes(c)) {
+    const pedidos = new Map<string, number>()
+    for (const i of combo.itens!) pedidos.set(chaveCombo(i.produto_id, i.tamanho_id), (pedidos.get(chaveCombo(i.produto_id, i.tamanho_id)) ?? 0) + i.quantidade)
+    const cheio = precoCheioDoCombo(c, combo)
+    if (cheio == null || cheio <= Number(combo.valor)) continue
+    const vezes = Math.min(...[...pedidos].map(([k, q]) => Math.floor((livres.get(k) ?? 0) / q)))
+    if (vezes < 1) continue
+    for (const [k, q] of pedidos) livres.set(k, (livres.get(k) ?? 0) - vezes * q)
+    aplicados.push({ id: combo.id, nome: combo.nome, vezes, desconto: Math.round(vezes * (cheio - Number(combo.valor)) * 100) / 100 })
+  }
+  return { aplicados, desconto: Math.round(aplicados.reduce((s, a) => s + a.desconto, 0) * 100) / 100 }
 }
 
 /** Menor preço do produto ("a partir de"), de tabela e com promoção. */

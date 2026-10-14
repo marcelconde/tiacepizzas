@@ -158,6 +158,29 @@ await teste('criar promoção e ver o preço cair no site', async () => {
   await cli.close()
 })
 
+await teste('combo: o painel cadastra vários produtos por um preço e a sacola do site dá o desconto', async () => {
+  await ir(pc, '/admin/conteudo', 1200); await clicar(pc, 'Promoções', '[role=tab]'); await dormir(600)
+  await clicar(pc, 'Nova promoção', 'button'); await dormir(500)
+  await preencher(pc, 'Nome da promoção', 'Combo de Quinta'); await preencher(pc, 'Tipo de desconto', 'combo'); await preencher(pc, 'Preço do combo', '80')
+  await clicar(pc, 'Adicionar item', '[role=dialog] button'); await clicar(pc, 'Adicionar item', '[role=dialog] button')
+  await preencher(pc, 'Produto do item 1', 'Calabresa'); await preencher(pc, 'Tamanho do item 1', 'Grande')
+  await preencher(pc, 'Produto do item 2', 'Mussarela'); await preencher(pc, 'Tamanho do item 2', 'Média')
+  await clicar(pc, 'Salvar promoção', '[role=dialog] button'); await dormir(1500)
+  const salvo = (await api(`promocoes?select=tipo,valor,promocao_itens(quantidade)&nome=eq.${encodeURIComponent('Combo de Quinta')}`))[0]
+  assert.deepEqual([salvo.tipo, Number(salvo.valor), salvo.promocao_itens.length], ['combo', 80, 2])
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('tr')].some((l) => /Combo por R\$\s80,00/.test(l.innerText) && l.innerText.includes('1 Calabresa (Grande) + 1 Mussarela (Média)'))), 'lista de promoções mostra o combo')
+  // no site: o cartão do combo leva os dois itens para a sacola e o desconto fecha o conjunto em R$ 80
+  const cli = await nova('celular'); await ir(cli, '/cardapio')
+  await clicar(cli, 'Quero o combo', 'button'); await cli.evaluate(() => window.scrollTo(0, 0)); await clicar(cli, 'Ver sacola', 'button')
+  const sacola = (await cli.evaluate(() => document.querySelector('[role=dialog]').innerText)).replace(/ /g, ' ')
+  const reais = (t) => Number(t.replace('.', '').replace(',', '.'))
+  const subtotal = reais(sacola.match(/Subtotal\s*R\$ ([\d.,]+)/)[1]), desconto = reais(sacola.match(/Combo de Quinta\s*− R\$ ([\d.,]+)/)[1])
+  assert.ok(sacola.includes('Calabresa (Grande)') && sacola.includes('Mussarela (Média)'), sacola)
+  assert.equal(Math.round((subtotal - desconto) * 100) / 100, 80)
+  await cli.close()
+  await api(`promocoes?nome=eq.${encodeURIComponent('Combo de Quinta')}`, { method: 'DELETE', headers: { prefer: 'return=minimal' } })
+})
+
 await teste('criar banner com imagem enviada', async () => {
   await ir(pc, '/admin/conteudo', 1000); await clicar(pc, 'Banners', '[role=tab]'); await clicar(pc, 'Novo banner', 'button')
   await preencher(pc, 'Título', 'Banner de teste')

@@ -5,7 +5,7 @@ import { Alternar, AreaTexto, Botao, Campo, Cartao, Contador, Entrada, Selecao, 
 import { itensParaPedido, subtotalDe } from '../lib/carrinho'
 import { ORIGEM, PAGAMENTO, brl, haQuanto, soDigitos, telefone as formatarTelefone } from '../lib/formato'
 import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
-import { precoInicial, useLoja } from '../lib/loja'
+import { combosDaSacola, precoInicial, useLoja } from '../lib/loja'
 import { aposConfirmar } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, ItemCarrinho, OrigemPedido, Produto, TipoPedido } from '../lib/tipos'
@@ -67,7 +67,9 @@ export default function Pdv() {
   const subtotal = subtotalDe(itens)
   const bairro = catalogo.bairros.find((b) => b.id === end.bairro_id)
   const taxaFinal = tipo === 'entrega' ? (taxa !== '' ? numero(taxa) : Number(bairro?.taxa_entrega ?? 0)) : 0
-  const total = Math.max(0, subtotal + taxaFinal - numero(desconto))
+  // combos: o servidor refaz esta conta ao receber o pedido (combos_do_pedido)
+  const combos = combosDaSacola(catalogo, itens)
+  const total = Math.max(0, subtotal + taxaFinal - Math.min(numero(desconto) + combos.desconto, subtotal))
 
   /** Entrega por distância: acha o endereço no mapa e já escolhe a faixa (a atendente pode trocar à mão). */
   async function calcularEntrega(sabido?: Ponto | null, e = end) {
@@ -478,6 +480,12 @@ export default function Pdv() {
                 <dd className="tabular-nums">{brl(taxaFinal)}</dd>
               </div>
             )}
+            {combos.aplicados.map((c) => (
+              <div key={c.id} className="flex justify-between text-manjericao-700">
+                <dt>{c.vezes > 1 ? `${c.vezes}x ` : ''}{c.nome}</dt>
+                <dd className="tabular-nums">− {brl(c.desconto)}</dd>
+              </div>
+            ))}
             {numero(desconto) > 0 && (
               <div className="flex justify-between">
                 <dt>Desconto</dt>

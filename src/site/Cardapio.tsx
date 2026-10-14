@@ -7,6 +7,7 @@ import { Carregando, Entrada, Vazio, cx, useAviso } from '../components/ui'
 import { useCarrinho } from '../lib/carrinho'
 import { bannersEm, precoInicial, promocoesDo, useLoja } from '../lib/loja'
 import type { Produto } from '../lib/tipos'
+import { Combos } from './Combos'
 
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -116,6 +117,7 @@ export default function Cardapio() {
       </div>
 
       <Banners itens={bannersEm(catalogo, 'cardapio_topo')} className="mt-6" />
+      <Combos className="mt-6" />
 
       <nav aria-label="Categorias" className="sem-barra sticky top-16 z-20 -mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-massa-200 bg-massa-50/95 px-4 py-3 backdrop-blur max-md:top-[6.6rem]">
         {secoes.map((s) => (

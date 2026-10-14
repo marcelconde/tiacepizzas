@@ -260,7 +260,7 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
                   )}
                   {p.desconto > 0 && (
                     <div className="flex justify-between">
-                      <dt>Desconto {p.cupom_codigo && `(${p.cupom_codigo})`}</dt>
+                      <dt>Desconto {(p.cupom_codigo || p.combo) && `(${[p.cupom_codigo, p.combo].filter(Boolean).join(' + ')})`}</dt>
                       <dd className="tabular-nums">− {brl(p.desconto)}</dd>
                     </div>
                   )}

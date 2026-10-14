@@ -6,7 +6,7 @@ import { Botao, Contador, Erro, Modal, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { useCarrinho } from '../lib/carrinho'
 import { DIAS_SEMANA, brl, cnpj, soDigitos, telefone } from '../lib/formato'
-import { useLoja } from '../lib/loja'
+import { combosDaSacola, useLoja } from '../lib/loja'
 import type { Configuracoes } from '../lib/tipos'
 
 export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
@@ -87,9 +87,10 @@ function FaixaAberta() {
 
 function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
   const { itens, subtotal, alterarQuantidade, limpar } = useCarrinho()
-  const { config, aberta: lojaAberta } = useLoja()
+  const { config, aberta: lojaAberta, catalogo } = useLoja()
   const navegar = useNavigate()
   const falta = Math.max(0, Number(config?.pedido_minimo ?? 0) - subtotal)
+  const combos = combosDaSacola(catalogo, itens)
   const whats = linkWhatsApp(config?.whatsapp, 'Olá! Preciso de ajuda com o meu pedido.')
 
   return (
@@ -104,6 +105,18 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
               <span className="text-sm text-stone-600">Subtotal</span>
               <span className="text-lg font-bold tabular-nums">{brl(subtotal)}</span>
             </div>
+            {combos.aplicados.map((c) => (
+              <div key={c.id} className="-mt-2 mb-3 flex items-baseline justify-between text-sm font-semibold text-manjericao-700">
+                <span>{c.vezes > 1 ? `${c.vezes}x ` : ''}{c.nome}</span>
+                <span className="tabular-nums">− {brl(c.desconto)}</span>
+              </div>
+            ))}
+            {combos.desconto > 0 && (
+              <div className="mb-3 flex items-baseline justify-between border-t border-stone-200 pt-2">
+                <span className="text-sm text-stone-600">Com o combo</span>
+                <span className="text-lg font-bold tabular-nums">{brl(subtotal - combos.desconto)}</span>
+              </div>
+            )}
             {falta > 0 && <p className="mb-2 text-sm text-molho-700">Faltam {brl(falta)} para o pedido mínimo.</p>}
             {lojaAberta === false && <p className="mb-2 text-sm text-stone-600">Estamos fechados agora — você pode montar a sacola e pedir quando abrirmos.</p>}
             <Botao

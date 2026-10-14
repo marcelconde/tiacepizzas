@@ -66,13 +66,21 @@ export interface Nutricional {
   alergenicos?: string
 }
 
+export interface ItemCombo {
+  produto_id: string
+  tamanho_id: string | null
+  quantidade: number
+}
+
 export interface Promocao {
   id: string
   nome: string
   descricao: string | null
-  tipo: 'percentual' | 'valor' | 'preco'
+  tipo: 'percentual' | 'valor' | 'preco' | 'combo'
   valor: number
   tamanho_id: string | null
+  /** Só no combo: os produtos (e tamanhos) que, juntos, saem pelo preço em `valor`. */
+  itens?: ItemCombo[]
   selo: string
   destaque: boolean
   imagem_url: string | null
@@ -345,6 +353,8 @@ export interface Pedido {
   troco_para: number | null
   pago: boolean
   cupom_codigo: string | null
+  /** Nome dos combos aplicados ao pedido (parte do desconto). */
+  combo?: string | null
   cpf_nota: string | null
   observacoes: string | null
   entregador_id: string | null

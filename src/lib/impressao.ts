@@ -71,7 +71,7 @@ async function viaCliente(p: Pedido, cfg: Configuracoes, fiscal?: ConfigFiscal |
       <hr>
       ${linha('Subtotal', brl(p.subtotal))}
       ${p.taxa_entrega > 0 ? linha('Taxa de entrega', brl(p.taxa_entrega)) : ''}
-      ${p.desconto > 0 ? linha(`Desconto${p.cupom_codigo ? ` (${esc(p.cupom_codigo)})` : ''}`, `- ${brl(p.desconto)}`) : ''}
+      ${p.desconto > 0 ? linha(`Desconto${p.cupom_codigo || p.combo ? ` (${esc([p.cupom_codigo, p.combo].filter(Boolean).join(' + '))})` : ''}`, `- ${brl(p.desconto)}`) : ''}
       ${linha('<b>TOTAL</b>', `<b>${brl(p.total)}</b>`, 'grande')}
       ${linha('Pagamento', `${PAGAMENTO[p.forma_pagamento]}${p.pago ? ' (pago)' : ''}`)}
       ${troco > 0 ? linha(`Troco para ${brl(p.troco_para)}`, brl(troco), 'destaque') : ''}

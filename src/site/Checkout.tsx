@@ -6,7 +6,7 @@ import { itensParaPedido, useCarrinho } from '../lib/carrinho'
 import { useConta } from '../lib/conta'
 import { PAGAMENTO, brl, enderecoTexto, soDigitos } from '../lib/formato'
 import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
-import { useLoja } from '../lib/loja'
+import { combosDaSacola, useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento } from '../lib/tipos'
 import { BotoesSociais, useLoginSocial } from './Entrar'
@@ -94,7 +94,10 @@ export default function Checkout() {
 
   const bairro = catalogo.bairros.find((b) => b.id === d.bairro_id)
   const taxa = tipo !== 'entrega' ? 0 : porDistancia ? Number(entrega?.taxa ?? 0) : Number(bairro?.taxa_entrega ?? 0)
-  const desconto = Math.min(cupomAplicado?.desconto ?? 0, subtotal)
+  // combos: o servidor refaz esta conta ao receber o pedido (combos_do_pedido)
+  const combos = combosDaSacola(catalogo, itens)
+  const descontoCupom = Math.min(cupomAplicado?.desconto ?? 0, subtotal)
+  const desconto = Math.min(descontoCupom + combos.desconto, subtotal)
   const total = subtotal + taxa - desconto
   const minimo = Number(config?.pedido_minimo ?? 0)
   const fechada = aberta === false || config?.aceita_pedidos_online === false
@@ -522,10 +525,16 @@ export default function Checkout() {
                 </dd>
               </div>
             )}
-            {desconto > 0 && (
+            {combos.aplicados.map((c) => (
+              <div key={c.id} className="flex justify-between text-manjericao-700">
+                <dt>{c.vezes > 1 ? `${c.vezes}x ` : ''}{c.nome}</dt>
+                <dd className="tabular-nums">− {brl(c.desconto)}</dd>
+              </div>
+            ))}
+            {descontoCupom > 0 && (
               <div className="flex justify-between text-manjericao-700">
                 <dt>Cupom {cupomAplicado?.codigo}</dt>
-                <dd className="tabular-nums">− {brl(desconto)}</dd>
+                <dd className="tabular-nums">− {brl(descontoCupom)}</dd>
               </div>
             )}
             <div className="flex justify-between pt-2 text-lg font-bold">
