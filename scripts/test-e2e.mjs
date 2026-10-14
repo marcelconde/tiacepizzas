@@ -291,6 +291,17 @@ await teste('criar usuário motoboy já ligado a um entregador; metas salvas', a
   await clicar(pc, 'Metas e indicadores', '[role=tab]')
   await preencher(pc, 'Faturamento por dia: ruim', '1200'); await clicar(pc, 'Salvar', 'button[type=submit]'); await dormir(900)
   assert.equal((await rpc('config_interna', {})).metas.faturamento_dia.ruim, 1200)
+  // indicador com os dois campos em branco fica sem meta: é gravado vazio e o painel mostra o número sem Ruim/Médio/Bom
+  const selo = (rotulo) => pc.evaluate((rotulo) => { const cartao = [...document.querySelectorAll('main p')].find((p) => p.innerText.trim() === rotulo)?.parentElement; return /Ruim|Médio|Bom/.test(cartao?.innerText ?? 'não achei o indicador') }, rotulo)
+  await ir(pc, '/admin/painel', 1500); await clicar(pc, '30 dias', 'button'); await dormir(1500)
+  assert.deepEqual([await selo('Ticket médio'), await selo('Faturamento')], [true, true], 'com meta, os dois indicadores são classificados')
+  await ir(pc, '/admin/configuracoes', 1000); await clicar(pc, 'Metas e indicadores', '[role=tab]')
+  for (const campo of ['Ticket médio: ruim', 'Ticket médio: bom']) { const el = await pc.$(`input[aria-label="${campo}"]`); await el.evaluate((e) => { e.focus(); e.select() }); await pc.keyboard.press('Backspace') }
+  await clicar(pc, 'Salvar', 'button[type=submit]'); await dormir(900)
+  assert.deepEqual((({ ruim, bom }) => [ruim, bom])((await rpc('config_interna', {})).metas.ticket_medio), [null, null])
+  assert.ok(await pc.evaluate(() => [...document.querySelectorAll('tr')].some((l) => l.innerText.includes('Ticket médio') && l.innerText.includes('Sem meta'))), 'a tela avisa que o indicador está sem meta')
+  await ir(pc, '/admin/painel', 1500); await clicar(pc, '30 dias', 'button'); await dormir(1500)
+  assert.deepEqual([await selo('Ticket médio'), await selo('Faturamento')], [false, true], 'sem meta, o ticket médio aparece sem classificação')
 })
 
 await teste('marcar pronto avisa o celular do motoboy que entrou no aplicativo', async () => {

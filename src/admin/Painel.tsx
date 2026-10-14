@@ -5,6 +5,7 @@ import { Carregando, Cartao, Entrada, Erro, cx } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { DIAS_SEMANA, ORIGEM, PAGAMENTO, TIPO, brl, dataCurta, diasAtras, isoDia, num } from '../lib/formato'
 import { useLoja } from '../lib/loja'
+import { limiteDaMeta } from '../lib/metas'
 import { supabase } from '../lib/supabase'
 import type { FormaPagamento, Insumo, OrigemPedido, TipoPedido } from '../lib/tipos'
 import { Pagina, useAdmin, usePedidosAoVivo } from './AdminLayout'
@@ -193,9 +194,9 @@ export default function Painel() {
           {niveisDias.length > 0 && (
             <Cartao className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 text-sm">
               <b>Dias do período pela meta de faturamento:</b>
-              <Semaforo nivel="bom" texto={`${conta('bom')} bom(ns) — a partir de ${brl(metas.faturamento_dia?.bom)}`} />
+              <Semaforo nivel="bom" texto={`${conta('bom')} bom(ns)${limiteDaMeta(metas.faturamento_dia?.bom) != null ? ` — a partir de ${brl(metas.faturamento_dia?.bom)}` : ''}`} />
               <Semaforo nivel="medio" texto={`${conta('medio')} médio(s)`} />
-              <Semaforo nivel="ruim" texto={`${conta('ruim')} ruim(ns) — abaixo de ${brl(metas.faturamento_dia?.ruim)}`} />
+              <Semaforo nivel="ruim" texto={`${conta('ruim')} ruim(ns)${limiteDaMeta(metas.faturamento_dia?.ruim) != null ? ` — abaixo de ${brl(metas.faturamento_dia?.ruim)}` : ''}`} />
               {pode('configuracoes') && (
                 <Link to="/admin/configuracoes" className="ml-auto text-xs font-semibold text-molho-700 hover:underline">
                   Alterar metas

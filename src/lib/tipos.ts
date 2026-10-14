@@ -5,9 +5,10 @@ export type OrigemPedido = 'site' | 'balcao' | 'telefone' | 'whatsapp' | 'ifood'
 export type FormaPagamento = 'dinheiro' | 'pix' | 'credito' | 'debito' | 'vale_refeicao'
 export type Papel = 'admin' | 'atendente' | 'cozinha' | 'financeiro' | 'motoboy'
 
+/** Faixas de um indicador. Campo em branco (null) não é usado; os dois em branco = indicador sem meta. */
 export interface Meta {
-  ruim: number
-  bom: number
+  ruim: number | null
+  bom: number | null
   menor_melhor?: boolean
 }
 

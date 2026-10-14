@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight, CircleAlert, CircleCheck, CircleMinus } from 'lucide-react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Cartao, cx } from '../components/ui'
+import { limiteDaMeta, metaDefinida } from '../lib/metas'
 import type { Meta } from '../lib/tipos'
 
 // Uma série só por gráfico: uma cor para tudo. O texto usa tinta neutra, nunca a cor da série.
@@ -20,12 +21,14 @@ const compacto = new Intl.NumberFormat('pt-BR', { notation: 'compact', maximumFr
 
 export type Nivel = 'bom' | 'medio' | 'ruim'
 
-/** Classifica um valor conforme a meta definida em Configurações → Metas. */
+/** Classifica um valor conforme a meta definida em Configurações → Metas. Com um campo só preenchido, vale só ele. */
 export function classificar(valor: number | null | undefined, meta: Meta | undefined): Nivel | null {
-  if (valor == null || !meta || !Number.isFinite(Number(valor))) return null
+  if (valor == null || !metaDefinida(meta) || !Number.isFinite(Number(valor))) return null
   const v = Number(valor)
-  if (meta.menor_melhor) return v <= Number(meta.bom) ? 'bom' : v >= Number(meta.ruim) ? 'ruim' : 'medio'
-  return v >= Number(meta.bom) ? 'bom' : v < Number(meta.ruim) ? 'ruim' : 'medio'
+  const ruim = limiteDaMeta(meta.ruim)
+  const bom = limiteDaMeta(meta.bom)
+  if (meta.menor_melhor) return bom != null && v <= bom ? 'bom' : ruim != null && v >= ruim ? 'ruim' : 'medio'
+  return bom != null && v >= bom ? 'bom' : ruim != null && v < ruim ? 'ruim' : 'medio'
 }
 
 // cores de situação (reservadas: nunca usadas como cor de série) sempre acompanhadas de ícone e texto

@@ -8,6 +8,7 @@ import { consultarCep } from '../lib/geo'
 import { imprimirPedido } from '../lib/impressao'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
+import { metaDefinida } from '../lib/metas'
 import type { Configuracoes as TConfig, Meta, Papel, Pedido, Perfil } from '../lib/tipos'
 import { MODULOS, Pagina, useAdmin, type Modulo } from './AdminLayout'
 import { PontoLoja } from './PontoLoja'
@@ -261,17 +262,21 @@ function Sistema() {
   )
 }
 
+/** Na tela, indicador sem meta (campos vazios ou os dois zerados) aparece com os dois campos em branco. */
+const comMetasEmBranco = (cfg: TConfig | null): TConfig | null =>
+  cfg && { ...cfg, metas: Object.fromEntries(Object.entries(cfg.metas ?? {}).map(([k, m]) => [k, metaDefinida(m) ? m : { ...(m as Meta), ruim: null, bom: null }])) }
+
 // ------------------------------------------------------------------ página
 export default function Configuracoes() {
   const { config, recarregar } = useLoja()
   const { ehAdmin } = useAdmin()
   const aviso = useAviso()
   const [aba, setAba] = useState<Aba>('loja')
-  const [c, setC] = useState<TConfig | null>(config)
+  const [c, setC] = useState<TConfig | null>(() => comMetasEmBranco(config))
   const [categorias, setCategorias] = useState('')
   const [salvando, setSalvando] = useState(false)
   useEffect(() => {
-    setC(config)
+    setC(comMetasEmBranco(config))
     setCategorias((config?.categorias_despesa ?? []).join('\n'))
   }, [config])
 
@@ -303,7 +308,9 @@ export default function Configuracoes() {
     valores.nome_loja = valores.nome_loja ?? 'Tia Cê Pizzas'
     valores.fuso_horario = valores.fuso_horario ?? 'America/Sao_Paulo'
     valores.alertas_pedido = { atencao: numero(c!.alertas_pedido.atencao), atrasado: numero(c!.alertas_pedido.atrasado), critico: numero(c!.alertas_pedido.critico) }
-    valores.metas = Object.fromEntries(Object.entries(c!.metas).map(([k, m]) => [k, { ...m, ruim: numero(m.ruim), bom: numero(m.bom) }]))
+    // campo de meta em branco é gravado vazio (não zero): indicador com os dois campos vazios não é avaliado
+    const limite = (v: unknown) => (v == null || String(v).trim() === '' ? null : numero(v))
+    valores.metas = Object.fromEntries(Object.entries(c!.metas).map(([k, m]) => [k, { ...m, ruim: limite(m.ruim), bom: limite(m.bom) }]))
     valores.categorias_despesa = [...new Set(categorias.split('\n').map((x) => x.trim()).filter(Boolean))]
     const { error } = await supabase.from('configuracoes').update(valores).eq('id', 1)
     setSalvando(false)
@@ -504,6 +511,7 @@ export default function Configuracoes() {
           <>
             <p className="text-sm text-stone-600 sm:col-span-2">
               Defina o que é ruim e o que é bom para cada indicador. O painel mostra <b>Ruim</b>, <b>Médio</b> ou <b>Bom</b> ao lado de cada número; entre os dois valores fica Médio.
+              Para não avaliar um indicador, deixe os dois campos dele em branco: o número continua no painel, sem a classificação.
             </p>
             <div className="overflow-x-auto sm:col-span-2">
               <table className="w-full text-sm">
@@ -522,6 +530,7 @@ export default function Configuracoes() {
                         <td className="py-2 pr-3">
                           <b>{m.nome}</b> <span className="text-stone-500">({m.unidade})</span>
                           <span className="block text-xs text-stone-500">{m.explicacao}</span>
+                          {!metaDefinida(c.metas[m.id]) && <span className="block text-xs font-semibold text-stone-500">Sem meta: não é avaliado.</span>}
                         </td>
                         <td className="px-2">
                           <label className="flex items-center gap-1 whitespace-nowrap text-stone-500">

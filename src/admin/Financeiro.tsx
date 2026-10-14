@@ -5,6 +5,7 @@ import { useConsulta } from '../lib/dados'
 import { exportar, type TabelaExport } from '../lib/exportar'
 import { PAGAMENTO, STATUS, brl, dataCurta, dataHora } from '../lib/formato'
 import { useLoja } from '../lib/loja'
+import { metaDefinida } from '../lib/metas'
 import { supabase } from '../lib/supabase'
 import type { FormaPagamento, Pedido } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
@@ -104,14 +105,15 @@ function PorPeriodo({ r, agrupar, setAgrupar }: { r: Relatorio; agrupar: Agrupar
         <option value="semana">Agrupar por semana</option>
         <option value="mes">Agrupar por mês</option>
       </Selecao>
-      <Tabela colunas={[r.agrupar === 'dia' ? 'Dia' : 'A partir de', 'Pedidos', 'Faturamento', 'Ticket médio', ...(r.agrupar === 'dia' ? ['Meta do dia'] : [])]}>
+      {/* a coluna da meta some quando o faturamento por dia está sem meta (campos em branco em Configurações) */}
+      <Tabela colunas={[r.agrupar === 'dia' ? 'Dia' : 'A partir de', 'Pedidos', 'Faturamento', 'Ticket médio', ...(r.agrupar === 'dia' && metaDefinida(config?.metas.faturamento_dia) ? ['Meta do dia'] : [])]}>
         {r.por_dia.slice().reverse().map((d) => (
           <tr key={d.dia}>
             <td className="tabular-nums">{dataCurta(d.dia)}</td>
             <td className="tabular-nums">{d.pedidos}</td>
             <td className="font-semibold tabular-nums">{brl(d.faturamento)}</td>
             <td className="tabular-nums">{d.pedidos ? brl(Number(d.faturamento) / d.pedidos) : '—'}</td>
-            {r.agrupar === 'dia' && (
+            {r.agrupar === 'dia' && metaDefinida(config?.metas.faturamento_dia) && (
               <td>
                 <Semaforo nivel={classificar(Number(d.faturamento), config?.metas.faturamento_dia)} />
               </td>
