@@ -88,8 +88,8 @@ em segundo plano ou fechado. O aviso viaja pelo Firebase, o serviço gratuito do
 > no aparelho dele ("funcionou perfeitamente"). Ficou provado o caminho inteiro: aplicativo registra o aparelho →
 > painel chama `avisar-entregador` → Firebase → celular. Ainda sem registro: marca e versão do Android do aparelho,
 > e o comportamento com o aplicativo fechado à força ou com economia de bateria agressiva.
-> O painel publicado só passa a disparar o aviso quando esta branch entrar na `main`; até lá, `npm run build` e
-> `npm run preview` abrem em http://localhost:4173/admin um painel com o disparo.
+> Desde 2026-10-13 a `main` tem o disparo: o painel publicado em tiacepizzas.com.br/admin avisa o motoboy.
+> (Para testar o painel de uma branch sem publicar: `npm run build` e `npm run preview`, em http://localhost:4173/admin.)
 
 Para ligar (uma vez):
 
