@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import { Download, MessageCircle, Plus, Search, Trash2 } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Tabela, Vazio, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { baixarCsv, brl, dataCurta, enderecoTexto, soDigitos, telefone } from '../lib/formato'
+import { consultarCep } from '../lib/geo'
+import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Cliente, Endereco } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
@@ -20,9 +22,76 @@ const SEGMENTOS = {
   },
 }
 
+// ------------------------------------------------------------------ endereço do cliente
+const enderecoVazio = { cep: '', logradouro: '', numero: '', complemento: '', bairro_id: '', bairro: '', referencia: '', cidade: '', uf: '' }
+type EnderecoForm = typeof enderecoVazio
+const temEndereco = (e: EnderecoForm) => Object.entries(e).some(([k, v]) => k !== 'cidade' && k !== 'uf' && v.trim() !== '')
+
+/** Campos de um endereço. O CEP completo preenche rua, bairro e cidade; o resto é digitado. */
+function CamposEndereco({ valor, mudar }: { valor: EnderecoForm; mudar: Dispatch<SetStateAction<EnderecoForm>> }) {
+  const { catalogo, config } = useLoja()
+  const [cepAviso, setCepAviso] = useState('')
+  const cepBuscado = useRef('')
+  const campoNumero = useRef<HTMLInputElement>(null)
+  const porBairro = config?.modo_entrega === 'bairro'
+  const campo = (nome: keyof EnderecoForm) => ({ value: valor[nome], onChange: (e: { target: { value: string } }) => mudar((v) => ({ ...v, [nome]: e.target.value })) })
+
+  async function mudarCep(texto: string) {
+    mudar((v) => ({ ...v, cep: texto }))
+    const cep = soDigitos(texto)
+    if (cep.length !== 8 || cep === cepBuscado.current) return
+    cepBuscado.current = cep
+    setCepAviso('')
+    const r = await consultarCep(cep).catch(() => undefined)
+    if (cepBuscado.current !== cep) return
+    if (r === undefined) return void (cepBuscado.current = '') // sem resposta do serviço: digita-se à mão
+    if (!r) return setCepAviso('CEP não encontrado: confira os números ou digite o endereço.')
+    const achado = catalogo.bairros.find((b) => b.nome.toLowerCase() === r.bairro.toLowerCase())
+    mudar((v) => ({ ...v, logradouro: r.logradouro || v.logradouro, bairro: r.bairro || v.bairro, bairro_id: achado?.id ?? v.bairro_id, cidade: r.cidade || v.cidade, uf: r.uf || v.uf }))
+    campoNumero.current?.focus()
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-6">
+      <Campo rotulo="CEP" className="sm:col-span-2" dica={cepAviso || 'O CEP preenche a rua.'}>
+        <Entrada inputMode="numeric" maxLength={9} autoComplete="off" value={valor.cep} onChange={(e) => mudarCep(e.target.value)} />
+      </Campo>
+      <Campo rotulo="Rua / avenida" className="sm:col-span-4">
+        <Entrada autoComplete="off" {...campo('logradouro')} />
+      </Campo>
+      <Campo rotulo="Número" className="sm:col-span-2">
+        <Entrada ref={campoNumero} autoComplete="off" {...campo('numero')} />
+      </Campo>
+      <Campo rotulo="Complemento" className="sm:col-span-4">
+        <Entrada autoComplete="off" placeholder="Apartamento, bloco, casa dos fundos…" {...campo('complemento')} />
+      </Campo>
+      <Campo rotulo="Bairro" className="sm:col-span-3">
+        {porBairro ? (
+          <Selecao value={valor.bairro_id} onChange={(e) => mudar((v) => ({ ...v, bairro_id: e.target.value, bairro: catalogo.bairros.find((b) => b.id === e.target.value)?.nome ?? '' }))}>
+            <option value="">Escolha o bairro…</option>
+            {catalogo.bairros.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.nome}
+              </option>
+            ))}
+          </Selecao>
+        ) : (
+          <Entrada autoComplete="off" {...campo('bairro')} />
+        )}
+      </Campo>
+      <Campo rotulo="Referência" className="sm:col-span-3">
+        <Entrada autoComplete="off" placeholder="Perto de…, portão azul…" {...campo('referencia')} />
+      </Campo>
+    </div>
+  )
+}
+
 function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente>; onFechar: () => void; onSalvo: () => void }) {
   const aviso = useAviso()
+  const { config } = useLoja()
   const [c, setC] = useState(cliente)
+  const [endereco, setEndereco] = useState(enderecoVazio) // endereço digitado junto com o cliente novo
+  const [outroEndereco, setOutroEndereco] = useState<EnderecoForm | null>(null) // endereço a mais de quem já é cliente
   const [salvando, setSalvando] = useState(false)
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null)
   const [versaoCompras, setVersaoCompras] = useState(0)
@@ -33,8 +102,20 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
     [cliente.id],
   )
 
+  /** Endereço pronto para gravar; devolve o que falta quando está incompleto (a entrega exige rua e número). */
+  function paraGravar(e: EnderecoForm, clienteId: string) {
+    if (!e.logradouro.trim() || !e.numero.trim()) return 'Para guardar o endereço, informe a rua e o número.'
+    return {
+      cliente_id: clienteId, cep: e.cep.trim() || null, logradouro: e.logradouro.trim(), numero: e.numero.trim(), complemento: e.complemento.trim() || null,
+      bairro_id: e.bairro_id || null, bairro: e.bairro.trim() || null, referencia: e.referencia.trim() || null,
+      cidade: e.cidade || config?.cidade || null, uf: e.uf || config?.uf || null,
+    }
+  }
+
   async function salvar(e: FormEvent) {
     e.preventDefault()
+    const comEndereco = novo && temEndereco(endereco)
+    if (comEndereco && typeof paraGravar(endereco, '') === 'string') return aviso.erro(paraGravar(endereco, '') as string)
     setSalvando(true)
     const valores = {
       nome: c.nome?.trim(),
@@ -44,12 +125,29 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
       nascimento: c.nascimento || null,
       observacoes: c.observacoes?.trim() || null,
     }
-    const { error } = novo ? await supabase.from('clientes').insert(valores) : await supabase.from('clientes').update(valores).eq('id', cliente.id!)
+    // cliente novo: o cadastro volta com o id, para o endereço ser guardado junto
+    const r = novo ? await supabase.from('clientes').insert(valores).select('id').single() : await supabase.from('clientes').update(valores).eq('id', cliente.id!)
+    let erroEndereco = null
+    if (!r.error && comEndereco) erroEndereco = (await supabase.from('enderecos').insert(paraGravar(endereco, (r.data as { id: string }).id) as object)).error
     setSalvando(false)
-    if (error) return aviso.erro(mensagemErro(error))
-    aviso.sucesso('Cliente salvo')
+    if (r.error) return aviso.erro(mensagemErro(r.error))
+    if (erroEndereco) aviso.erro(`O cliente foi salvo, mas o endereço não: ${mensagemErro(erroEndereco)}`)
+    else aviso.sucesso('Cliente salvo')
     onSalvo()
     onFechar()
+  }
+
+  async function salvarOutroEndereco(e: FormEvent) {
+    e.preventDefault()
+    const dados = paraGravar(outroEndereco!, cliente.id!)
+    if (typeof dados === 'string') return aviso.erro(dados)
+    setSalvando(true)
+    const { error } = await supabase.from('enderecos').insert(dados)
+    setSalvando(false)
+    if (error) return aviso.erro(mensagemErro(error))
+    aviso.sucesso('Endereço guardado')
+    setOutroEndereco(null)
+    recarregarEnderecos()
   }
 
   async function removerEndereco(id: string) {
@@ -85,6 +183,13 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
           <Campo rotulo="Observações" className="sm:col-span-2">
             <AreaTexto placeholder="Preferências, alergias, portão azul…" {...campo('observacoes')} />
           </Campo>
+          {novo && (
+            <fieldset className="sm:col-span-2">
+              <legend className="font-semibold">Endereço de entrega (opcional)</legend>
+              <p className="mb-3 text-xs text-stone-500">Com o endereço guardado, em Novo pedido basta digitar o nome ou o telefone do cliente: os dados entram sozinhos.</p>
+              <CamposEndereco valor={endereco} mudar={setEndereco} />
+            </fieldset>
+          )}
           <div className="flex justify-end gap-2 sm:col-span-2">
             {c.telefone && !novo && (
               <a href={`https://wa.me/55${soDigitos(c.telefone)}`} target="_blank" rel="noreferrer" className="mr-auto inline-flex items-center gap-1.5 text-sm font-semibold text-manjericao-700 hover:underline">
@@ -118,7 +223,24 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-stone-500">Nenhum endereço salvo — eles são guardados automaticamente a cada entrega.</p>
+              <p className="text-sm text-stone-500">Nenhum endereço salvo. Eles são guardados automaticamente a cada entrega, ou você pode cadastrar um agora.</p>
+            )}
+            {outroEndereco ? (
+              <form onSubmit={salvarOutroEndereco} className="mt-3 rounded-xl border border-stone-200 p-3">
+                <CamposEndereco valor={outroEndereco} mudar={setOutroEndereco as Dispatch<SetStateAction<EnderecoForm>>} />
+                <div className="mt-3 flex justify-end gap-2">
+                  <Botao variante="secundario" onClick={() => setOutroEndereco(null)}>
+                    Cancelar
+                  </Botao>
+                  <Botao type="submit" carregando={salvando}>
+                    Guardar endereço
+                  </Botao>
+                </div>
+              </form>
+            ) : (
+              <Botao variante="secundario" tamanho="p" className="mt-3" onClick={() => setOutroEndereco(enderecoVazio)}>
+                <Plus className="size-4" /> Adicionar endereço
+              </Botao>
             )}
 
             <h3 className="mt-6 mb-2 font-semibold">Compras</h3>

@@ -512,6 +512,40 @@ await teste('entrega por distância: CEP preenche e troca o endereço, taxa pelo
   await cli.close()
 })
 
+await teste('cliente cadastrado com endereço: em Novo pedido o nome vem primeiro e puxa telefone e endereço', async () => {
+  const ad = await nova('desktop'); await entrar(ad, '/admin', 'dona@teste.local')
+  await ad.setRequestInterception(true)
+  ad.on('request', (r) => {
+    if (!r.url().includes('viacep.com.br')) return r.continue()
+    r.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(r.url().includes('01310100') ? { logradouro: 'Avenida Paulista', bairro: 'Bela Vista', localidade: 'São Paulo', uf: 'SP' } : { erro: true }) })
+  })
+  const valor = (rotulo, onde = '[role=dialog]') => ad.evaluate((rotulo, onde) => (document.querySelector(`${onde} [aria-label="${rotulo}"]`) ?? [...document.querySelectorAll(`${onde} label`)].find((l) => l.innerText.trim().startsWith(rotulo))?.querySelector('input'))?.value, rotulo, onde)
+  // cadastro do cliente já com o endereço: o CEP preenche a rua
+  await ir(ad, '/admin/clientes', 1200); await clicar(ad, 'Novo cliente', 'button'); await dormir(500)
+  await preencher(ad, 'Nome', 'Zuleica Endereço'); await preencher(ad, 'Telefone com DDD', '11955557777')
+  await preencher(ad, 'CEP', '01310100'); await dormir(800)
+  assert.equal(await valor('Rua / avenida'), 'Avenida Paulista')
+  // sem o número o endereço não é guardado: a tela avisa e nada é gravado
+  await clicar(ad, 'Salvar', '[role=dialog] button[type=submit]'); await dormir(700)
+  assert.equal((await api('clientes?select=id&telefone=eq.11955557777')).length, 0)
+  await preencher(ad, 'Número', '1500'); await preencher(ad, 'Complemento', 'ap 12'); await preencher(ad, 'Referência', 'portão azul')
+  await clicar(ad, 'Salvar', '[role=dialog] button[type=submit]'); await dormir(1500)
+  const salvo = (await api('clientes?select=nome,enderecos(logradouro,numero,complemento,bairro,referencia,cidade)&telefone=eq.11955557777'))[0]
+  assert.deepEqual([salvo.nome, salvo.enderecos], ['Zuleica Endereço', [{ logradouro: 'Avenida Paulista', numero: '1500', complemento: 'ap 12', bairro: 'Bela Vista', referencia: 'portão azul', cidade: 'São Paulo' }]])
+  // um segundo endereço para quem já é cliente
+  await preencher(ad, 'Buscar cliente', 'Zuleica'); await dormir(500); await clicar(ad, 'Zuleica Endereço', 'tr'); await dormir(900)
+  await clicar(ad, 'Adicionar endereço', '[role=dialog] button'); await preencher(ad, 'Rua / avenida', 'Rua Augusta'); await preencher(ad, 'Número', '200')
+  await clicar(ad, 'Guardar endereço', '[role=dialog] button[type=submit]'); await dormir(1200)
+  assert.equal((await api('clientes?select=enderecos(id)&telefone=eq.11955557777'))[0].enderecos.length, 2)
+  // Novo pedido: o nome é o primeiro campo, e duas letras já mostram a cliente; o toque puxa telefone e endereço
+  await ir(ad, '/admin/pdv', 1500); await clicar(ad, 'Entrega', 'form button')
+  assert.deepEqual(await ad.evaluate(() => [...document.querySelectorAll('form label')].map((l) => l.innerText.trim().split('\n')[0]).filter((t) => t === 'Nome' || t === 'Telefone')), ['Nome', 'Telefone'])
+  await preencher(ad, 'Nome', 'zu'); await dormir(400)
+  await clicar(ad, 'Zuleica Endereço', '[role=option]'); await dormir(1200)
+  assert.deepEqual([await valor('Nome', 'form'), (await valor('Telefone', 'form')).replace(/\D/g, ''), await valor('Rua', 'form'), await valor('Número', 'form')], ['Zuleica Endereço', '11955557777', 'Rua Augusta', '200'])
+  await ad.close()
+})
+
 await teste('novo pedido: busca o cliente pelo nome ou pelo telefone, puxa o endereço, e o CEP preenche a rua', async () => {
   const at = await nova('desktop'); await entrar(at, '/admin', 'ana@teste.local')
   await at.setRequestInterception(true)

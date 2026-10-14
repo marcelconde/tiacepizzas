@@ -128,15 +128,16 @@ export default function Pdv() {
   const sugestoes = useMemo(() => {
     if (!sugerir || clienteAchado) return []
     const termo = sugerir === 'telefone' ? soDigitos(telefone) : semAcento(nome.trim())
-    if (termo.length < 3) return []
+    // pelo nome a lista aparece a partir da segunda letra; pelo telefone, do terceiro número
+    if (termo.length < (sugerir === 'nome' ? 2 : 3)) return []
     return clientes.filter((c) => (sugerir === 'telefone' ? c.telefone.includes(termo) : semAcento(c.nome).includes(termo))).slice(0, 6)
   }, [sugerir, clienteAchado, telefone, nome, clientes])
 
   /** Puxa os dados de quem já comprou: nome, telefone, CPF e os endereços (o mais novo já entra no pedido). */
-  async function usarCliente(c: ClienteBusca, trocarEndereco = true) {
+  async function usarCliente(c: ClienteBusca, trocarEndereco = true, trocarNome = true) {
     setSugerir(null)
     setClienteAchado(true)
-    setNome(c.nome)
+    if (trocarNome) setNome(c.nome)
     if (c.telefone) setTelefone(c.telefone)
     if (c.cpf && !cpfNota) setCpfNota(c.cpf)
     const { data } = await supabase.from('enderecos').select('*').in('cliente_id', c.ids).order('criado_em', { ascending: false })
@@ -155,7 +156,8 @@ export default function Pdv() {
     const tel = soDigitos(telefone)
     if (clienteAchado || tel.length < 10) return
     const c = clientes.find((x) => x.telefone === tel)
-    if (c) usarCliente(c, false)
+    // o nome que a atendente já digitou fica como está; em branco, entra o do cadastro
+    if (c) usarCliente(c, false, !nome.trim())
   }
 
   /** CEP completo: preenche rua e bairro. Se a rua mudou, número, complemento e referência eram de outro endereço. */
@@ -308,6 +310,21 @@ export default function Pdv() {
 
           <div className="relative" onKeyDown={(e) => e.key === 'Escape' && setSugerir(null)}>
             <div className="grid grid-cols-2 gap-3">
+              <Campo rotulo="Nome">
+                <Entrada
+                  autoComplete="off"
+                  required={tipo !== 'balcao'}
+                  value={nome}
+                  onFocus={() => setSugerir('nome')}
+                  onChange={(e) => {
+                    setNome(e.target.value)
+                    setSugerir('nome')
+                    // mudou o nome depois de escolher alguém: a lista de clientes volta a aparecer
+                    if (clienteAchado) setClienteAchado(false)
+                  }}
+                  onBlur={() => setSugerir(null)}
+                />
+              </Campo>
               <Campo rotulo="Telefone">
                 <Entrada
                   type="tel"
@@ -327,9 +344,6 @@ export default function Pdv() {
                   }}
                   onBlur={conferirTelefone}
                 />
-              </Campo>
-              <Campo rotulo="Nome">
-                <Entrada autoComplete="off" required={tipo !== 'balcao'} value={nome} onFocus={() => setSugerir('nome')} onChange={(e) => { setNome(e.target.value); setSugerir('nome') }} onBlur={() => setSugerir(null)} />
               </Campo>
             </div>
             {sugestoes.length > 0 && (
@@ -354,7 +368,7 @@ export default function Pdv() {
               <UserCheck className="size-4" /> Cliente já cadastrado{salvos.length > 0 && tipo !== 'entrega' ? ` · ${salvos.length} endereço${salvos.length > 1 ? 's' : ''} guardado${salvos.length > 1 ? 's' : ''}` : ''}
             </p>
           ) : (
-            <p className="-mt-2 text-xs text-stone-500">Já é cliente? Digite o telefone ou o nome e toque em quem aparecer.</p>
+            <p className="-mt-2 text-xs text-stone-500">Já é cliente? Digite o nome ou o telefone e toque em quem aparecer: os dados e o endereço entram sozinhos.</p>
           )}
           {tipo !== 'balcao' && (
             <Campo rotulo="Canal do pedido">
