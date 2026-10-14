@@ -228,7 +228,9 @@ await teste('borda com preço por tamanho: vale o do tamanho da pizza; sem preç
   const media = await id('tamanhos', 'Média')
   // padrão 10; na grande custa 14. O navegador não manda preço: quem decide é o servidor
   await db.query(`update adicionais set precos_tamanho = $2::jsonb where id = $1`, [bordaCatupiry, JSON.stringify({ [grande]: 14 })])
-  const pizza = (tamanho) => criar({ ...pedidoSite, chave: undefined, tipo: 'retirada', endereco: null, itens: [{ produto_id: mussarela, tamanho_id: tamanho, adicionais: [bordaCatupiry], quantidade: 2 }] })
+  // telefone próprio: o limite de pedidos pendentes por telefone não pode pesar nos outros testes
+  const base = { ...pedidoSite, chave: undefined, tipo: 'retirada', endereco: null, cliente: { nome: 'Teste Borda', telefone: '11955550001' } }
+  const pizza = (tamanho) => criar({ ...base, itens: [{ produto_id: mussarela, tamanho_id: tamanho, adicionais: [bordaCatupiry], quantidade: 2 }] })
   let g, m
   await como('anon', null, async () => {
     g = await pizza(grande)
@@ -238,9 +240,17 @@ await teste('borda com preço por tamanho: vale o do tamanho da pizza; sem preç
   assert.deepEqual([Number(g.total), Number(m.total)], [144, 116])
   const item = await um(`select adicionais from pedido_itens where pedido_id = $1`, [g.id])
   assert.equal(Number(item.adicionais[0].preco), 14)
+  // tamanho sem borda recheada (o brotinho da pizzaria): o servidor recusa a borda nele
+  await db.query(`update tamanhos set aceita_borda = false where id = $1`, [broto])
+  await como('anon', null, async () => {
+    await falha(pizza(broto), 'não tem borda recheada')
+    const semBorda = await criar({ ...base, itens: [{ produto_id: mussarela, tamanho_id: broto, quantidade: 1 }] })
+    assert.equal(Number(semBorda.total), 32)
+  })
+  await db.query(`update tamanhos set aceita_borda = true where id = $1`, [broto])
   await falha(db.query(`update adicionais set precos_tamanho = '[]'::jsonb where id = $1`, [bordaCatupiry]), 'check')
   await db.query(`update adicionais set precos_tamanho = '{}'::jsonb where id = $1`, [bordaCatupiry])
-  await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where id in ($1, $2)`, [g.id, m.id])
+  await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where cliente_telefone = '11955550001'`)
 })
 
 await teste('recusa: loja fechada, sabores demais, bairro inválido, produto indisponível', async () => {

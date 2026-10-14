@@ -134,6 +134,13 @@ await teste('borda com preço por tamanho: o painel grava e o site mostra o pre�
   await clicar(cli, 'Grande', '[role=dialog] button'); assert.match(await texto('Catupiry'), /14,00/)
   const semBorda = valor(await texto('Adicionar ·')); await clicar(cli, 'Catupiry', '[role=dialog] button'); assert.equal(valor(await texto('Adicionar ·')), semBorda + 14)
   await clicar(cli, 'Média', '[role=dialog] button'); assert.match(await texto('Catupiry'), /10,00/)
+  // tamanho sem borda recheada: a escolha da borda some nele e volta nos outros
+  await api('tamanhos?nome=eq.Broto', { method: 'PATCH', body: JSON.stringify({ aceita_borda: false }), headers: { prefer: 'return=minimal' } })
+  await ir(cli, '/cardapio'); await clicar(cli, 'Calabresa', 'button')
+  const temBorda = () => cli.evaluate(() => [...document.querySelectorAll('[role=dialog] h3')].some((h) => h.innerText.trim().toUpperCase() === 'BORDA'))
+  await clicar(cli, 'Grande', '[role=dialog] button'); assert.equal(await temBorda(), true)
+  await clicar(cli, 'Broto', '[role=dialog] button'); assert.equal(await temBorda(), false)
+  await api('tamanhos?nome=eq.Broto', { method: 'PATCH', body: JSON.stringify({ aceita_borda: true }), headers: { prefer: 'return=minimal' } })
   await cli.close()
   await api(`adicionais?${filtro}`, { method: 'PATCH', body: JSON.stringify({ precos_tamanho: {} }), headers: { prefer: 'return=minimal' } })
 })

@@ -452,6 +452,7 @@ export default function CardapioAdmin() {
             { rotulo: 'Nome', render: (t) => <b>{t.nome}</b> },
             { rotulo: 'Descrição', render: (t) => t.descricao },
             { rotulo: 'Máx. de sabores', render: (t) => t.max_sabores },
+            { rotulo: 'Borda recheada', render: (t) => (t.aceita_borda ? 'Sim' : 'Não tem') },
             { rotulo: 'Ativo', render: (t) => simNao(t.ativo) },
           ]}
           campos={[
@@ -460,6 +461,7 @@ export default function CardapioAdmin() {
             { nome: 'fatias', rotulo: 'Fatias', tipo: 'numero' },
             { nome: 'max_sabores', rotulo: 'Máximo de sabores (1 a 4)', tipo: 'numero', padrao: 1, obrigatorio: true },
             { nome: 'ordem', rotulo: 'Ordem', tipo: 'numero', padrao: 0 },
+            { nome: 'aceita_borda', rotulo: 'Aceita borda recheada', tipo: 'booleano' },
             { nome: 'ativo', rotulo: 'Ativo', tipo: 'booleano' },
           ]}
         />
@@ -478,11 +480,13 @@ export default function CardapioAdmin() {
               {
                 rotulo: 'Preço',
                 render: (a) => {
-                  const proprios = precosProprios(a)
+                  // a borda só conta os tamanhos que têm borda recheada
+                  const validos = tamanhos.filter((t) => a.tipo !== 'borda' || t.aceita_borda)
+                  const proprios = precosProprios(a).filter((t) => validos.includes(t))
                   if (!proprios.length) return brl(a.preco)
                   return [
                     ...proprios.map((t) => `${t.nome} ${brl(a.precos_tamanho![t.id])}`),
-                    ...(proprios.length < tamanhos.length ? [`outros tamanhos ${brl(a.preco)}`] : []),
+                    ...(proprios.length < validos.length ? [`outros tamanhos ${brl(a.preco)}`] : []),
                   ].join(' · ')
                 },
               },

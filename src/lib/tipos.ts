@@ -202,6 +202,8 @@ export interface Tamanho {
   descricao: string | null
   fatias: number | null
   max_sabores: number
+  /** Falso para o tamanho que não tem borda recheada (ex.: brotinho). */
+  aceita_borda: boolean
   ordem: number
   ativo: boolean
 }

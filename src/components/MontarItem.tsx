@@ -77,9 +77,11 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
     .slice(0, maxSabores)
     .map((id) => catalogo.produtos.find((p) => p.id === id))
     .filter((p): p is Produto => Boolean(p))
-  const bordas = exibir.complementos ? catalogo.adicionais.filter((a) => a.tipo === 'borda') : []
+  // há tamanho sem borda recheada (ex.: brotinho): nele a escolha some e a borda marcada antes não conta
+  const temBorda = tamanho?.aceita_borda !== false
+  const bordas = exibir.complementos && temBorda ? catalogo.adicionais.filter((a) => a.tipo === 'borda') : []
   const listaExtras = exibir.complementos ? catalogo.adicionais.filter((a) => a.tipo === 'extra') : []
-  const adicionais = catalogo.adicionais.filter((a) => a.id === bordaId || extras.includes(a.id))
+  const adicionais = catalogo.adicionais.filter((a) => (temBorda && a.id === bordaId) || extras.includes(a.id))
   const promocoes = promocoesDo(catalogo, produto.id)
 
   const precoBase = pizza
