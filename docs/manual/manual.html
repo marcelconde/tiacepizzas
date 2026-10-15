@@ -132,7 +132,7 @@
   <tr><td><b>Em preparo</b></td><td>Quem está no quadro de Pedidos clica em Iniciar preparo</td><td>—</td></tr>
   <tr><td><b>Pronto</b></td><td>Quem está no quadro de Pedidos clica em Marcar pronto</td><td>Em entregas, avisa o motoboy escolhido no aplicativo Android dele (capítulo 12).</td></tr>
   <tr><td><b>Saiu para entrega</b></td><td>Atendimento ou motoboy</td><td>Mostra o mapa com a posição do motoboy ao cliente.</td></tr>
-  <tr><td><b>Entregue</b></td><td>Atendimento ou motoboy</td><td>Marca como pago e lança a venda no caixa aberto.</td></tr>
+  <tr><td><b>Entregue</b></td><td>Atendimento ou motoboy</td><td>Marca como pago e lança a venda no caixa aberto. Quando é o motoboy, o painel avisa.</td></tr>
 </table>
 <p>Fora do caminho normal existem três situações: <b>Cancelado</b> (devolve o estoque e estorna o caixa), <b>Problema na entrega</b> (o pedido fica destacado até ser resolvido) e <b>Reembolsado</b> (o dinheiro é devolvido depois da entrega). Elas são explicadas no capítulo 4.</p>
 <div class="dica"><p>Pedidos lançados pela própria equipe (balcão, telefone, WhatsApp) já nascem <b>confirmados</b>: não precisam ser aceitos.</p></div>
@@ -214,10 +214,11 @@
 <ul>
   <li>seu nome e sua função;</li>
   <li>o sinal <b>ao vivo</b>: verde quando os pedidos chegam na hora; amarelo (“a cada 45 s”) quando a conexão em tempo real caiu e a tela está se atualizando sozinha de tempos em tempos;</li>
-  <li>o botão do <b>alto-falante</b>, que liga e desliga o som de pedido novo;</li>
+  <li>o botão do <b>alto-falante</b>, que liga e desliga os sons do painel (pedido novo, entrega concluída e problema na entrega);</li>
+  <li>o botão do <b>sino</b>, que liga os avisos no canto da tela do computador: com ele, pedido novo e entrega concluída aparecem mesmo com o painel minimizado ou em outra aba. Na primeira vez o navegador pergunta se pode mostrar notificações: responda <b>Permitir</b>;</li>
   <li>o botão da <b>chave</b>, para trocar a senha, e o <b class="ui">Sair</b>.</li>
 </ul>
-<p>Quando há pedidos novos esperando, um número amarelo pisca ao lado de <b class="ui">Pedidos</b>.</p>
+<p>Quando há pedidos novos esperando, um número amarelo pisca ao lado de <b class="ui">Pedidos</b>. Quando o motoboy toca em <b>Entreguei</b> no aplicativo, o painel toca um som e mostra “Pedido #… entregue!”; se ele tocar em <b>Tive um problema</b>, aparece o aviso em vermelho com o número do pedido. O que você mesma clica no painel não gera aviso.</p>
 <figure><img src="capturas/painel-menu-atendente.jpg" alt=""><figcaption>O painel visto por quem tem a função Atendimento: o menu mostra só as telas liberadas.</figcaption></figure>
 <div class="dica"><p>Deixe o painel aberto no computador da loja durante todo o expediente. É ele que toca o aviso de pedido novo, aceita automaticamente (se ligado) e manda imprimir.</p></div>
 
@@ -655,7 +656,7 @@
 <figure class="media"><img src="capturas/painel-config-financeiro.jpg" alt=""><figcaption>Categorias de despesa.</figcaption></figure>
 
 <h2>Usuários</h2>
-<p>Só administradores veem esta aba. <b class="ui">Novo usuário</b> cria o acesso de alguém da equipe: nome, e-mail, senha inicial (a pessoa troca depois) e função. Na lista você muda a função e bloqueia ou libera o acesso. Quando alguém sair da equipe, bloqueie o acesso.</p>
+<p>Só administradores veem esta aba. <b class="ui">Novo usuário</b> cria o acesso de alguém da equipe: nome, e-mail, senha inicial (a pessoa troca depois) e função. Na lista você muda a função e bloqueia ou libera o acesso. Quando alguém sair da equipe, apague o usuário pela <b>lixeira</b> no fim da linha: a pessoa não entra mais, e os pedidos, o caixa e a auditoria continuam mostrando o que ela fez. Apagar não tem volta; para afastar alguém só por um tempo, use <b class="ui">Bloqueado</b>. Ninguém apaga o próprio usuário. O motoboy apagado continua em Entregas → Entregadores com o histórico dele; para tirá-lo da lista de motoboys, desative lá.</p>
 <figure class="media"><img src="capturas/painel-config-usuarios.jpg" alt=""><figcaption>Usuários do painel.</figcaption></figure>
 <figure class="media"><img src="capturas/painel-config-usuario-novo.jpg" alt=""><figcaption>Criando o acesso de um motoboy.</figcaption></figure>
 <h2>Permissões</h2>

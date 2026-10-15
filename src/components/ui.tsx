@@ -256,16 +256,17 @@ interface Aviso {
   tipo: 'sucesso' | 'erro'
   texto: string
 }
-const AvisoContexto = createContext<{ sucesso: (t: string) => void; erro: (t: string) => void }>({ sucesso: () => {}, erro: () => {} })
+// `ms`: quanto tempo o aviso fica na tela (padrão: 3,5 s o de sucesso e 7 s o de erro)
+const AvisoContexto = createContext<{ sucesso: (t: string, ms?: number) => void; erro: (t: string, ms?: number) => void }>({ sucesso: () => {}, erro: () => {} })
 
 export function AvisoProvider({ children }: { children: ReactNode }) {
   const [avisos, setAvisos] = useState<Aviso[]>([])
-  const mostrar = useCallback((tipo: Aviso['tipo'], texto: string) => {
+  const mostrar = useCallback((tipo: Aviso['tipo'], texto: string, ms?: number) => {
     const id = Date.now() + Math.random()
     setAvisos((a) => [...a, { id, tipo, texto }])
-    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), tipo === 'erro' ? 7000 : 3500)
+    setTimeout(() => setAvisos((a) => a.filter((x) => x.id !== id)), ms ?? (tipo === 'erro' ? 7000 : 3500))
   }, [])
-  const [api] = useState(() => ({ sucesso: (t: string) => mostrar('sucesso', t), erro: (t: string) => mostrar('erro', t) }))
+  const [api] = useState(() => ({ sucesso: (t: string, ms?: number) => mostrar('sucesso', t, ms), erro: (t: string, ms?: number) => mostrar('erro', t, ms) }))
 
   return (
     <AvisoContexto.Provider value={api}>

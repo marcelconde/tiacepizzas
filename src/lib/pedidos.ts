@@ -42,10 +42,15 @@ const AVISO_SEM_CAIXA = 'Nenhum caixa aberto: o recebimento ficou registrado só
 const avisarEntregador = (pedidoId: string) =>
   void supabase.functions.invoke('avisar-entregador', { body: { pedido_id: pedidoId } }).then(() => {}, () => {})
 
+// pedidos alterados por este painel: o aviso de "entregue" é para o que o motoboy fez no aplicativo, não para o que a própria atendente clicou
+const alteradosAqui = new Map<string, number>()
+export const alteradoAquiAgora = (id: string) => Date.now() - (alteradosAqui.get(id) ?? 0) < 2 * 60_000
+
 /** Atualiza o pedido. Devolve um aviso quando um recebimento é registrado sem caixa aberto. */
 export async function atualizarPedido(id: string, dados: Partial<Pedido>): Promise<string | null> {
   const { error } = await supabase.from('pedidos').update(dados).eq('id', id)
   if (error) throw error
+  alteradosAqui.set(id, Date.now())
   // ficou pronto, ou o motoboy foi escolhido (o pedido pode já estar pronto)
   if (dados.status === 'pronto' || dados.entregador_id) avisarEntregador(id)
   if (!dados.pago) return null

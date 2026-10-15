@@ -320,13 +320,53 @@ await teste('marcar pronto avisa o celular do motoboy que entrou no aplicativo',
   assert.ok((await registrar(false)).ok)
 })
 
-await teste('motoboy conclui a entrega pelo aplicativo', async () => {
-  const moto = await nova('celular'); await entrar(moto, '/entregador', 'carlos@teste.local'); await dormir(1200)
+await teste('apagar usuário: some da lista, não entra mais e fica na auditoria', async () => {
+  await ir(pc, '/admin/configuracoes', 1000); await clicar(pc, 'Usuários', '[role=tab]'); await clicar(pc, 'Novo usuário', 'button')
+  await preencher(pc, 'Nome', 'Bia Temporária'); await preencher(pc, 'E-mail', 'bia@teste.local'); await preencher(pc, 'Senha inicial', 'teste1234'); await preencher(pc, 'Função', 'Atendimento')
+  await clicar(pc, 'Criar usuário', 'button'); await dormir(1200)
+  const bia = (await api('perfis?select=id&email=eq.bia@teste.local'))[0]
+  assert.ok(bia, 'usuário criado')
+  assert.ok(await pc.evaluate(() => { const eu = [...document.querySelectorAll('main tr')].find((t) => t.innerText.includes('(você)')); return Boolean(eu) && !eu.querySelector('[aria-label^="Apagar"]') }), 'ninguém apaga o próprio usuário')
+  await pc.click('[aria-label="Apagar Bia Temporária"]'); await dormir(500)
+  assert.ok(await pc.evaluate(() => document.querySelector('[role=dialog]').innerText.includes('não consegue mais entrar')))
+  await clicar(pc, 'Apagar', '[role=dialog] footer button'); await dormir(1200)
+  assert.equal((await api('perfis?select=id&email=eq.bia@teste.local')).length, 0)
+  assert.ok(!(await pc.evaluate(() => document.querySelector('main').innerText.includes('Bia Temporária'))), 'saiu da lista')
+  const login = await fetch(API + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'bia@teste.local', password: 'teste1234' }) })
+  assert.ok(!login.ok, 'não entra mais')
+  const aud = (await api('auditoria?select=descricao,usuario_nome&acao=eq.excluiu&registro_id=eq.' + bia.id))[0]
+  assert.deepEqual([aud?.descricao, aud?.usuario_nome], ['Bia Temporária (atendente)', 'Tia Cê'])
+})
+
+await teste('motoboy conclui uma entrega e registra problema em outra pelo aplicativo; o painel avisa as duas', async () => {
+  // o Carlos fica com duas entregas na rua
   const rua = await numero('saiu_entrega')
+  const carlos = (await api('entregadores?select=id&nome=eq.Carlos%20Moto'))[0].id
+  const outra = (await api('pedidos?select=id,numero&tipo=eq.entrega&status=eq.em_preparo&order=criado_em&limit=1'))[0]
+  await api('pedidos?id=eq.' + outra.id, { method: 'PATCH', body: JSON.stringify({ status: 'saiu_entrega', entregador_id: carlos }) })
+  await api('pedidos?id=eq.' + rua.id, { method: 'PATCH', body: JSON.stringify({ entregador_id: carlos }) })
+  await ir(pc, '/admin/pedidos', 2000) // o painel aberto, como na loja
+  const moto = await nova('celular'); await entrar(moto, '/entregador', 'carlos@teste.local'); await dormir(1200)
   await clicar(moto, 'Entreguei', 'button'); await dormir(1500)
-  assert.deepEqual([(await situacao(rua.id)).status, (await situacao(rua.id)).pago], ['entregue', true])
+  await clicar(moto, 'Tive um problema', 'button'); await clicar(moto, 'Cliente não atende', '[role=dialog] button'); await clicar(moto, 'Avisar a pizzaria', '[role=dialog] button'); await dormir(1200)
+  const [a, b] = [await situacao(rua.id), await situacao(outra.id)]
+  const entregue = a.status === 'entregue' ? rua : outra, comProblema = entregue === rua ? outra : rua
+  assert.deepEqual([a.status, b.status].sort(), ['entregue', 'problema_entrega'])
   assert.ok(await moto.evaluate(() => document.body.innerText.includes('entrega(s) hoje')))
   await moto.close()
+  // sem tempo real no ambiente local, o painel confere a cada 45 s
+  let avisos = ''
+  for (let i = 0; i < 55 && !(avisos.includes('#' + entregue.numero + ' entregue!') && avisos.includes('pedido #' + comProblema.numero)); i++) {
+    await dormir(1000)
+    avisos = await pc.evaluate(() => document.querySelector('[aria-live=polite]')?.innerText ?? '')
+  }
+  assert.match(avisos, new RegExp('Pedido #' + entregue.numero + ' entregue! Carlos Moto concluiu a entrega'))
+  assert.match(avisos, new RegExp('Problema na entrega do pedido #' + comProblema.numero + ': Carlos Moto não conseguiu entregar'))
+  // o que a própria atendente faz no painel não vira aviso para ela
+  await pc.evaluate((n) => [...[...document.querySelectorAll('article')].find((x) => x.innerText.includes('#' + n)).querySelectorAll('button')].find((x) => x.innerText.includes('Tentar entregar de novo')).click(), comProblema.numero); await dormir(1500)
+  await pc.evaluate((n) => [...[...document.querySelectorAll('article')].find((x) => x.innerText.includes('#' + n)).querySelectorAll('button')].find((x) => x.innerText.includes('Entregue e recebido')).click(), comProblema.numero); await dormir(2500)
+  assert.equal((await situacao(comProblema.id)).status, 'entregue')
+  assert.ok(!(await pc.evaluate((n) => document.querySelector('[aria-live=polite]')?.innerText.includes('#' + n + ' entregue!'), comProblema.numero)), 'sem aviso do que o próprio painel fez')
 })
 
 await teste('pagamentos: motoboy recebe diária + entregas, o dinheiro sai do caixa e desconta do líquido', async () => {

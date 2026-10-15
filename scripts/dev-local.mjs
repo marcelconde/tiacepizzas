@@ -243,7 +243,18 @@ http.createServer(async (req, res) => {
     // ---------- funções de servidor
     if (url.pathname === '/functions/v1/admin-usuarios') {
       const admin = claims && (await db.query(`select 1 from perfis where id = $1 and ativo and papel = 'admin'`, [claims.sub])).rows.length
-      if (!admin) return enviar(403, { erro: 'Apenas administradores podem criar usuários.' })
+      if (!admin) return enviar(403, { erro: 'Apenas administradores podem criar ou apagar usuários.' })
+      if (corpo.acao === 'apagar') {
+        // como a função de verdade: não apaga a si mesmo, desliga os avisos do celular do motoboy e registra quem apagou
+        if (corpo.id === claims.sub) return enviar(400, { erro: 'Você não pode apagar o seu próprio usuário.' })
+        const alvo = (await db.query(`select id, nome, email, papel, ativo from perfis where id = $1`, [corpo.id])).rows[0]
+        if (!alvo) return enviar(404, { erro: 'Usuário não encontrado.' })
+        await db.query(`delete from entregador_aparelhos where entregador_id in (select id from entregadores where usuario_id = $1)`, [alvo.id])
+        await db.query(`delete from auth.users where id = $1`, [alvo.id])
+        await db.query(`insert into auditoria (tabela, registro_id, acao, descricao, antes, usuario_id, usuario_nome) select 'perfis', $1, 'excluiu', $2, $3::jsonb, id, nome from perfis where id = $4`,
+          [alvo.id, `${alvo.nome} (${alvo.papel})`, JSON.stringify(alvo), claims.sub])
+        return enviar(200, { ok: true })
+      }
       if (await usuarioPor('email', corpo.email)) return enviar(400, { erro: 'Já existe um usuário com este e-mail.' })
       // como o Supabase de verdade: o usuário nasce sem o papel, que é gravado logo em seguida no app_metadata
       const email = String(corpo.email).trim().toLowerCase()

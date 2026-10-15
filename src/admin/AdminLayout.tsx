@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import {
-  BarChart3, Bike, BookOpen, ClipboardList, FileText, HandCoins, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
+  BarChart3, Bell, BellOff, BellRing, Bike, BookOpen, ClipboardList, FileText, HandCoins, History, KeyRound, LayoutTemplate, LineChart, LogOut, Menu, Package,
   PlusCircle, Settings, Users, Volume2, VolumeX, Wallet, Wallet2, Wifi, WifiOff, X, type LucideIcon,
 } from 'lucide-react'
 import { Login, Moldura, TrocarSenha } from '../components/Login'
@@ -10,7 +10,7 @@ import { Botao, Carregando, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { PAPEIS } from '../lib/formato'
 import { useLoja } from '../lib/loja'
-import { aceitarPedido } from '../lib/pedidos'
+import { aceitarPedido, alteradoAquiAgora } from '../lib/pedidos'
 import { mensagemErro, recuperacao, supabase } from '../lib/supabase'
 import type { ConfigFiscal, Configuracoes } from '../lib/tipos'
 
@@ -100,13 +100,20 @@ export function nivelAtraso(statusEm: string, config: Configuracoes | null): Niv
   return min >= a.critico ? 'critico' : min >= a.atrasado ? 'atrasado' : min >= a.atencao ? 'atencao' : null
 }
 
-function tocarAlerta() {
+// cada aviso tem o seu som: [frequência, quando começa (s)]
+const SONS = {
+  novo: [[880, 0], [880, 0.25], [1175, 0.5]],
+  entregue: [[784, 0], [1047, 0.18], [1319, 0.36]],
+  problema: [[466, 0], [349, 0.3]],
+} as const
+
+function tocarAlerta(som: keyof typeof SONS = 'novo') {
   try {
     const ctx = new AudioContext()
-    ;[0, 0.25, 0.5].forEach((inicio, i) => {
+    SONS[som].forEach(([frequencia, inicio]) => {
       const osc = ctx.createOscillator()
       const ganho = ctx.createGain()
-      osc.frequency.value = i === 2 ? 1175 : 880
+      osc.frequency.value = frequencia
       ganho.gain.setValueAtTime(0.25, ctx.currentTime + inicio)
       ganho.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + inicio + 0.2)
       osc.connect(ganho).connect(ctx.destination)
@@ -117,6 +124,31 @@ function tocarAlerta() {
   } catch {
     /* navegador bloqueou o áudio antes de qualquer clique */
   }
+}
+
+// avisos do computador (aparecem mesmo com o painel minimizado ou em outra aba); a pessoa liga pelo sino do menu
+const temAvisosDoSistema = typeof window !== 'undefined' && 'Notification' in window
+const avisosLigados = () => temAvisosDoSistema && Notification.permission === 'granted' && localStorage.getItem('tiace.avisos') !== 'nao'
+
+function avisarNoComputador(titulo: string, texto: string, marca: string) {
+  if (!document.hidden || !avisosLigados()) return // com o painel à vista, o aviso na tela já basta
+  try {
+    const n = new Notification(titulo, { body: texto, tag: marca, icon: '/icone-192.png' })
+    n.onclick = () => {
+      window.focus()
+      n.close()
+    }
+  } catch {
+    /* celular: o navegador só mostra avisos de sites instalados como aplicativo */
+  }
+}
+
+interface PedidoNaRua {
+  id: string
+  numero: number
+  status: string
+  cliente_nome: string
+  entregadores: { nome: string } | null
 }
 
 // ------------------------------------------------------------------ layout
@@ -130,6 +162,10 @@ export default function AdminLayout() {
   const [novos, setNovos] = useState(0)
   const [aoVivo, setAoVivo] = useState(false)
   const [som, setSom] = useState(() => localStorage.getItem('tiace.som') !== 'nao')
+  const [avisos, setAvisos] = useState<'ligados' | 'desligados' | 'bloqueados'>(() =>
+    !temAvisosDoSistema ? 'desligados' : Notification.permission === 'denied' ? 'bloqueados' : avisosLigados() ? 'ligados' : 'desligados',
+  )
+  const naRua = useRef<Map<string, string> | null>(null) // entregas prontas ou na rua, e a última etapa vista de cada uma
   const [menu, setMenu] = useState(false)
   const [trocarSenha, setTrocarSenha] = useState(false)
   const ouvintes = useRef(new Set<() => void>())
@@ -161,6 +197,39 @@ export default function AdminLayout() {
     contarNovos()
     ouvintes.current.forEach((fn) => fn())
   }, [contarNovos])
+
+  /**
+   * Avisa quando o motoboy conclui uma entrega (ou registra um problema) pelo aplicativo. Compara a etapa de cada
+   * entrega com a da conferência anterior, então funciona com ou sem o tempo real; o que este painel mesmo mudou não avisa.
+   */
+  const conferirEntregas = useCallback(async () => {
+    const desde = new Date(Date.now() - 12 * 3600_000).toISOString()
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('id, numero, status, cliente_nome, entregadores(nome)')
+      .eq('tipo', 'entrega')
+      .in('status', ['pronto', 'saiu_entrega', 'problema_entrega', 'entregue'])
+      .gte('status_em', desde)
+    if (error || !data) return
+    const lista = data as unknown as PedidoNaRua[]
+    const antes = naRua.current
+    naRua.current = new Map(lista.map((p) => [p.id, p.status]))
+    if (!antes) return // primeira conferência: só memoriza
+    for (const p of lista) {
+      const anterior = antes.get(p.id)
+      if (anterior === p.status || alteradoAquiAgora(p.id)) continue
+      const motoboy = p.entregadores?.nome ?? 'O motoboy'
+      if (p.status === 'entregue' && anterior) {
+        if (refs.current.som) tocarAlerta('entregue')
+        aviso.sucesso(`Pedido #${p.numero} entregue! ${motoboy} concluiu a entrega para ${p.cliente_nome}.`, 15_000)
+        avisarNoComputador(`Pedido #${p.numero} entregue`, `${motoboy} concluiu a entrega para ${p.cliente_nome}.`, `pedido-${p.id}`)
+      } else if (p.status === 'problema_entrega') {
+        if (refs.current.som) tocarAlerta('problema')
+        aviso.erro(`Problema na entrega do pedido #${p.numero}: ${motoboy} não conseguiu entregar. Veja em Pedidos.`, 20_000)
+        avisarNoComputador(`Problema no pedido #${p.numero}`, `${motoboy} não conseguiu entregar para ${p.cliente_nome}.`, `pedido-${p.id}`)
+      }
+    }
+  }, [aviso])
 
   useEffect(() => {
     // o painel é carregado depois do site: o aviso do link de "esqueci a senha" pode já ter passado
@@ -196,6 +265,8 @@ export default function AdminLayout() {
     recarregarFiscal()
     if (!atendimento) return
     contarNovos()
+    conferirEntregas()
+    const pararEntregas = aoMudarPedidos(conferirEntregas)
     const canal = supabase
       .channel('painel-pedidos')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (m) => {
@@ -205,6 +276,7 @@ export default function AdminLayout() {
         const { config, fiscal, som } = refs.current
         if (som) tocarAlerta()
         aviso.sucesso(`Chegou o pedido #${novo.numero}!`)
+        avisarNoComputador(`Chegou o pedido #${novo.numero}!`, 'Abra o painel para aceitar.', `novo-${novo.id}`)
         if (config?.auto_aceitar && novo.id) {
           aceitarPedido(novo.id, config, fiscal)
             .then((avisos) => avisos?.forEach((a) => aviso.erro(a)))
@@ -216,9 +288,11 @@ export default function AdminLayout() {
     const t = setInterval(sincronizar, 45_000)
     return () => {
       clearInterval(t)
+      pararEntregas()
+      naRua.current = null
       supabase.removeChannel(canal)
     }
-  }, [interno, modulos, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar])
+  }, [interno, modulos, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar, aoMudarPedidos, conferirEntregas])
 
   const valor = useMemo(
     () => ({ fiscal, recarregarFiscal, novos, pode, ehAdmin, aoMudarPedidos, sincronizar }),
@@ -268,6 +342,22 @@ export default function AdminLayout() {
     setSom(v)
     localStorage.setItem('tiace.som', v ? 'sim' : 'nao')
     if (v) tocarAlerta()
+  }
+
+  async function alternarAvisos() {
+    if (avisos === 'ligados') {
+      localStorage.setItem('tiace.avisos', 'nao')
+      return setAvisos('desligados')
+    }
+    localStorage.removeItem('tiace.avisos')
+    const permissao = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission
+    if (permissao === 'granted') {
+      setAvisos('ligados')
+      aviso.sucesso('Pronto: pedido novo e entrega concluída aparecem no canto da tela do computador, mesmo com o painel minimizado.', 8000)
+    } else {
+      setAvisos('bloqueados')
+      aviso.erro('O navegador bloqueou os avisos. Para liberar, clique no cadeado ao lado do endereço do site e permita "Notificações".', 12_000)
+    }
   }
 
   return (
@@ -325,6 +415,18 @@ export default function AdminLayout() {
               <button type="button" title={som ? 'Desligar som de novos pedidos' : 'Ligar som de novos pedidos'} aria-label="Som de novos pedidos" aria-pressed={som} onClick={alternarSom} className="rounded-lg p-2 hover:bg-white/10">
                 {som ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
               </button>
+              {atendimento && temAvisosDoSistema && (
+                <button
+                  type="button"
+                  title={avisos === 'ligados' ? 'Avisos no canto da tela do computador: ligados' : avisos === 'bloqueados' ? 'Avisos bloqueados pelo navegador' : 'Ligar avisos no canto da tela do computador (pedido novo e entrega concluída)'}
+                  aria-label="Avisos no computador"
+                  aria-pressed={avisos === 'ligados'}
+                  onClick={alternarAvisos}
+                  className="rounded-lg p-2 hover:bg-white/10"
+                >
+                  {avisos === 'ligados' ? <BellRing className="size-4" /> : avisos === 'bloqueados' ? <BellOff className="size-4 text-massa-400" /> : <Bell className="size-4" />}
+                </button>
+              )}
               <button type="button" title="Trocar senha" aria-label="Trocar senha" onClick={() => setTrocarSenha(true)} className="rounded-lg p-2 hover:bg-white/10">
                 <KeyRound className="size-4" />
               </button>

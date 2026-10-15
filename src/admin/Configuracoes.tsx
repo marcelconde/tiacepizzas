@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, Download, Plus, Printer } from 'lucide-react'
+import { Check, Download, Plus, Printer, Trash2 } from 'lucide-react'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Tabela, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { chamarFuncao, useConsulta } from '../lib/dados'
@@ -40,6 +40,7 @@ function Usuarios() {
   const aviso = useAviso()
   const [novo, setNovo] = useState<{ nome: string; email: string; senha: string; papel: Papel; entregador_id: string } | null>(null)
   const [salvando, setSalvando] = useState(false)
+  const [apagar, setApagar] = useState<Perfil | null>(null)
   const { dados, carregando, erro, recarregar } = useConsulta<Perfil[]>(() => supabase.from('perfis').select('*').order('criado_em'), [])
   // motoboys já cadastrados em Entregas que ainda não têm login
   const { dados: entregadores, recarregar: recarregarEntregadores } = useConsulta<{ id: string; nome: string }[]>(
@@ -69,6 +70,21 @@ function Usuarios() {
     setSalvando(false)
   }
 
+  async function confirmarApagar() {
+    if (!apagar) return
+    setSalvando(true)
+    try {
+      await chamarFuncao('admin-usuarios', { acao: 'apagar', id: apagar.id })
+      aviso.sucesso(`Usuário ${apagar.nome} apagado`)
+      setApagar(null)
+      recarregar()
+      recarregarEntregadores()
+    } catch (err) {
+      aviso.erro(mensagemErro(err))
+    }
+    setSalvando(false)
+  }
+
   if (erro) return <Erro>{erro}</Erro>
   if (carregando && !dados) return <Carregando />
   return (
@@ -78,7 +94,7 @@ function Usuarios() {
           <Plus className="size-4" /> Novo usuário
         </Botao>
       </div>
-      <Tabela colunas={['Nome', 'E-mail', 'Função', 'Acesso']}>
+      <Tabela colunas={['Nome', 'E-mail', 'Função', 'Acesso', '']}>
         {(dados ?? []).map((p) => {
           const eu = p.id === perfil?.id
           return (
@@ -100,11 +116,48 @@ function Usuarios() {
               <td>
                 <Alternar ativo={p.ativo} disabled={eu} onChange={(v) => alterar(p, { ativo: v })} rotulo={p.ativo ? 'Liberado' : 'Bloqueado'} />
               </td>
+              <td className="text-right">
+                {!eu && (
+                  <button type="button" title="Apagar usuário" aria-label={`Apagar ${p.nome}`} onClick={() => setApagar(p)} className="rounded-lg p-2 text-red-700 hover:bg-red-50">
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
+              </td>
             </tr>
           )
         })}
       </Tabela>
       <p className="mt-3 text-sm text-stone-500">O que cada função enxerga é definido na aba Permissões. O motoboy usa só o aplicativo de entregas, em {location.host}/entregador.</p>
+
+      <Modal
+        aberto={apagar != null}
+        titulo="Apagar usuário"
+        onFechar={() => setApagar(null)}
+        largura="max-w-md"
+        rodape={
+          <>
+            <Botao variante="secundario" onClick={() => setApagar(null)}>
+              Voltar
+            </Botao>
+            <Botao variante="perigo" carregando={salvando} onClick={confirmarApagar}>
+              <Trash2 className="size-4" /> Apagar
+            </Botao>
+          </>
+        }
+      >
+        {apagar && (
+          <div className="space-y-3 text-sm text-stone-700">
+            <p>
+              Apagar <b>{apagar.nome}</b> ({apagar.email})? A pessoa não consegue mais entrar. Não dá para desfazer: para voltar, é preciso criar o usuário de novo.
+            </p>
+            <p>Os pedidos, o caixa e a auditoria continuam mostrando o que ela fez.</p>
+            {apagar.papel === 'motoboy' && (
+              <p>O cadastro dele em Entregas continua, com o histórico de entregas e acertos, e o celular dele para de receber avisos. Para tirar da lista de motoboys, desative em Entregas → Entregadores.</p>
+            )}
+            <p className="text-stone-500">Só quer impedir o acesso por um tempo? Use a chave “Liberado/Bloqueado”.</p>
+          </div>
+        )}
+      </Modal>
 
       <Modal aberto={novo != null} titulo="Novo usuário" onFechar={() => setNovo(null)} largura="max-w-md">
         {novo && (
