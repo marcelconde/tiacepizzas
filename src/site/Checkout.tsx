@@ -5,7 +5,7 @@ import { AreaTexto, Botao, Campo, Entrada, Erro, Selecao, Vazio, cx } from '../c
 import { itensParaPedido, useCarrinho } from '../lib/carrinho'
 import { useConta } from '../lib/conta'
 import { PAGAMENTO, brl, enderecoTexto, soDigitos } from '../lib/formato'
-import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
+import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto, type PontoAchado } from '../lib/geo'
 import { combosDaSacola, useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento } from '../lib/tipos'
@@ -73,6 +73,7 @@ export default function Checkout() {
   const cepBuscado = useRef(soDigitos(d.cep)) // o CEP que já veio preenchido não é buscado de novo
   const [cepAviso, setCepAviso] = useState('')
   const [ponto, setPonto] = useState<Ponto | null>(null)
+  const [aproximado, setAproximado] = useState<PontoAchado['aproximado']>() // o número não está no mapa: ponto pela rua ou pelo bairro
   const [entrega, setEntrega] = useState<Entrega | null>(null)
   const [localizando, setLocalizando] = useState(false)
   const [pagamento, setPagamento] = useState<FormaPagamento>('pix')
@@ -141,6 +142,7 @@ export default function Checkout() {
     setLocalizando(true)
     const p = await localizarEndereco({ ...dados, cidade: dados.cidade || config?.cidade, uf: dados.uf || config?.uf }, loja)
     if (localizado.current !== endereco) return null // o endereço mudou enquanto a busca corria: vale a busca mais nova
+    setAproximado(p?.aproximado)
     if (p) return { ponto: p as Ponto | null, entrega: await calcular(p) }
     const r: Entrega = { dentro: false, mensagem: 'Não encontramos este endereço no mapa. Confira a rua e o número ou marque o local no mapa.' }
     vezCalculo.current++
@@ -206,6 +208,7 @@ export default function Checkout() {
     if (e.lat != null && e.lng != null) {
       // endereço salvo já tem o ponto certo no mapa
       localizado.current = chaveEndereco(novo)
+      setAproximado(undefined)
       calcular({ lat: Number(e.lat), lng: Number(e.lng) })
     } else localizar(novo)
   }
@@ -298,7 +301,7 @@ export default function Checkout() {
   const whats = linkWhatsApp(config?.whatsapp, 'Olá! Preciso de ajuda para finalizar meu pedido.')
   const marcadores = [
     ...(loja ? [{ id: 'loja', ponto: loja, tipo: 'loja' as const, rotulo: config?.nome_loja }] : []),
-    ...(ponto ? [{ id: 'cliente', ponto, tipo: 'cliente' as const, rotulo: 'Arraste para ajustar o local da entrega', aoArrastar: calcular }] : []),
+    ...(ponto ? [{ id: 'cliente', ponto, tipo: 'cliente' as const, rotulo: 'Arraste para ajustar o local da entrega', aoArrastar: (p: Ponto) => { setAproximado(undefined); calcular(p) } }] : []),
   ]
 
   return (
@@ -436,6 +439,12 @@ export default function Checkout() {
                       <Erro>{entrega.mensagem}</Erro>
                     ) : (
                       <p className="text-sm text-stone-600">Preencha a rua e o número: a taxa de entrega é calculada na hora, pela distância da loja até você.</p>
+                    )}
+                    {aproximado && ponto && !localizando && (
+                      <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                        Não achamos o número {d.numero} no mapa, então marcamos o ponto {aproximado === 'rua' ? 'pela rua' : 'no meio do bairro'}. <b>Arraste o pino até a sua casa</b> para a taxa
+                        ficar certa.
+                      </p>
                     )}
                     {marcadores.length > 0 && ponto && (
                       <Suspense fallback={null}>

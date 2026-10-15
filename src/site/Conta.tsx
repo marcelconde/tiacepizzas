@@ -96,7 +96,8 @@ export default function Conta() {
     const { error } = await supabase.from('enderecos').insert({
       cliente_id: conta!.id, cep: novo.cep || null, logradouro: novo.logradouro.trim(), numero: novo.numero.trim(), complemento: novo.complemento.trim() || null,
       bairro_id: novo.bairro_id || null, bairro: bairro?.nome ?? (novo.bairro.trim() || null), referencia: novo.referencia.trim() || null,
-      cidade: local.cidade || null, uf: local.uf || null, lat: ponto?.lat ?? null, lng: ponto?.lng ?? null,
+      // ponto aproximado (número que o mapa não tem) não é guardado: no pedido, a pessoa confere e acerta o pino
+      cidade: local.cidade || null, uf: local.uf || null, lat: ponto && !ponto.aproximado ? ponto.lat : null, lng: ponto && !ponto.aproximado ? ponto.lng : null,
     })
     setSalvando(false)
     if (error) return aviso.erro(mensagemErro(error))

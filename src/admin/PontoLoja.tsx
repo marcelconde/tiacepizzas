@@ -59,7 +59,7 @@ export function PontoLoja({ podeEditar }: { podeEditar: boolean }) {
     const p = await localizarEndereco({ logradouro: config.logradouro, numero: config.numero, bairro: config.bairro, cidade: config.cidade, uf: config.uf })
     setOcupado('')
     if (!p) return aviso.erro('Não encontramos o endereço da loja no mapa. Use um dos outros jeitos.')
-    propor(p, 'Este é o ponto achado pelo endereço. Ele costuma cair perto, mas não na porta: confira e arraste o pino.')
+    propor(p, p.aproximado ? `O número não está no mapa: o ponto é ${p.aproximado === 'rua' ? 'o da rua' : 'o do bairro'}. Arraste o pino até a porta da loja.` : 'Este é o ponto achado pelo endereço. Ele costuma cair perto, mas não na porta: confira e arraste o pino.')
   }
 
   function peloTextoColado() {

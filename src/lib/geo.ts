@@ -31,13 +31,27 @@ export async function consultarCep(cep: string): Promise<EnderecoDoCep | null> {
 
 const BASE = 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=5&addressdetails=1&accept-language=pt-BR'
 const soNumeros = (s: unknown) => String(s ?? '').replace(/\D/g, '')
+const semAcento = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+// "Travessa Coronel Frederico Lundgren" → "Coronel Frederico Lundgren": o mapa às vezes não tem a travessa, mas tem a avenida de mesmo nome ao lado
+const TIPO_DE_VIA = /^(rua|r\.|avenida|av\.?|travessa|tv\.?|trav\.?|alameda|al\.?|estrada|estr?\.|rodovia|rod\.?|pra[cç]a|p[cç]a\.?|largo|beco|vila|viela|via|ladeira|passagem|caminho|servid[aã]o)\s+/i
+
+/** Ponto no mapa. `aproximado`: o número da casa não foi achado e o ponto é o da rua de mesmo nome ou o do bairro. */
+export interface PontoAchado extends Ponto {
+  aproximado?: 'rua' | 'bairro'
+}
 
 interface Achado extends Ponto {
   numero: string
   cep: string
+  bairro: string
 }
 
+// a política do serviço pede no máximo uma consulta por segundo
+let ultimaConsulta = 0
 async function consultar(parametros: Record<string, string>, perto?: Ponto | null): Promise<Achado[]> {
+  const espera = ultimaConsulta + 1000 - Date.now()
+  if (espera > 0) await new Promise((r) => setTimeout(r, espera))
+  ultimaConsulta = Date.now()
   const filtros = new URLSearchParams(Object.entries(parametros).filter(([, v]) => v))
   if (perto) {
     // só vale resultado a até uns 55 km do ponto de referência: sem isto, uma rua de mesmo nome em outra cidade ganha
@@ -45,37 +59,59 @@ async function consultar(parametros: Record<string, string>, perto?: Ponto | nul
     filtros.set('bounded', '1')
   }
   const r = await fetch(`${BASE}&${filtros}`).then((x) => (x.ok ? x.json() : []))
-  return (Array.isArray(r) ? r : []).map((x) => ({ lat: Number(x.lat), lng: Number(x.lon), numero: String(x.address?.house_number ?? '').trim().toLowerCase(), cep: soNumeros(x.address?.postcode) }))
+  return (Array.isArray(r) ? r : []).map((x) => ({
+    lat: Number(x.lat), lng: Number(x.lon), numero: String(x.address?.house_number ?? '').trim().toLowerCase(), cep: soNumeros(x.address?.postcode),
+    bairro: semAcento([x.address?.suburb, x.address?.neighbourhood, x.address?.quarter, x.address?.city_district].filter(Boolean).join('|')),
+  }))
 }
 
 /**
- * Converte um endereço em coordenadas. Devolve null quando não encontra.
+ * Converte um endereço em coordenadas. Devolve null quando não encontra nem a rua nem o bairro.
  * `perto` (o ponto da loja) limita a busca à região. Entre os resultados, vale primeiro a casa com o número
- * pedido, depois o trecho da rua com o mesmo CEP e só então o primeiro da lista.
+ * pedido, depois o trecho da rua com o mesmo CEP, depois o do mesmo bairro e só então o primeiro da lista.
+ * O mapa do OpenStreetMap não tem todas as ruas pequenas: nesse caso o ponto sai aproximado (rua de mesmo nome
+ * no bairro, ou o meio do bairro) e quem usa a tela confere e arrasta o pino.
  */
-export async function localizarEndereco(e: EnderecoBusca, perto?: Ponto | null): Promise<Ponto | null> {
+export async function localizarEndereco(e: EnderecoBusca, perto?: Ponto | null): Promise<PontoAchado | null> {
   const rua = e.logradouro?.trim()
   if (!rua) return null
   const numero = String(e.numero ?? '').trim().toLowerCase()
   const cep = soNumeros(e.cep)
+  const bairro = e.bairro?.trim() ?? ''
   const cidade = e.cidade?.trim() ?? ''
   const uf = e.uf?.trim() ?? ''
-  const chave = `tiace.geo.${[rua, numero, e.bairro, cidade, uf, cep, perto?.lat.toFixed(3), perto?.lng.toFixed(3)].join('|').toLowerCase()}`
+  const chave = `tiace.geo.${[rua, numero, bairro, cidade, uf, cep, perto?.lat.toFixed(3), perto?.lng.toFixed(3)].join('|').toLowerCase()}`
   try {
     const salvo = sessionStorage.getItem(chave)
     if (salvo) return JSON.parse(salvo)
   } catch {
     /* sem armazenamento de sessão: segue consultando */
   }
-  const escolher = (lista: Achado[]) => lista.find((x) => numero && x.numero === numero) ?? lista.find((x) => cep.length === 8 && x.cep === cep) ?? lista[0] ?? null
+  const mesmoBairro = (x: Achado) => Boolean(bairro) && x.bairro.split('|').includes(semAcento(bairro))
+  const escolher = (lista: Achado[]) =>
+    lista.find((x) => numero && x.numero === numero) ?? lista.find((x) => cep.length === 8 && x.cep === cep) ?? lista.find(mesmoBairro) ?? lista[0] ?? null
   try {
     const comNumero = [numero, rua].filter(Boolean).join(' ')
-    let achado = escolher(await consultar({ street: comNumero, city: cidade, state: uf }, perto))
+    let achado: Achado | null = escolher(await consultar({ street: comNumero, city: cidade, state: uf }, perto))
     // a cidade informada pode não ser a do endereço (cliente de cidade vizinha que não digitou o CEP)
     if (!achado && cidade && perto) achado = escolher(await consultar({ street: comNumero, state: uf }, perto))
-    if (!achado) achado = escolher(await consultar({ q: [rua, e.bairro?.trim(), cidade, uf, 'Brasil'].filter(Boolean).join(', ') }, perto))
+    if (!achado) achado = escolher(await consultar({ q: [rua, bairro, cidade, uf, 'Brasil'].filter(Boolean).join(', ') }, perto))
+    let aproximado: PontoAchado['aproximado']
+    // a rua não está no mapa: tenta o nome sem "Travessa", "Rua"… (a avenida de mesmo nome costuma ser a vizinha)
+    const nome = rua.replace(TIPO_DE_VIA, '')
+    if (!achado && nome !== rua) {
+      const lista = await consultar({ q: [nome, cidade, uf, 'Brasil'].filter(Boolean).join(', ') }, perto)
+      // só serve se ficar no bairro informado: fora dele seria outra rua qualquer
+      achado = bairro ? (lista.find(mesmoBairro) ?? null) : escolher(lista)
+      if (achado) aproximado = 'rua'
+    }
+    // por fim, o meio do bairro
+    if (!achado && bairro) {
+      achado = escolher(await consultar({ q: [bairro, cidade, uf, 'Brasil'].filter(Boolean).join(', ') }, perto))
+      if (achado) aproximado = 'bairro'
+    }
     if (!achado) return null
-    const ponto: Ponto = { lat: achado.lat, lng: achado.lng }
+    const ponto: PontoAchado = { lat: achado.lat, lng: achado.lng, ...(aproximado ? { aproximado } : {}) }
     try {
       sessionStorage.setItem(chave, JSON.stringify(ponto))
     } catch {

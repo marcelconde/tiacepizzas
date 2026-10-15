@@ -89,7 +89,9 @@ export default function Pdv() {
     }
     setPonto({ ...p, rota_km: km })
     setTaxa(String(data.taxa))
-    setDistancia(`${data.por_rota ? '' : 'cerca de '}${String(data.distancia_km).replace('.', ',')} km da loja${data.por_rota ? ', pelas ruas' : ''}`)
+    const quanto = `${data.por_rota ? '' : 'cerca de '}${String(data.distancia_km).replace('.', ',')} km da loja${data.por_rota ? ', pelas ruas' : ''}`
+    // número que o mapa não tem: o ponto é o da rua ou o do bairro, e a atendente confere a faixa
+    setDistancia('aproximado' in p && p.aproximado ? `Ponto aproximado (${p.aproximado === 'rua' ? 'pela rua, sem o número' : 'pelo bairro'}): ${quanto}. Confira a faixa.` : quanto)
   }
 
   function mudarTipo(t: TipoPedido) {
