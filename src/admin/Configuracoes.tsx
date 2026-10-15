@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { Check, Download, Plus, Printer, Trash2 } from 'lucide-react'
+import { Check, Download, Plus, Printer, Trash2, Volume2 } from 'lucide-react'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Tabela, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { chamarFuncao, useConsulta } from '../lib/dados'
@@ -10,7 +10,7 @@ import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import { metaDefinida } from '../lib/metas'
 import type { Configuracoes as TConfig, Meta, Papel, Pedido, Perfil } from '../lib/tipos'
-import { MODULOS, Pagina, useAdmin, type Modulo } from './AdminLayout'
+import { MODULOS, NOME_DO_SOM, Pagina, tocarAlerta, useAdmin, type Modulo, type Som } from './AdminLayout'
 import { PontoLoja } from './PontoLoja'
 
 type Aba = 'loja' | 'horarios' | 'pedidos' | 'metas' | 'impressao' | 'financeiro' | 'usuarios' | 'permissoes' | 'sistema'
@@ -529,7 +529,10 @@ export default function Configuracoes() {
             </Campo>
 
             <h2 className="mt-2 font-display text-lg font-semibold sm:col-span-2">Alertas de pedido parado</h2>
-            <p className="-mt-2 text-sm text-stone-600 sm:col-span-2">Quantos minutos um pedido pode ficar na mesma etapa antes de cada nível de alerta aparecer no quadro de pedidos.</p>
+            <p className="-mt-2 text-sm text-stone-600 sm:col-span-2">
+              Quantos minutos um pedido pode ficar na mesma etapa antes de cada nível de alerta. Quando um pedido passa de nível, o painel toca um som e mostra um aviso (com o
+              alto-falante do menu ligado).
+            </p>
             <div className="grid grid-cols-3 gap-3 sm:col-span-2">
               <Campo rotulo="Atenção (min)">
                 <Entrada {...alerta('atencao')} />
@@ -540,6 +543,16 @@ export default function Configuracoes() {
               <Campo rotulo="Crítico (min)">
                 <Entrada {...alerta('critico')} />
               </Campo>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-sm font-semibold">Ouvir os sons dos avisos</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(Object.keys(NOME_DO_SOM) as Som[]).map((s) => (
+                  <Botao key={s} variante="secundario" tamanho="p" onClick={() => tocarAlerta(s)}>
+                    <Volume2 className="size-4" /> {NOME_DO_SOM[s]}
+                  </Botao>
+                ))}
+              </div>
             </div>
 
             <h2 className="mt-2 font-display text-lg font-semibold sm:col-span-2">Conta do cliente</h2>

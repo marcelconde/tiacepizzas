@@ -338,14 +338,20 @@ await teste('apagar usuário: some da lista, não entra mais e fica na auditoria
   assert.deepEqual([aud?.descricao, aud?.usuario_nome], ['Bia Temporária (atendente)', 'Tia Cê'])
 })
 
-await teste('motoboy conclui uma entrega e registra problema em outra pelo aplicativo; o painel avisa as duas', async () => {
+await teste('painel avisa com som: entrega concluída e problema pelo aplicativo do motoboy, pedido que fica atrasado e pedido novo sem tempo real', async () => {
   // o Carlos fica com duas entregas na rua
   const rua = await numero('saiu_entrega')
   const carlos = (await api('entregadores?select=id&nome=eq.Carlos%20Moto'))[0].id
-  const outra = (await api('pedidos?select=id,numero&tipo=eq.entrega&status=eq.em_preparo&order=criado_em&limit=1'))[0]
+  const [outra, parado] = await api('pedidos?select=id,numero&tipo=eq.entrega&status=eq.em_preparo&order=criado_em&limit=2')
+  await api('pedidos?id=eq.' + parado.id, { method: 'PATCH', body: JSON.stringify({ status_em: new Date().toISOString() }) }) // em dia quando o painel abre
   await api('pedidos?id=eq.' + outra.id, { method: 'PATCH', body: JSON.stringify({ status: 'saiu_entrega', entregador_id: carlos }) })
   await api('pedidos?id=eq.' + rua.id, { method: 'PATCH', body: JSON.stringify({ entregador_id: carlos }) })
   await ir(pc, '/admin/pedidos', 2000) // o painel aberto, como na loja
+  // com o painel aberto: um pedido passa a 30 min parado na mesma etapa e chega um pedido novo pelo site
+  await api('pedidos?id=eq.' + parado.id, { method: 'PATCH', body: JSON.stringify({ status_em: new Date(Date.now() - 30 * 60000).toISOString() }) })
+  const coca = (await api('produtos?select=id&nome=eq.Coca-Cola%202L'))[0].id
+  const site = await (await fetch(API + '/rest/v1/rpc/criar_pedido', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p: { chave: crypto.randomUUID(), tipo: 'retirada', cliente: { nome: 'Teste Aviso', telefone: '11955554444' }, itens: [{ produto_id: coca, quantidade: 1 }], forma_pagamento: 'pix' } }) })).json()
+  assert.ok(site.numero, JSON.stringify(site))
   const moto = await nova('celular'); await entrar(moto, '/entregador', 'carlos@teste.local'); await dormir(1200)
   await clicar(moto, 'Entreguei', 'button'); await dormir(1500)
   await clicar(moto, 'Tive um problema', 'button'); await clicar(moto, 'Cliente não atende', '[role=dialog] button'); await clicar(moto, 'Avisar a pizzaria', '[role=dialog] button'); await dormir(1200)
@@ -359,14 +365,17 @@ await teste('motoboy conclui uma entrega e registra problema em outra pelo aplic
   assert.match(minhas, /Minhas entregas[\s\S]*Hoje[\s\S]*Últimos 7 dias[\s\S]*Este mês[\s\S]*Por dia/)
   assert.ok(Number(/(\d+)\s*Hoje/.exec(minhas)?.[1]) >= 1, 'a entrega de agora conta em Hoje')
   await moto.close()
-  // sem tempo real no ambiente local, o painel confere a cada 45 s
+  // sem tempo real no ambiente local, o painel confere a cada 45 s; junta tudo o que apareceu na tela nesse tempo
+  const esperados = ['Pedido #' + entregue.numero + ' entregue! Carlos Moto concluiu a entrega', 'Problema na entrega do pedido #' + comProblema.numero + ': Carlos Moto não conseguiu entregar',
+    'Pedido #' + parado.numero + ' está ATRASADO: 3', 'Chegou o pedido #' + site.numero + '!'] // 30 ou 31 min, conforme a hora da conferência
   let avisos = ''
-  for (let i = 0; i < 55 && !(avisos.includes('#' + entregue.numero + ' entregue!') && avisos.includes('pedido #' + comProblema.numero)); i++) {
+  for (let i = 0; i < 55 && !esperados.every((e) => avisos.includes(e)); i++) {
     await dormir(1000)
-    avisos = await pc.evaluate(() => document.querySelector('[aria-live=polite]')?.innerText ?? '')
+    avisos += '\n' + (await pc.evaluate(() => document.querySelector('[aria-live=polite]')?.innerText ?? ''))
   }
-  assert.match(avisos, new RegExp('Pedido #' + entregue.numero + ' entregue! Carlos Moto concluiu a entrega'))
-  assert.match(avisos, new RegExp('Problema na entrega do pedido #' + comProblema.numero + ': Carlos Moto não conseguiu entregar'))
+  for (const e of esperados) assert.ok(avisos.includes(e), 'faltou o aviso: ' + e)
+  assert.match(avisos, new RegExp('Pedido #' + parado.numero + ' está ATRASADO: 3[01] min parado em “Em preparo”'))
+  assert.ok(!avisos.includes('Pedido #' + outra.numero + ' está') && !avisos.includes('Pedido #' + rua.numero + ' está'), 'pedido que mudou de etapa não vira aviso de atraso')
   // o que a própria atendente faz no painel não vira aviso para ela
   await pc.evaluate((n) => [...[...document.querySelectorAll('article')].find((x) => x.innerText.includes('#' + n)).querySelectorAll('button')].find((x) => x.innerText.includes('Tentar entregar de novo')).click(), comProblema.numero); await dormir(1500)
   await pc.evaluate((n) => [...[...document.querySelectorAll('article')].find((x) => x.innerText.includes('#' + n)).querySelectorAll('button')].find((x) => x.innerText.includes('Entregue e recebido')).click(), comProblema.numero); await dormir(2500)

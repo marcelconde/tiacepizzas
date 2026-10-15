@@ -8,11 +8,11 @@ import { Login, Moldura, TrocarSenha } from '../components/Login'
 import { Logo } from '../components/Logo'
 import { Botao, Carregando, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
-import { PAPEIS } from '../lib/formato'
+import { PAPEIS, STATUS, haQuanto } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { aceitarPedido, alteradoAquiAgora } from '../lib/pedidos'
 import { mensagemErro, recuperacao, supabase } from '../lib/supabase'
-import type { ConfigFiscal, Configuracoes } from '../lib/tipos'
+import type { ConfigFiscal, Configuracoes, StatusPedido, TipoPedido } from '../lib/tipos'
 
 // ------------------------------------------------------------------ módulos e menu
 export type Modulo =
@@ -100,29 +100,63 @@ export function nivelAtraso(statusEm: string, config: Configuracoes | null): Niv
   return min >= a.critico ? 'critico' : min >= a.atrasado ? 'atrasado' : min >= a.atencao ? 'atencao' : null
 }
 
-// cada aviso tem o seu som: [frequência, quando começa (s)]
-const SONS = {
-  novo: [[880, 0], [880, 0.25], [1175, 0.5]],
-  entregue: [[784, 0], [1047, 0.18], [1319, 0.36]],
-  problema: [[466, 0], [349, 0.3]],
-} as const
+// ------------------------------------------------------------------ sons
+// Cada aviso tem o seu som, feitos para serem ouvidos numa cozinha barulhenta: ondas "ásperas", volume alto e o
+// desenho repetido. Quanto mais grave a situação, mais rápido e insistente.
+type Nota = [frequencia: number, inicio: number, duracao: number] // em hertz e segundos
+const repetir = (notas: Nota[], vezes: number, intervalo: number): Nota[] =>
+  Array.from({ length: vezes }, (_, i) => notas.map(([f, t, d]): Nota => [f, t + i * intervalo, d])).flat()
 
-function tocarAlerta(som: keyof typeof SONS = 'novo') {
+export type Som = 'novo' | 'entregue' | 'atencao' | 'atrasado' | 'critico' | 'problema'
+const SONS: Record<Som, { onda: OscillatorType; volume: number; notas: Nota[] }> = {
+  novo: { onda: 'sine', volume: 0.35, notas: [[880, 0, 0.2], [880, 0.25, 0.2], [1175, 0.5, 0.25]] },
+  // "plim-plim-plim" subindo, duas vezes
+  entregue: { onda: 'triangle', volume: 0.6, notas: repetir([[1047, 0, 0.14], [1319, 0.15, 0.14], [1568, 0.3, 0.32]], 2, 0.75) },
+  // "dim-dom", duas vezes
+  atencao: { onda: 'triangle', volume: 0.6, notas: repetir([[988, 0, 0.3], [784, 0.35, 0.45]], 2, 0.95) },
+  // sirene de dois tons, quatro vezes
+  atrasado: { onda: 'square', volume: 0.2, notas: repetir([[880, 0, 0.22], [622, 0.25, 0.22]], 4, 0.5) },
+  // bipes agudos e rápidos, como alarme
+  critico: { onda: 'square', volume: 0.25, notas: repetir([[1480, 0, 0.08], [1480, 0.12, 0.08], [1480, 0.24, 0.08], [1480, 0.36, 0.08]], 4, 0.6) },
+  // dois tons descendo, graves
+  problema: { onda: 'square', volume: 0.2, notas: repetir([[740, 0, 0.3], [494, 0.35, 0.45]], 2, 0.95) },
+}
+export const NOME_DO_SOM: Record<Som, string> = {
+  novo: 'Pedido novo', entregue: 'Pedido entregue', atencao: 'Atenção', atrasado: 'Atrasado', critico: 'Crítico', problema: 'Problema na entrega',
+}
+const duracaoDo = (som: Som) => Math.max(...SONS[som].notas.map(([, inicio, duracao]) => inicio + duracao))
+
+export function tocarAlerta(som: Som = 'novo') {
   try {
     const ctx = new AudioContext()
-    SONS[som].forEach(([frequencia, inicio]) => {
+    const { onda, volume, notas } = SONS[som]
+    for (const [frequencia, inicio, duracao] of notas) {
       const osc = ctx.createOscillator()
       const ganho = ctx.createGain()
+      const t0 = ctx.currentTime + inicio
+      osc.type = onda
       osc.frequency.value = frequencia
-      ganho.gain.setValueAtTime(0.25, ctx.currentTime + inicio)
-      ganho.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + inicio + 0.2)
+      ganho.gain.setValueAtTime(0.0001, t0)
+      ganho.gain.exponentialRampToValueAtTime(volume, t0 + 0.01)
+      ganho.gain.setValueAtTime(volume, t0 + duracao * 0.6)
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao)
       osc.connect(ganho).connect(ctx.destination)
-      osc.start(ctx.currentTime + inicio)
-      osc.stop(ctx.currentTime + inicio + 0.2)
-    })
-    setTimeout(() => ctx.close(), 1500)
+      osc.start(t0)
+      osc.stop(t0 + duracao + 0.02)
+    }
+    setTimeout(() => ctx.close(), (duracaoDo(som) + 0.5) * 1000)
   } catch {
     /* navegador bloqueou o áudio antes de qualquer clique */
+  }
+}
+
+/** Vários avisos na mesma conferência: um som depois do outro, do mais grave para o mais leve, nunca encavalados. */
+const PRIORIDADE: Som[] = ['critico', 'problema', 'atrasado', 'novo', 'atencao', 'entregue']
+function tocarEmSequencia(sons: Set<Som>) {
+  let espera = 0
+  for (const som of PRIORIDADE.filter((s) => sons.has(s))) {
+    setTimeout(() => tocarAlerta(som), espera * 1000)
+    espera += duracaoDo(som) + 0.5
   }
 }
 
@@ -143,13 +177,17 @@ function avisarNoComputador(titulo: string, texto: string, marca: string) {
   }
 }
 
-interface PedidoNaRua {
+interface PedidoAberto {
   id: string
   numero: number
-  status: string
+  status: StatusPedido
+  tipo: TipoPedido
+  status_em: string
   cliente_nome: string
   entregadores: { nome: string } | null
 }
+const PESO: Record<NivelAtraso, number> = { atencao: 1, atrasado: 2, critico: 3 }
+const EM_ANDAMENTO: StatusPedido[] = ['novo', 'confirmado', 'em_preparo', 'pronto', 'saiu_entrega', 'problema_entrega']
 
 // ------------------------------------------------------------------ layout
 export default function AdminLayout() {
@@ -165,7 +203,9 @@ export default function AdminLayout() {
   const [avisos, setAvisos] = useState<'ligados' | 'desligados' | 'bloqueados'>(() =>
     !temAvisosDoSistema ? 'desligados' : Notification.permission === 'denied' ? 'bloqueados' : avisosLigados() ? 'ligados' : 'desligados',
   )
-  const naRua = useRef<Map<string, string> | null>(null) // entregas prontas ou na rua, e a última etapa vista de cada uma
+  // pedidos em andamento como estavam na conferência anterior: etapa e nível de atraso
+  const vistos = useRef<Map<string, { status: StatusPedido; nivel: NivelAtraso | null }> | null>(null)
+  const novosAvisados = useRef(new Set<string>()) // pedido novo avisa uma vez só (pelo tempo real ou pela conferência)
   const [menu, setMenu] = useState(false)
   const [trocarSenha, setTrocarSenha] = useState(false)
   const ouvintes = useRef(new Set<() => void>())
@@ -199,36 +239,66 @@ export default function AdminLayout() {
   }, [contarNovos])
 
   /**
-   * Avisa quando o motoboy conclui uma entrega (ou registra um problema) pelo aplicativo. Compara a etapa de cada
-   * entrega com a da conferência anterior, então funciona com ou sem o tempo real; o que este painel mesmo mudou não avisa.
+   * Avisos com som a cada conferência (tempo real ou a cada 45 s): pedido que passou de nível de atraso (atenção,
+   * atrasado, crítico), entrega concluída ou problema registrado pelo motoboy no aplicativo e pedido novo que o tempo
+   * real não avisou. Compara com a conferência anterior; o que este painel mesmo mudou não avisa.
    */
-  const conferirEntregas = useCallback(async () => {
+  const conferirPedidos = useCallback(async () => {
     const desde = new Date(Date.now() - 12 * 3600_000).toISOString()
     const { data, error } = await supabase
       .from('pedidos')
-      .select('id, numero, status, cliente_nome, entregadores(nome)')
-      .eq('tipo', 'entrega')
-      .in('status', ['pronto', 'saiu_entrega', 'problema_entrega', 'entregue'])
+      .select('id, numero, status, tipo, status_em, cliente_nome, entregadores(nome)')
+      .in('status', [...EM_ANDAMENTO, 'entregue'])
       .gte('status_em', desde)
     if (error || !data) return
-    const lista = data as unknown as PedidoNaRua[]
-    const antes = naRua.current
-    naRua.current = new Map(lista.map((p) => [p.id, p.status]))
-    if (!antes) return // primeira conferência: só memoriza
+    const { config, fiscal } = refs.current
+    const lista = data as unknown as PedidoAberto[]
+    const antes = vistos.current
+    vistos.current = new Map(lista.map((p) => [p.id, { status: p.status, nivel: p.status === 'entregue' ? null : nivelAtraso(p.status_em, config) }]))
+    if (!antes) {
+      // primeira conferência (painel acabou de abrir): só memoriza; o quadro já mostra o que está atrasado
+      lista.forEach((p) => p.status === 'novo' && novosAvisados.current.add(p.id))
+      return
+    }
+    const sons = new Set<Som>()
+    const atrasos: { p: PedidoAberto; nivel: NivelAtraso }[] = []
     for (const p of lista) {
       const anterior = antes.get(p.id)
-      if (anterior === p.status || alteradoAquiAgora(p.id)) continue
+      const agora = vistos.current.get(p.id)!
       const motoboy = p.entregadores?.nome ?? 'O motoboy'
-      if (p.status === 'entregue' && anterior) {
-        if (refs.current.som) tocarAlerta('entregue')
-        aviso.sucesso(`Pedido #${p.numero} entregue! ${motoboy} concluiu a entrega para ${p.cliente_nome}.`, 15_000)
-        avisarNoComputador(`Pedido #${p.numero} entregue`, `${motoboy} concluiu a entrega para ${p.cliente_nome}.`, `pedido-${p.id}`)
-      } else if (p.status === 'problema_entrega') {
-        if (refs.current.som) tocarAlerta('problema')
-        aviso.erro(`Problema na entrega do pedido #${p.numero}: ${motoboy} não conseguiu entregar. Veja em Pedidos.`, 20_000)
-        avisarNoComputador(`Problema no pedido #${p.numero}`, `${motoboy} não conseguiu entregar para ${p.cliente_nome}.`, `pedido-${p.id}`)
+      if (p.status === 'novo' && !novosAvisados.current.has(p.id)) {
+        novosAvisados.current.add(p.id)
+        sons.add('novo')
+        aviso.sucesso(`Chegou o pedido #${p.numero}!`)
+        avisarNoComputador(`Chegou o pedido #${p.numero}!`, 'Abra o painel para aceitar.', `novo-${p.id}`)
+        if (config?.auto_aceitar) aceitarPedido(p.id, config, fiscal).then((a) => a?.forEach((x) => aviso.erro(x)), (e) => aviso.erro(mensagemErro(e)))
       }
+      if (!anterior || alteradoAquiAgora(p.id)) continue
+      if (anterior.status !== p.status) {
+        if (p.tipo === 'entrega' && p.status === 'entregue' && ['pronto', 'saiu_entrega', 'problema_entrega'].includes(anterior.status)) {
+          sons.add('entregue')
+          aviso.sucesso(`Pedido #${p.numero} entregue! ${motoboy} concluiu a entrega para ${p.cliente_nome}.`, 15_000)
+          avisarNoComputador(`Pedido #${p.numero} entregue`, `${motoboy} concluiu a entrega para ${p.cliente_nome}.`, `pedido-${p.id}`)
+        } else if (p.status === 'problema_entrega') {
+          sons.add('problema')
+          aviso.erro(`Problema na entrega do pedido #${p.numero}: ${motoboy} não conseguiu entregar. Veja em Pedidos.`, 20_000)
+          avisarNoComputador(`Problema no pedido #${p.numero}`, `${motoboy} não conseguiu entregar para ${p.cliente_nome}.`, `pedido-${p.id}`)
+        }
+        continue
+      }
+      // mesma etapa: o tempo parado fez o pedido subir de nível
+      if (agora.nivel && PESO[agora.nivel] > (anterior.nivel ? PESO[anterior.nivel] : 0)) atrasos.push({ p, nivel: agora.nivel })
     }
+    if (atrasos.length) {
+      const pior = atrasos.reduce((a, b) => (PESO[b.nivel] > PESO[a.nivel] ? b : a)).nivel
+      sons.add(pior)
+      const frase = ({ p, nivel }: (typeof atrasos)[number]) =>
+        `Pedido #${p.numero} ${nivel === 'atencao' ? 'pede atenção' : nivel === 'atrasado' ? 'está ATRASADO' : 'está CRÍTICO'}: ${haQuanto(p.status_em)} parado em “${STATUS[p.status].rotulo}”.`
+      if (atrasos.length <= 3) atrasos.forEach((a) => aviso.erro(frase(a), a.nivel === 'critico' ? 20_000 : 12_000))
+      else aviso.erro(`${atrasos.length} pedidos passaram do tempo (o pior: ${ATRASO[pior].rotulo.toLowerCase()}). Veja o quadro de Pedidos.`, 20_000)
+      avisarNoComputador(atrasos.length === 1 ? `Pedido #${atrasos[0].p.numero}: ${ATRASO[pior].rotulo}` : `${atrasos.length} pedidos passaram do tempo`, atrasos.map(frase).join(' '), 'atrasos')
+    }
+    if (sons.size && refs.current.som) tocarEmSequencia(sons)
   }, [aviso])
 
   useEffect(() => {
@@ -265,14 +335,17 @@ export default function AdminLayout() {
     recarregarFiscal()
     if (!atendimento) return
     contarNovos()
-    conferirEntregas()
-    const pararEntregas = aoMudarPedidos(conferirEntregas)
+    conferirPedidos()
+    const pararConferencia = aoMudarPedidos(conferirPedidos)
     const canal = supabase
       .channel('painel-pedidos')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, (m) => {
-        sincronizar()
         const novo = m.new as { id?: string; status?: string; numero?: number }
-        if (m.eventType !== 'INSERT' || novo.status !== 'novo' || !atendimento) return
+        const chegou = m.eventType === 'INSERT' && novo.status === 'novo' && Boolean(novo.id)
+        // marcado antes de conferir: a conferência que este mesmo evento dispara não avisa de novo
+        if (chegou) novosAvisados.current.add(novo.id!)
+        sincronizar()
+        if (!chegou) return
         const { config, fiscal, som } = refs.current
         if (som) tocarAlerta()
         aviso.sucesso(`Chegou o pedido #${novo.numero}!`)
@@ -288,11 +361,11 @@ export default function AdminLayout() {
     const t = setInterval(sincronizar, 45_000)
     return () => {
       clearInterval(t)
-      pararEntregas()
-      naRua.current = null
+      pararConferencia()
+      vistos.current = null
       supabase.removeChannel(canal)
     }
-  }, [interno, modulos, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar, aoMudarPedidos, conferirEntregas])
+  }, [interno, modulos, atendimento, aviso, contarNovos, recarregarFiscal, sincronizar, aoMudarPedidos, conferirPedidos])
 
   const valor = useMemo(
     () => ({ fiscal, recarregarFiscal, novos, pode, ehAdmin, aoMudarPedidos, sincronizar }),
