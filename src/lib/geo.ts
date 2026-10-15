@@ -168,3 +168,10 @@ export const linkRota = (destino: Ponto | null, enderecoTexto: string) =>
 /** Link que abre o Waze já navegando até o destino (pelo ponto no mapa, se houver, ou pela busca do endereço). */
 export const linkWaze = (destino: Ponto | null, enderecoTexto: string) =>
   `https://waze.com/ul?${destino ? `ll=${destino.lat}%2C${destino.lng}` : `q=${encodeURIComponent(enderecoTexto)}`}&navigate=yes`
+
+/**
+ * O mesmo destino pelo endereço próprio do aplicativo do Waze (waze://). Dentro do aplicativo Android, o link https
+ * abria o site do Waze: o Android só manda para o app os links https que o Waze "assina", e no celular do motoboy não mandou.
+ */
+export const linkWazeApp = (destino: Ponto | null, enderecoTexto: string) =>
+  `waze://?${destino ? `ll=${destino.lat},${destino.lng}` : `q=${encodeURIComponent(enderecoTexto)}`}&navigate=yes`

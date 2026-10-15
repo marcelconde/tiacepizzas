@@ -6,7 +6,7 @@ import { AreaTexto, Botao, Carregando, Erro, Modal, Selo, cx, useAviso } from '.
 import { useAuth } from '../lib/auth'
 import { desligarAvisos, ligarAvisos } from '../lib/avisos'
 import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, soDigitos, telefone } from '../lib/formato'
-import { linkRota, linkWaze } from '../lib/geo'
+import { linkRota, linkWaze, linkWazeApp, type Ponto } from '../lib/geo'
 import { acompanharPosicao, noAplicativo } from '../lib/rastreio'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, StatusPedido } from '../lib/tipos'
@@ -241,7 +241,7 @@ export default function Entregador() {
               <p className="mt-2 text-sm text-stone-600">{e.itens.map((i) => `${i.quantidade}x ${i.nome}`).join(' · ')}</p>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <a href={linkWaze(destino, endereco)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-stone-300 text-sm font-semibold">
+                <a href={linkWaze(destino, endereco)} target="_blank" rel="noreferrer" onClick={(ev) => abrirNoWaze(ev, destino, endereco)} className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-stone-300 text-sm font-semibold">
                   <Navigation className="size-4" /> Waze
                 </a>
                 <a href={linkRota(destino, endereco)} target="_blank" rel="noreferrer" className="inline-flex h-12 items-center justify-center gap-1.5 rounded-lg border border-stone-300 text-sm font-semibold">
@@ -305,4 +305,19 @@ export default function Entregador() {
       </Modal>
     </div>
   )
+}
+
+/**
+ * No aplicativo Android, o Waze é aberto pelo endereço próprio dele (waze://), que vai direto para o app instalado.
+ * Sem o Waze no celular nada acontece: se em 1,5 s o aplicativo continuar na tela, abre-se o link comum (site ou loja).
+ * No navegador do celular fica o link comum, que já oferece abrir o app.
+ */
+function abrirNoWaze(ev: { preventDefault: () => void }, destino: Ponto | null, endereco: string) {
+  if (!noAplicativo) return
+  ev.preventDefault()
+  const reserva = setTimeout(() => {
+    if (document.visibilityState === 'visible') window.open(linkWaze(destino, endereco), '_blank')
+  }, 1500)
+  document.addEventListener('visibilitychange', () => clearTimeout(reserva), { once: true })
+  window.location.href = linkWazeApp(destino, endereco)
 }
