@@ -12,7 +12,7 @@ const GpsNativo = registerPlugin<BackgroundGeolocationPlugin>('BackgroundGeoloca
 export type FalhaGps = 'negado' | 'indisponivel'
 
 /** Começa a acompanhar a posição; devolve a função que para. */
-export function acompanharPosicao(aoMudar: (p: Ponto) => void, aoFalhar: (f: FalhaGps) => void): () => void {
+export function acompanharPosicao(aoMudar: (p: Ponto) => void | Promise<void>, aoFalhar: (f: FalhaGps) => void): () => void {
   if (noAplicativo) {
     let parado = false
     const pedido = GpsNativo.addWatcher(
@@ -45,4 +45,28 @@ export function acompanharPosicao(aoMudar: (p: Ponto) => void, aoFalhar: (f: Fal
     { enableHighAccuracy: true, maximumAge: 10_000, timeout: 30_000 },
   )
   return () => navigator.geolocation.clearWatch(id)
+}
+
+/**
+ * Dentro do aplicativo a tela vem do site publicado. Ao abrir e ao voltar para o aplicativo, confere se saiu
+ * uma publicação nova e recarrega nela; o endereço com ?v= evita que o celular use a página guardada.
+ * Sem internet segue com a versão aberta. Devolve a função que para de conferir.
+ */
+export function acompanharVersao(): () => void {
+  if (!noAplicativo) return () => {}
+  const conferir = async () => {
+    try {
+      const r = await fetch(`/versao.json?_=${Date.now()}`, { cache: 'no-store' })
+      const { versao } = (await r.json()) as { versao?: string }
+      if (!versao || versao === __VERSAO__ || sessionStorage.getItem('tce_versao') === versao) return
+      sessionStorage.setItem('tce_versao', versao) // uma tentativa por versão, sem recarregar em ciclo
+      location.replace(`${location.pathname}?v=${encodeURIComponent(versao)}`)
+    } catch {
+      // sem conexão ou site fora do ar: continua com o que está aberto
+    }
+  }
+  const aoVoltar = () => document.visibilityState === 'visible' && void conferir()
+  void conferir()
+  document.addEventListener('visibilitychange', aoVoltar)
+  return () => document.removeEventListener('visibilitychange', aoVoltar)
 }

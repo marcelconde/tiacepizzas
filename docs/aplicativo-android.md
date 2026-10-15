@@ -72,7 +72,12 @@ instalação).
 
 ## 4. Nova versão
 
-Quando a tela do entregador mudar:
+Desde a versão 1.2 (2026-10-15) o aplicativo abre a tela do entregador direto do site publicado
+(`server.url` em `capacitor.config.ts`). Mudança de tela chega ao celular com a publicação na `main`: ao abrir ou
+voltar para o aplicativo, ele compara `/versao.json` com a versão aberta e recarrega na nova, sem reinstalar e sem
+login. Sem internet, mostra `public/sem-conexao.html`.
+
+Só mudança nativa (ícone, nome, permissões, plugins, Firebase, `capacitor.config.ts`) pede um APK novo:
 
 1. Em `android/app/build.gradle`, some 1 em `versionCode` e ajuste `versionName`.
 2. `git pull`, `npm install`, `npm run app:android`.

@@ -4,7 +4,18 @@
 import { noAplicativo } from './rastreio'
 import { supabase } from './supabase'
 
-const temAvisos = noAplicativo && import.meta.env.VITE_AVISOS === '1'
+// O aplicativo abre o site publicado com "?avisos=1" (gerado com o Firebase) ou "?avisos=0". A resposta fica
+// guardada para valer também quando a tela recarrega numa versão nova ou volta da tela "sem conexão".
+const avisosDoAplicativo = (() => {
+  try {
+    const doEndereco = new URLSearchParams(location.search).get('avisos')
+    if (doEndereco === '1' || doEndereco === '0') localStorage.setItem('tce_avisos', doEndereco)
+    return localStorage.getItem('tce_avisos') === '1'
+  } catch {
+    return false
+  }
+})()
+const temAvisos = noAplicativo && (import.meta.env.VITE_AVISOS === '1' || avisosDoAplicativo)
 let aparelho: string | null = null
 
 /**

@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth'
 import { desligarAvisos, ligarAvisos } from '../lib/avisos'
 import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, isoDia, soDigitos, telefone } from '../lib/formato'
 import { linkRota, linkWaze, linkWazeApp, type Ponto } from '../lib/geo'
-import { acompanharPosicao, noAplicativo } from '../lib/rastreio'
+import { acompanharPosicao, acompanharVersao, noAplicativo } from '../lib/rastreio'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, StatusPedido } from '../lib/tipos'
 
@@ -66,6 +66,7 @@ export default function Entregador() {
   const [vendoResumo, setVendoResumo] = useState(false)
   const [resumo, setResumo] = useState<Resumo | null>(null)
   const [erroResumo, setErroResumo] = useState('')
+  const [envio, setEnvio] = useState<{ ok?: Date; falha?: { quando: Date; motivo: string } }>({})
   const ultimoEnvio = useRef(0)
 
   const carregar = useCallback(async () => {
@@ -85,6 +86,8 @@ export default function Entregador() {
     if (error) setErroResumo(mensagemErro(error))
     else setResumo(data as Resumo)
   }
+
+  useEffect(() => acompanharVersao(), [])
 
   const usuarioId = sessao?.user.id
   useEffect(() => {
@@ -118,12 +121,31 @@ export default function Entregador() {
       setGps('desligado')
       return
     }
-    return acompanharPosicao((p) => {
+    return acompanharPosicao(async (p) => {
       setGps('ativo')
       if (Date.now() - ultimoEnvio.current < 15_000) return
       ultimoEnvio.current = Date.now()
-      supabase.rpc('entrega_posicao', { p_lat: p.lat, p_lng: p.lng }).then(() => {})
+      const { error } = await supabase.rpc('entrega_posicao', { p_lat: p.lat, p_lng: p.lng })
+      if (!error) {
+        setEnvio((e) => ({ ...e, ok: new Date() }))
+        return
+      }
+      // a falha fica à vista para o motoboy e a próxima posição tenta de novo, sem esperar 15 s
+      setEnvio((e) => ({ ...e, falha: { quando: new Date(), motivo: mensagemErro(error) } }))
+      ultimoEnvio.current = 0
+      if (/jwt|token/i.test(error.message)) await supabase.auth.refreshSession().catch(() => {})
     }, setGps)
+  }, [naRua])
+
+  // Em segundo plano o login para de se renovar sozinho (e o envio da posição passa a ser recusado).
+  // Com entrega na rua, no aplicativo, a renovação continua enquanto ele usa o Waze ou o Maps.
+  useEffect(() => {
+    if (!naRua || !noAplicativo) return
+    const manter = () => {
+      if (document.visibilityState === 'hidden') void supabase.auth.startAutoRefresh()
+    }
+    document.addEventListener('visibilitychange', manter)
+    return () => document.removeEventListener('visibilitychange', manter)
   }, [naRua])
 
   useEffect(() => {
@@ -218,6 +240,14 @@ export default function Entregador() {
       {aviso_gps && (
         <p className={cx('flex items-center gap-2 px-4 py-2 text-sm font-semibold', aviso_gps.cor)}>
           <LocateFixed className="size-4 shrink-0" /> {aviso_gps.texto}
+        </p>
+      )}
+      {gps === 'ativo' && (envio.ok || envio.falha) && (
+        <p className="bg-white px-4 py-1.5 text-xs text-stone-600">
+          {envio.ok && `Última posição enviada às ${envio.ok.toLocaleTimeString('pt-BR')}.`}
+          {envio.falha && (
+            <span className="text-red-700"> Falha às {envio.falha.quando.toLocaleTimeString('pt-BR')}: {envio.falha.motivo}</span>
+          )}
         </p>
       )}
       {gps === 'ativo' && !noAplicativo && (
