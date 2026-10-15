@@ -583,6 +583,17 @@ await teste('motoboy: vê e move só as entregas dele, registra problema e posi�
   })
   const p = await um(`select status, pago from pedidos where id = $1`, [entrega.id])
   assert.deepEqual([p.status, p.pago], ['entregue', true])
+  // "Minhas entregas": conta só as dele, por período; entrega antiga sai de hoje, da semana e do mês
+  const resumo = (uid) => como('authenticated', uid, async () => (await um(`select minhas_entregas_resumo() as r`)).r)
+  let r = await resumo(motoboy)
+  assert.deepEqual([r.hoje, r.ultimos_7_dias, r.mes, r.total, r.dias.length, r.dias[0].entregas], [1, 1, 1, 1, 1, 1])
+  assert.equal((await resumo(outroMotoboy)).total, 0)
+  await db.query(`update pedidos set entregue_em = now() - interval '40 days' where id = $1`, [entrega.id])
+  r = await resumo(motoboy)
+  assert.deepEqual([r.hoje, r.ultimos_7_dias, r.mes, r.total, r.dias.length], [0, 0, 0, 1, 0])
+  await db.query(`update pedidos set entregue_em = now() where id = $1`, [entrega.id])
+  await como('authenticated', atendente, () => falha(db.query(`select minhas_entregas_resumo()`), 'restrito aos entregadores'))
+  await como('anon', null, () => falha(db.query(`select minhas_entregas_resumo()`), 'permission denied'))
   // rastreio desligado nas configurações não expõe a posição
   await db.exec(`update configuracoes set rastreio_motoboy = false`)
 })

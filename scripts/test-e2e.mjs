@@ -353,6 +353,11 @@ await teste('motoboy conclui uma entrega e registra problema em outra pelo aplic
   const entregue = a.status === 'entregue' ? rua : outra, comProblema = entregue === rua ? outra : rua
   assert.deepEqual([a.status, b.status].sort(), ['entregue', 'problema_entrega'])
   assert.ok(await moto.evaluate(() => document.body.innerText.includes('entrega(s) hoje')))
+  // "Minhas entregas": quantas ele concluiu hoje, na semana, no mês e por dia
+  await clicar(moto, 'Entregas', 'header button'); await dormir(1200)
+  const minhas = await moto.evaluate(() => document.querySelector('[role=dialog]')?.innerText ?? '')
+  assert.match(minhas, /Minhas entregas[\s\S]*Hoje[\s\S]*Últimos 7 dias[\s\S]*Este mês[\s\S]*Por dia/)
+  assert.ok(Number(/(\d+)\s*Hoje/.exec(minhas)?.[1]) >= 1, 'a entrega de agora conta em Hoje')
   await moto.close()
   // sem tempo real no ambiente local, o painel confere a cada 45 s
   let avisos = ''

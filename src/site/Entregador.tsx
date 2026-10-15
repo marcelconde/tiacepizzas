@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, LocateFixed, LogOut, MapPinned, MessageCircle, Navigation, Phone, RefreshCw } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ListChecks, LocateFixed, LogOut, MapPinned, MessageCircle, Navigation, Phone, RefreshCw } from 'lucide-react'
 import { Login, Moldura } from '../components/Login'
 import { AreaTexto, Botao, Carregando, Erro, Modal, Selo, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { desligarAvisos, ligarAvisos } from '../lib/avisos'
-import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, soDigitos, telefone } from '../lib/formato'
+import { PAGAMENTO, STATUS, brl, enderecoTexto, haQuanto, isoDia, soDigitos, telefone } from '../lib/formato'
 import { linkRota, linkWaze, linkWazeApp, type Ponto } from '../lib/geo'
 import { acompanharPosicao, noAplicativo } from '../lib/rastreio'
 import { mensagemErro, supabase } from '../lib/supabase'
@@ -38,6 +38,15 @@ interface Painel {
   entregas: Entrega[]
 }
 
+/** Entregas concluídas pelo próprio motoboy, para a janela "Minhas entregas". */
+interface Resumo {
+  hoje: number
+  ultimos_7_dias: number
+  mes: number
+  total: number
+  dias: { dia: string; entregas: number }[]
+}
+
 /**
  * Aplicativo do entregador (abre no navegador do celular e pode ser adicionado à tela inicial).
  * Mostra só as entregas atribuídas a ele e, com uma entrega na rua, envia a posição a cada 15 segundos
@@ -54,6 +63,9 @@ export default function Entregador() {
   const [problema, setProblema] = useState<Entrega | null>(null)
   const [texto, setTexto] = useState('')
   const [gps, setGps] = useState<'desligado' | 'ativo' | 'negado' | 'indisponivel'>('desligado')
+  const [vendoResumo, setVendoResumo] = useState(false)
+  const [resumo, setResumo] = useState<Resumo | null>(null)
+  const [erroResumo, setErroResumo] = useState('')
   const ultimoEnvio = useRef(0)
 
   const carregar = useCallback(async () => {
@@ -64,6 +76,15 @@ export default function Entregador() {
       setPainel(data as Painel)
     }
   }, [])
+
+  async function abrirResumo() {
+    setVendoResumo(true)
+    setResumo(null)
+    setErroResumo('')
+    const { data, error } = await supabase.rpc('minhas_entregas_resumo')
+    if (error) setErroResumo(mensagemErro(error))
+    else setResumo(data as Resumo)
+  }
 
   const usuarioId = sessao?.user.id
   useEffect(() => {
@@ -182,6 +203,9 @@ export default function Entregador() {
           </p>
         </div>
         <div className="flex gap-1">
+          <button type="button" onClick={abrirResumo} className="flex h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold hover:bg-white/10">
+            <ListChecks className="size-5" /> Entregas
+          </button>
           <button type="button" aria-label="Atualizar" onClick={carregar} className="grid size-11 place-items-center rounded-lg hover:bg-white/10">
             <RefreshCw className="size-5" />
           </button>
@@ -303,8 +327,56 @@ export default function Entregador() {
         </div>
         <AreaTexto rows={3} maxLength={300} placeholder="Descreva o problema" value={texto} onChange={(e) => setTexto(e.target.value)} />
       </Modal>
+
+      <Modal aberto={vendoResumo} titulo="Minhas entregas" onFechar={() => setVendoResumo(false)}>
+        {erroResumo ? (
+          <Erro>{erroResumo}</Erro>
+        ) : !resumo ? (
+          <Carregando />
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                { rotulo: 'Hoje', n: resumo.hoje },
+                { rotulo: 'Últimos 7 dias', n: resumo.ultimos_7_dias },
+                { rotulo: 'Este mês', n: resumo.mes },
+              ].map((p) => (
+                <div key={p.rotulo} className="rounded-xl bg-stone-100 px-2 py-3">
+                  <p className="font-display text-3xl font-semibold text-forno-900">{p.n}</p>
+                  <p className="text-xs text-stone-600">{p.rotulo}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-center text-sm text-stone-600">Desde o começo: {resumo.total} entrega(s) concluída(s)</p>
+            {resumo.dias.length > 0 ? (
+              <div>
+                <p className="mb-1 text-sm font-semibold">Por dia (últimos 30 dias)</p>
+                <ul className="divide-y divide-stone-200 rounded-xl border border-stone-200">
+                  {resumo.dias.map((d) => (
+                    <li key={d.dia} className="flex justify-between px-3 py-2 text-sm">
+                      <span className="capitalize">{nomeDoDia(d.dia)}</span>
+                      <strong>{d.entregas} entrega(s)</strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-center text-sm text-stone-500">Nenhuma entrega concluída nos últimos 30 dias.</p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
+}
+
+/** "Hoje", "Ontem" ou o dia da semana com a data (qua., 15/10). */
+function nomeDoDia(dia: string) {
+  const ontem = new Date()
+  ontem.setDate(ontem.getDate() - 1)
+  if (dia === isoDia()) return 'Hoje'
+  if (dia === isoDia(ontem)) return 'Ontem'
+  return new Date(`${dia}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })
 }
 
 /**
