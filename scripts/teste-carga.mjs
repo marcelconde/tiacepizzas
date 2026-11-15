@@ -4,6 +4,11 @@
 //   node scripts/teste-carga.mjs --pessoas 50 --minutos 2           site e banco publicados: PEDIDOS DE VERDADE
 //   node scripts/teste-carga.mjs --pessoas 20 --minutos 1 --local   ambiente local (com "npm run dev:demo" rodando)
 //   --intenso                                                       cada pessoa age a cada 2 a 5 s (estresse, não uso real)
+//   --todos-pedem                                                   todas as pessoas fazem pedido e depois ficam navegando
+//                                                                   (acompanham o pedido e voltam ao cardápio) até o fim
+//   --navegadores 25                                                além das chamadas, 25 navegadores de verdade em rodízio
+//                                                                   abrindo o site, o cardápio, um produto e o acompanhamento:
+//                                                                   são as visitas que aparecem no Cloudflare Web Analytics
 //
 // Divisão: 40% olham o cardápio (uma visita nova a cada 20 a 40 s), 40% fazem um pedido e depois acompanham,
 // 20% só acompanham pedidos já feitos. Os pedidos saem como RETIRADA, em nome de "Teste de carga NN", com a
@@ -21,6 +26,8 @@ const PESSOAS = Number(arg('pessoas', 50))
 const MINUTOS = Number(arg('minutos', 2))
 const LOCAL = process.argv.includes('--local')
 const INTENSO = process.argv.includes('--intenso')
+const TODOS_PEDEM = process.argv.includes('--todos-pedem')
+const NAVEGADORES = Number(arg('navegadores', 0))
 const env = Object.fromEntries(readFileSync(new URL('../.env.production', import.meta.url), 'utf8').split('\n').filter((l) => l.includes('=')).map((l) => l.split('=').map((x) => x.trim())))
 const SITE = LOCAL ? 'http://localhost:5173' : 'https://tiacepizzas.com.br'
 const API = LOCAL ? 'http://localhost:54321' : env.VITE_SUPABASE_URL
@@ -51,6 +58,15 @@ async function medir(rotulo, fazer) {
     const motivo = e.name === 'TimeoutError' ? 'sem resposta em 20 s' : e.message.slice(0, 90)
     m.motivos.set(motivo, (m.motivos.get(motivo) ?? 0) + 1)
     return null
+  }
+}
+function registrar(rotulo, tempo, erro) {
+  const m = medidas.get(rotulo) ?? { ms: [], erros: 0, motivos: new Map() }
+  medidas.set(rotulo, m)
+  m.ms.push(tempo)
+  if (erro) {
+    m.erros++
+    m.motivos.set(erro, (m.motivos.get(erro) ?? 0) + 1)
   }
 }
 const limite = () => AbortSignal.timeout(20_000)
@@ -122,12 +138,77 @@ async function pedir(n) {
   if (r instanceof Response && r.ok && corpo.codigo) {
     pedidos.feitos++
     codigos.push(corpo.codigo)
-    await acompanhar(corpo.codigo)
+    await (TODOS_PEDEM ? navegarDepois(corpo.codigo) : acompanhar(corpo.codigo))
   } else {
     m.erros++
     const motivo = corpo.message ?? `HTTP ${r.status}`
     pedidos.recusados.set(motivo, (pedidos.recusados.get(motivo) ?? 0) + 1)
   }
+}
+
+/** Depois do pedido: confere o andamento como a tela faz e, de vez em quando, volta ao cardápio (uma visita nova). */
+async function navegarDepois(codigo) {
+  for (let i = 0; Date.now() < fim; i++) {
+    await medir('banco: acompanhar pedido', () => rpc('acompanhar_pedido', { p_codigo: codigo }))
+    if (i % 2 === 1) await visita()
+    await dormir(INTENSO ? 3_000 : entre(10_000, 20_000))
+  }
+}
+
+/**
+ * Navegadores de verdade (Chrome sem janela) em rodízio: cada visitante abre o site, vai ao cardápio, abre um
+ * produto e, se já houver pedido de teste, a tela de acompanhamento; depois fecha e outro chega. Só eles executam
+ * o site como um celular faz — e só eles aparecem no Cloudflare Web Analytics. Fotos e fontes não são baixadas,
+ * para não gastar a cota de tráfego do banco de fotos.
+ */
+async function visitantesReais() {
+  if (!NAVEGADORES) return 0
+  const { default: puppeteer } = await import('puppeteer-core')
+  const { CHROME } = await import('./plataforma.mjs')
+  const nav = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-first-run', '--disable-gpu', '--mute-audio'] })
+  const versao = (await nav.version()).replace(/^HeadlessChrome\//, '').replace(/^Chrome\//, '')
+  // agente de navegador comum (o "HeadlessChrome" faria o Cloudflare tratar a visita como robô)
+  const AGENTES = [
+    `Mozilla/5.0 (Linux; Android 14; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${versao} Mobile Safari/537.36`,
+    `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${versao} Safari/537.36`,
+  ]
+  let visitas = 0
+  const visitante = async (n) => {
+    while (Date.now() < fim) {
+      const ctx = await nav.createBrowserContext()
+      const celular = (n + visitas) % 3 !== 0
+      try {
+        const p = await ctx.newPage()
+        await p.setUserAgent(AGENTES[celular ? 0 : 1])
+        await p.setViewport(celular ? { width: 390, height: 800, isMobile: true, hasTouch: true } : { width: 1366, height: 800 })
+        await p.setRequestInterception(true)
+        p.on('request', (r) => (['image', 'font', 'media'].includes(r.resourceType()) || /tile\.openstreetmap/.test(r.url()) ? r.abort() : r.continue()))
+        const t0 = performance.now()
+        await p.goto(`${SITE}/`, { waitUntil: 'networkidle2', timeout: 30_000 })
+        registrar('navegador: abrir o site', performance.now() - t0)
+        await dormir(entre(2_000, 4_000))
+        await p.evaluate(() => [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === '/cardapio')?.click())
+        await dormir(entre(2_000, 4_000))
+        await p.evaluate(() => document.querySelector('main button')?.click()) // abre um produto
+        await dormir(entre(1_500, 3_000))
+        await p.keyboard.press('Escape')
+        if (codigos.length) {
+          const t1 = performance.now()
+          await p.goto(`${SITE}/pedido?c=${codigos[Math.floor(Math.random() * codigos.length)]}`, { waitUntil: 'networkidle2', timeout: 30_000 })
+          registrar('navegador: acompanhar pedido', performance.now() - t1)
+          await dormir(entre(4_000, 8_000))
+        }
+        visitas++
+      } catch (e) {
+        registrar('navegador: abrir o site', 0, e.name === 'TimeoutError' ? 'página não carregou em 30 s' : e.message.slice(0, 90))
+      } finally {
+        await ctx.close().catch(() => {})
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: NAVEGADORES }, (_, i) => dormir(i * 1_200).then(() => visitante(i))))
+  await nav.close()
+  return visitas
 }
 
 async function soAcompanhar() {
@@ -141,7 +222,7 @@ const pct = (lista, p) => (lista.length ? lista.slice().sort((a, b) => a - b)[Ma
 const ms = (v) => `${Math.round(v)} ms`
 
 async function principal() {
-  console.log(`Teste de carga — ${PESSOAS} pessoas por ${MINUTOS} min em ${LOCAL ? 'ambiente local' : SITE}${INTENSO ? ' (ritmo intenso)' : ''}`)
+  console.log(`Teste de carga — ${PESSOAS} pessoas por ${MINUTOS} min em ${LOCAL ? 'ambiente local' : SITE}${INTENSO ? ' (ritmo intenso)' : ''}${TODOS_PEDEM ? ', todas fazendo pedido' : ''}${NAVEGADORES ? `, + ${NAVEGADORES} navegadores de verdade` : ''}`)
   const html = await (await fetch(`${SITE}/`)).text()
   arquivos = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]))]
   const aberta = await (await rpc('loja_aberta')).json()
@@ -160,7 +241,7 @@ async function principal() {
   const tarefas = []
   const t0 = Date.now()
   for (let i = 0; i < PESSOAS; i++) {
-    const tipo = i % 5 < 2 ? olhar : i % 5 < 4 ? () => pedir(i + 1) : soAcompanhar
+    const tipo = TODOS_PEDEM ? () => pedir(i + 1) : i % 5 < 2 ? olhar : i % 5 < 4 ? () => pedir(i + 1) : soAcompanhar
     // todos entram nos primeiros 5 segundos
     tarefas.push(dormir(Math.random() * 5_000).then(tipo))
   }
@@ -168,13 +249,16 @@ async function principal() {
     const total = [...medidas.values()].reduce((s, m) => s + m.ms.length, 0)
     console.log(`  ${Math.round((Date.now() - t0) / 1000)} s · ${total} chamadas · ${pedidos.feitos} pedidos feitos`)
   }, 15_000)
+  const reais = visitantesReais()
   await Promise.all(tarefas)
+  const visitasReais = await reais
   clearInterval(progresso)
 
   const duracao = (Date.now() - t0) / 1000
   const todas = [...medidas.values()].flatMap((m) => m.ms)
   const erros = [...medidas.values()].reduce((s, m) => s + m.erros, 0)
   console.log(`\nResultado (${Math.round(duracao)} s): ${todas.length} chamadas (${(todas.length / duracao).toFixed(1)} por segundo), ${erros} com erro (${((erros / Math.max(1, todas.length)) * 100).toFixed(1)}%)`)
+  if (NAVEGADORES) console.log(`Visitas de navegadores de verdade (as que o Cloudflare conta): ${visitasReais}`)
   console.log(`Pedidos: ${pedidos.feitos} feitos${pedidos.recusados.size ? `, recusados: ${[...pedidos.recusados].map(([m, n]) => `${n}× "${m}"`).join('; ')}` : ''}`)
   console.log('\n' + ['o quê'.padEnd(28), 'chamadas', 'erros', 'mediana', '95% até', 'mais lenta'].join(' | '))
   for (const [rotulo, m] of [...medidas].sort((a, b) => a[0].localeCompare(b[0]))) {

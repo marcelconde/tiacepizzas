@@ -337,6 +337,17 @@ await teste('limite de pedidos pendentes por telefone', async () => {
   })
 })
 
+await teste('freio de pedidos do site: o limite vem da configuração', async () => {
+  const outro = (tel) => ({ ...pedidoSite, chave: undefined, cliente: { nome: 'Freio', telefone: tel } })
+  // com o limite no número de pedidos já esperando, o próximo é recusado; com folga, passa
+  const esperando = Number((await um(`select count(*) as n from pedidos where origem = 'site' and status = 'novo' and criado_em > now() - interval '10 minutes'`)).n)
+  await db.query(`update configuracoes set limite_pedidos_site = $1`, [Math.max(1, esperando)])
+  await como('anon', null, () => falha(criar(outro('11955550001')), 'muitos pedidos'))
+  await db.query(`update configuracoes set limite_pedidos_site = $1`, [esperando + 1])
+  await como('anon', null, () => criar(outro('11955550002')))
+  await db.exec(`update configuracoes set limite_pedidos_site = 40`)
+})
+
 await teste('acompanhamento público não expõe telefone nem endereço', async () => {
   await como('anon', null, async () => {
     const a = (await um(`select acompanhar_pedido($1) as r`, [pedido.codigo.toLowerCase()])).r
