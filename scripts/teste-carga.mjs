@@ -165,7 +165,7 @@ async function visitantesReais() {
   if (!NAVEGADORES) return 0
   const { default: puppeteer } = await import('puppeteer-core')
   const { CHROME } = await import('./plataforma.mjs')
-  const nav = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-first-run', '--disable-gpu', '--mute-audio'] })
+  const nav = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-first-run', '--disable-gpu', '--mute-audio', '--disable-blink-features=AutomationControlled'] })
   const versao = (await nav.version()).replace(/^HeadlessChrome\//, '').replace(/^Chrome\//, '')
   // agente de navegador comum (o "HeadlessChrome" faria o Cloudflare tratar a visita como robô)
   const AGENTES = [
