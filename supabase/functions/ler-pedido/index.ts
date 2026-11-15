@@ -82,8 +82,8 @@ Deno.serve(async (req) => {
     const resposta = await anthropic.messages.parse({
       model: 'claude-haiku-5-5',
       max_tokens: 16000,
-      // ler um pedido é tarefa simples: pouco raciocínio, resposta mais rápida e mais barata
-      output_config: { effort: 'low', format: zodOutputFormat(PedidoDaConversa) },
+      // esforço médio: com o baixo, o Haiku errava tamanho e sabor ("pizza média de calabresa"); custa centavos a mais por mês
+      output_config: { effort: 'medium', format: zodOutputFormat(PedidoDaConversa) },
       // o cardápio muda pouco: fica guardado em cache entre um pedido e outro
       system: [
         { type: 'text', text: INSTRUCOES },

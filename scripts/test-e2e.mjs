@@ -661,6 +661,17 @@ await teste('colar do WhatsApp: a conversa vira pedido no Novo pedido (itens, cl
   assert.deepEqual([ult.origem, ult.tipo, ult.cliente_nome, ult.cliente_telefone, ult.forma_pagamento, Number(ult.troco_para)], ['whatsapp', 'entrega', 'Maria Clara', '11977771234', 'dinheiro', 150])
   const pizza = ult.pedido_itens.find((i) => i.nome.includes('Calabresa')), coca = ult.pedido_itens.find((i) => i.nome.includes('Coca'))
   assert.deepEqual([pizza?.observacoes, pizza?.adicionais?.map((a) => a.nome), coca?.quantidade], ['sem cebola', ['Borda de catupiry'], 2], JSON.stringify(ult.pedido_itens))
+  // cliente que já tem cadastro: no WhatsApp ele é só "Fulano cliente"; pelo telefone, valem o nome completo e o endereço guardado
+  const guardado = (await api('enderecos?select=cliente_id,logradouro&order=criado_em.desc&limit=1'))[0]
+  const fulano = (await api('clientes?select=nome,telefone&id=eq.' + guardado.cliente_id))[0]
+  const primeiro = fulano.nome.split(' ')[0]
+  await ir(at, '/admin/pdv', 1500)
+  await clicar(at, 'Colar do WhatsApp', 'main button')
+  await preencher(at, 'Conversa do WhatsApp', '[19:20, 14/11/2026] ' + primeiro + ' cliente: Boa noite! Quero 1 coca-cola 2l. Meu número é ' + fulano.telefone)
+  await clicar(at, 'Ler pedido', '[role=dialog] button'); await dormir(3000)
+  assert.deepEqual([await valor('Nome'), await valor('Rua')], [fulano.nome, guardado.logradouro])
+  assert.ok(await at.evaluate(() => document.body.innerText.includes('Cliente já cadastrado')))
+  assert.match(await at.evaluate(() => document.querySelector('form [role=alert]')?.innerText ?? ''), /ficou como entrega no endereço guardado do cliente/)
   await at.close()
 })
 

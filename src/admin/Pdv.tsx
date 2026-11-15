@@ -176,15 +176,19 @@ export default function Pdv() {
     const avisos = [...p.duvidas]
     if (novos.length < p.itens.length) avisos.push('Um item saiu do cardápio enquanto a leitura acontecia: confira os itens.')
     if (!novos.length) avisos.push('Nenhum item foi reconhecido: adicione os produtos pelo cardápio ao lado.')
-    const t: TipoPedido = p.tipo ?? (p.endereco.logradouro ? 'entrega' : 'retirada')
+    // o telefone diz se já é cliente: aí valem o nome e os endereços do cadastro (no WhatsApp o contato é só "Fulano cliente")
+    const conhecido = p.cliente.telefone ? clientes.find((c) => c.telefone === p.cliente.telefone) : undefined
+    const guardados = conhecido ? await enderecosDe(conhecido) : []
+    const comEndereco = Boolean(p.endereco.logradouro)
+    const usarGuardado = !comEndereco && guardados.length > 0 && p.tipo !== 'retirada'
+    const t: TipoPedido = p.tipo ?? (comEndereco || usarGuardado ? 'entrega' : 'retirada')
     setItens(novos)
     mudarTipo(t)
     setOrigem('whatsapp')
-    setNome(p.cliente.nome ?? '')
+    setNome(conhecido?.nome ?? p.cliente.nome ?? '')
     setTelefone(p.cliente.telefone ?? '')
-    setClienteAchado(false)
-    setSalvos([])
-    setSugerir(null)
+    setClienteAchado(Boolean(conhecido))
+    setSalvos(guardados)
     setEnd(enderecoVazio)
     enderecoSalvo.current = null
     cepBuscado.current = ''
@@ -192,14 +196,19 @@ export default function Pdv() {
     setPonto(null)
     setDistancia('')
     setTaxa('')
+    if (conhecido?.cpf) setCpfNota((atual) => atual || conhecido.cpf!)
     if (p.forma_pagamento) setPagamento(p.forma_pagamento)
     setTroco(p.troco_para ? String(p.troco_para).replace('.', ',') : '')
     setObservacoes(p.observacoes ?? '')
-    if (!p.cliente.telefone) avisos.push('A leitura não achou o telefone do cliente.')
-    if (t === 'entrega' && p.endereco.logradouro) {
+    if (!p.cliente.telefone) {
+      avisos.push('A conversa não mostra o telefone: digite o número (ou escolha a pessoa na lista abaixo do nome) para puxar o cadastro.')
+      // mostra quem já é cliente com esse primeiro nome
+      if (p.cliente.nome) setSugerir('nome')
+    } else if (!conhecido) avisos.push('Telefone sem cadastro: cliente novo. Confira o nome.')
+    if (t === 'entrega' && comEndereco) {
       const bairro = catalogo.bairros.find((b) => b.nome.toLowerCase() === (p.endereco.bairro ?? '').toLowerCase())
       const novo = {
-        ...enderecoVazio, cep: p.endereco.cep ?? '', logradouro: p.endereco.logradouro, numero: p.endereco.numero ?? '', complemento: p.endereco.complemento ?? '',
+        ...enderecoVazio, cep: p.endereco.cep ?? '', logradouro: p.endereco.logradouro!, numero: p.endereco.numero ?? '', complemento: p.endereco.complemento ?? '',
         bairro: p.endereco.bairro ?? '', bairro_id: bairro?.id ?? '', referencia: p.endereco.referencia ?? '',
       }
       cepBuscado.current = soDigitos(novo.cep)
@@ -207,19 +216,13 @@ export default function Pdv() {
       if (!novo.numero) avisos.push('Falta o número do endereço.')
       if (config?.modo_entrega !== 'distancia' && !bairro) avisos.push('Escolha o bairro da entrega.')
       calcularEntrega(null, novo)
+    } else if (usarGuardado) {
+      usarEndereco(guardados[0])
+      if (!p.tipo) avisos.push('A conversa não diz se é entrega ou retirada: ficou como entrega no endereço guardado do cliente. Confirme.')
+      else if (guardados.length > 1) avisos.push('Ficou o endereço mais recente do cliente: confira se é esse.')
     } else if (t === 'entrega') avisos.push('A leitura não achou o endereço da entrega.')
     setDuvidas(avisos)
-    aviso.sucesso(`Pedido lido: ${novos.length} item(ns). Confira tudo antes de lançar.`, 6000)
-    // já é cliente? marca como cadastrado e oferece os endereços guardados (sem trocar o que veio na conversa)
-    const conhecido = p.cliente.telefone ? clientes.find((c) => c.telefone === p.cliente.telefone) : undefined
-    if (conhecido) {
-      setClienteAchado(true)
-      if (!p.cliente.nome) setNome(conhecido.nome)
-      if (conhecido.cpf) setCpfNota((atual) => atual || conhecido.cpf!)
-      const lista = await enderecosDe(conhecido)
-      setSalvos(lista)
-      if (t === 'entrega' && !p.endereco.logradouro && lista.length) usarEndereco(lista[0])
-    }
+    aviso.sucesso(`Pedido lido: ${novos.length} item(ns)${conhecido ? `, cliente ${conhecido.nome}` : ''}. Confira tudo antes de lançar.`, 6000)
   }
 
   /** Telefone digitado inteiro, sem tocar na sugestão: se for de alguém já cadastrado, puxa os dados do mesmo jeito. */
@@ -228,8 +231,8 @@ export default function Pdv() {
     const tel = soDigitos(telefone)
     if (clienteAchado || tel.length < 10) return
     const c = clientes.find((x) => x.telefone === tel)
-    // o nome que a atendente já digitou fica como está; em branco, entra o do cadastro
-    if (c) usarCliente(c, false, !nome.trim())
+    // em branco, ou só o começo do nome do cadastro (o "Anderson" do WhatsApp), entra o nome completo; outro nome fica como está
+    if (c) usarCliente(c, false, !nome.trim() || semAcento(c.nome).startsWith(semAcento(nome.trim())))
   }
 
   /** CEP completo: preenche rua e bairro. Se a rua mudou, número, complemento e referência eram de outro endereço. */
@@ -450,7 +453,7 @@ export default function Pdv() {
                 {sugestoes.map((c) => (
                   <li key={c.ids[0]}>
                     {/* onMouseDown: o toque não tira o foco do campo antes de a escolha ser registrada */}
-                    <button type="button" role="option" aria-selected={false} className="block w-full px-3 py-2 text-left text-sm hover:bg-stone-50" onMouseDown={(e) => e.preventDefault()} onClick={() => usarCliente(c)}>
+                    <button type="button" role="option" aria-selected={false} className="block w-full px-3 py-2 text-left text-sm hover:bg-stone-50" onMouseDown={(e) => e.preventDefault()} onClick={() => usarCliente(c, !end.logradouro.trim() || Boolean(enderecoSalvo.current))}>
                       <span className="font-semibold">{c.nome}</span>
                       {c.telefone && <span className="text-stone-600"> · {formatarTelefone(c.telefone)}</span>}
                       <span className="block text-xs text-stone-500">

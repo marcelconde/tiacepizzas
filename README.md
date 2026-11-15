@@ -157,6 +157,19 @@ O plano gratuito do Supabase não faz backup automático. Em **Configurações �
 administrador baixa um arquivo com todos os dados; faça isso toda semana. Quando a operação depender do sistema,
 vale o plano Pro (backup diário e projeto que não pausa).
 
+## Pendências do aplicativo Android (para a sessão do Windows)
+
+Pedidos do Marcel registrados pelo Mac para quando ele for trabalhar no aplicativo no Windows:
+
+- **(2026-11-15) A posição para de chegar poucos minutos depois de o motoboy abrir o GPS (Waze/Maps).** Ele acredita
+  que o Android encerra o aplicativo em segundo plano. Ideia dele: com o aplicativo minimizado e o GPS aberto, mostrar
+  uma **bolinha flutuante** (meio transparente, por cima dos outros apps, como a do Uber/99 para motoristas) que indica
+  que o aplicativo está aberto e o mantém ativo; tocar na bolinha volta para o aplicativo, para finalizar o pedido.
+  Pontos para conferir junto: permissão "Exibir sobre outros apps" (`SYSTEM_ALERT_WINDOW`) para a bolinha; pedir a
+  exceção de economia de bateria (`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) em vez de depender do passo manual do guia;
+  se o serviço em primeiro plano do GPS continua com o aviso fixo quando a posição para (se o aviso some, o sistema
+  matou o serviço); e se a página (WebView) é pausada mesmo com o serviço vivo. Comprovar no celular dele.
+
 ## Desenvolvimento
 
 ```bash
