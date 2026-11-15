@@ -2,7 +2,7 @@
 // para a atendente conferir no Novo pedido. Quem lê é o Claude (Anthropic); a chave fica só nos segredos do
 // Supabase (ANTHROPIC_API_KEY). Só a equipe com acesso a Pedidos pode chamar.
 import Anthropic from 'npm:@anthropic-ai/sdk@1.8.0'
-import { betaZodOutputFormat } from 'npm:@anthropic-ai/sdk@1.8.0/helpers/beta/zod'
+import { zodOutputFormat } from 'npm:@anthropic-ai/sdk@1.8.0/helpers/zod'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { z } from 'npm:zod@4'
 import { INSTRUCOES, cardapioParaIA, montarPedido, type Cardapio } from './montar.ts'
@@ -77,14 +77,13 @@ Deno.serve(async (req) => {
     const mapa = cardapioParaIA(cardapio)
 
     const anthropic = new Anthropic({ apiKey: chave })
-    const resposta = await anthropic.beta.messages.parse({
-      model: 'claude-opus-5-5',
+    // Haiku: escolha do Marcel (2026-11-15) pelo custo, cerca de 40 vezes menor que o do Opus. Não tem modelo
+    // reserva no servidor para recusas: a recusa cai no aviso abaixo e a atendente lança à mão.
+    const resposta = await anthropic.messages.parse({
+      model: 'claude-haiku-5-5',
       max_tokens: 16000,
-      // se o modelo recusar por engano (filtro de segurança), outro modelo tenta na mesma chamada
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
       // ler um pedido é tarefa simples: pouco raciocínio, resposta mais rápida e mais barata
-      output_config: { effort: 'low', format: betaZodOutputFormat(PedidoDaConversa) },
+      output_config: { effort: 'low', format: zodOutputFormat(PedidoDaConversa) },
       // o cardápio muda pouco: fica guardado em cache entre um pedido e outro
       system: [
         { type: 'text', text: INSTRUCOES },
