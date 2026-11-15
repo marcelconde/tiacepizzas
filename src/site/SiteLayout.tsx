@@ -4,6 +4,7 @@ import { Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2, UserRound } f
 import { Logo } from '../components/Logo'
 import { Botao, Contador, Erro, Modal, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
+import { iniciarAnalise, precisaPerguntarCookies, responderCookies } from '../lib/analise'
 import { useCarrinho } from '../lib/carrinho'
 import { DIAS_SEMANA, brl, cnpj, soDigitos, telefone } from '../lib/formato'
 import { combosDaSacola, useLoja } from '../lib/loja'
@@ -181,6 +182,10 @@ export default function SiteLayout() {
   useEffect(() => {
     window.scrollTo(0, 0) // em navegadores novos scrollTo devolve uma Promise: não pode ser o retorno do efeito
   }, [pathname])
+  useEffect(() => {
+    iniciarAnalise()
+  }, [])
+  const [perguntarCookies, setPerguntarCookies] = useState(precisaPerguntarCookies)
 
   const link = ({ isActive }: { isActive: boolean }) =>
     cx('rounded-lg px-2.5 py-2 text-sm font-semibold whitespace-nowrap md:px-3', isActive ? 'text-molho-700' : 'text-forno-700 hover:text-molho-700')
@@ -263,6 +268,22 @@ export default function SiteLayout() {
         )}
         <Outlet />
       </main>
+
+      {perguntarCookies && (
+        <div role="dialog" aria-label="Aviso de cookies" className="fixed inset-x-0 bottom-0 z-40 border-t border-massa-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 text-sm">
+            <p className="min-w-0 flex-1 text-forno-700">Usamos cookies do Google Analytics só para contar as visitas e melhorar o site.</p>
+            <div className="flex gap-2">
+              <Botao variante="secundario" tamanho="p" onClick={() => { responderCookies(false); setPerguntarCookies(false) }}>
+                Recusar
+              </Botao>
+              <Botao tamanho="p" onClick={() => { responderCookies(true); setPerguntarCookies(false) }}>
+                Aceitar
+              </Botao>
+            </div>
+          </div>
+        </div>
+      )}
 
       {quantidade > 0 && !noCheckout && (
         <div className="sticky bottom-0 z-30 border-t border-massa-200 bg-massa-50/95 p-3 backdrop-blur md:hidden">

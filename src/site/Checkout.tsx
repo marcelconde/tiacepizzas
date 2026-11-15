@@ -9,6 +9,7 @@ import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto, type P
 import { combosDaSacola, useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento } from '../lib/tipos'
+import { registrarEvento } from '../lib/analise'
 import { BotoesSociais, useLoginSocial } from './Entrar'
 import { linkWhatsApp } from './SiteLayout'
 
@@ -274,6 +275,7 @@ export default function Checkout() {
     } catch {
       /* sem armazenamento local o pedido segue normalmente */
     }
+    registrarEvento('purchase', { transaction_id: String(data.numero), value: total, currency: 'BRL' })
     limpar()
     navegar(`/pedido?c=${data.codigo}`, { replace: true })
   }

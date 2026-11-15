@@ -157,6 +157,29 @@ O plano gratuito do Supabase não faz backup automático. Em **Configurações �
 administrador baixa um arquivo com todos os dados; faça isso toda semana. Quando a operação depender do sistema,
 vale o plano Pro (backup diário e projeto que não pausa).
 
+## Contagem de visitas
+
+O site público conta visitas com o Cloudflare Web Analytics e/ou o Google Analytics 4 (`src/lib/analise.ts`). Cada
+um liga sozinho quando a variável do GitHub correspondente existe (Settings → Secrets and variables → Actions →
+Variables), e a publicação seguinte já sai com ele:
+
+- `VITE_CF_BEACON`: o token do Cloudflare Web Analytics (Cloudflare → Analytics & Logs → Web Analytics → Add a
+  site). Não usa cookies e dispensa aviso.
+- `VITE_GA_ID`: o ID de medição do Google Analytics 4 (`G-…`). Usa cookies: o site mostra o aviso "Aceitar/Recusar"
+  e, até o visitante aceitar, o Google só recebe contagens anônimas (modo de consentimento). Pedido feito vira o
+  evento `purchase`, com o valor.
+
+O painel, o aplicativo do motoboy e a prévia da página inicial não contam como visita.
+
+## Teste de carga
+
+`npm run carga -- --pessoas 50 --minutos 2` simula pessoas ao mesmo tempo no site publicado: 40% olham o cardápio,
+40% fazem pedido e acompanham, 20% só acompanham. Usa as mesmas chamadas do site e mostra o tempo de resposta e os
+erros. **Cria pedidos de verdade** (retirada, "Teste de carga NN", observação "TESTE DE CARGA"), que aparecem no
+quadro e devem ser cancelados depois. Antes: abrir a loja (Configurações → Horários → Forçar aberta agora) e lembrar
+que o banco recusa mais de 40 pedidos do site em 10 minutos. `--local` roda no ambiente de demonstração; `--intenso`
+faz cada pessoa agir a cada 2 a 5 s.
+
 ## Pendências do aplicativo Android (para a sessão do Windows)
 
 Pedidos do Marcel registrados pelo Mac para quando ele for trabalhar no aplicativo no Windows:

@@ -30,6 +30,9 @@ jobs:
           # valores públicos do projeto Supabase (Settings > Secrets and variables > Actions > Variables)
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # contagem de visitas: vazias, o site publica sem ela (ver src/lib/analise.ts)
+          VITE_GA_ID: ${{ vars.VITE_GA_ID }}
+          VITE_CF_BEACON: ${{ vars.VITE_CF_BEACON }}
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
