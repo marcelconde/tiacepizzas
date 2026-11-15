@@ -66,9 +66,51 @@ async function consultar(parametros: Record<string, string>, perto?: Ponto | nul
 }
 
 /**
+ * Avenidas longas têm um CEP por trecho de numeração ("até 999 - lado ímpar", "de 2 a 1300 - lado par"…). Com a
+ * rua, o número e a cidade, o ViaCEP diz o CEP e o bairro daquele trecho — e o mapa tem o CEP de cada trecho da rua,
+ * mesmo quando não tem o número da casa. É o que separa o 907 da avenida no Bairro Novo do mesmo nome em Casa Caiada.
+ */
+export async function cepDoTrecho(e: { logradouro: string; numero?: string | null; cidade?: string | null; uf?: string | null }): Promise<{ cep: string; bairro: string } | null> {
+  const nome = e.logradouro.trim().replace(TIPO_DE_VIA, '')
+  const cidade = e.cidade?.trim()
+  const uf = e.uf?.trim()
+  if (!cidade || !uf || nome.length < 3) return null
+  const n = Number(soNumeros(e.numero))
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${encodeURIComponent(uf)}/${encodeURIComponent(cidade)}/${encodeURIComponent(nome)}/json/`).then((x) => (x.ok ? x.json() : []))
+    const trechos = (Array.isArray(r) ? r : []) as { cep: string; logradouro: string; complemento: string; bairro: string }[]
+    // só a mesma rua (o ViaCEP também devolve ruas que contêm o nome)
+    const mesmaRua = trechos.filter((t) => semAcento(t.logradouro).replace(TIPO_DE_VIA, '') === semAcento(nome))
+    const candidatos = n ? mesmaRua.filter((t) => cabeNoTrecho(t.complemento, n)) : mesmaRua
+    const escolhido = candidatos.length === 1 ? candidatos[0] : candidatos.find((t) => t.complemento) ?? (mesmaRua.length === 1 ? mesmaRua[0] : undefined)
+    return escolhido ? { cep: soNumeros(escolhido.cep), bairro: escolhido.bairro } : null
+  } catch {
+    return null
+  }
+}
+
+/** O número cabe na faixa do CEP? Faixas do Correios: "até 999 - lado ímpar", "de 1005 a 1197", "de 4001/4002 ao fim", "4295". */
+export function cabeNoTrecho(complemento: string, n: number) {
+  const c = semAcento(complemento)
+  if (!c) return true
+  if (c.includes('lado par') && n % 2 !== 0) return false
+  if (c.includes('lado impar') && n % 2 === 0) return false
+  let m = c.match(/de (\d+)(?:\/\d+)? a (\d+)/)
+  if (m) return n >= Number(m[1]) && n <= Number(m[2])
+  m = c.match(/de (\d+)(?:\/\d+)? ao fim/)
+  if (m) return n >= Number(m[1])
+  m = c.match(/ate (\d+)/)
+  if (m) return n <= Number(m[1])
+  m = c.match(/^(\d+)$/)
+  if (m) return n === Number(m[1])
+  return true // faixa escrita de outro jeito: não descarta
+}
+
+/**
  * Converte um endereço em coordenadas. Devolve null quando não encontra nem a rua nem o bairro.
- * `perto` (o ponto da loja) limita a busca à região. Entre os resultados, vale primeiro a casa com o número
- * pedido, depois o trecho da rua com o mesmo CEP, depois o do mesmo bairro e só então o primeiro da lista.
+ * `perto` (o ponto da loja) limita a busca à região. Entre os trechos de rua devolvidos, vale primeiro a casa com o
+ * número pedido, depois o trecho com o CEP certo (o digitado ou o que o ViaCEP diz para aquele número), depois o do
+ * bairro certo. Se nenhum trecho bate com o CEP ou o bairro, procura de novo com o bairro no texto.
  * O mapa do OpenStreetMap não tem todas as ruas pequenas: nesse caso o ponto sai aproximado (rua de mesmo nome
  * no bairro, ou o meio do bairro) e quem usa a tela confere e arrasta o pino.
  */
@@ -76,18 +118,27 @@ export async function localizarEndereco(e: EnderecoBusca, perto?: Ponto | null):
   const rua = e.logradouro?.trim()
   if (!rua) return null
   const numero = String(e.numero ?? '').trim().toLowerCase()
-  const cep = soNumeros(e.cep)
-  const bairro = e.bairro?.trim() ?? ''
+  let cep = soNumeros(e.cep)
+  let bairro = e.bairro?.trim() ?? ''
   const cidade = e.cidade?.trim() ?? ''
   const uf = e.uf?.trim() ?? ''
-  const chave = `tiace.geo.${[rua, numero, bairro, cidade, uf, cep, perto?.lat.toFixed(3), perto?.lng.toFixed(3)].join('|').toLowerCase()}`
+  const chave = `tiace.geo2.${[rua, numero, bairro, cidade, uf, cep, perto?.lat.toFixed(3), perto?.lng.toFixed(3)].join('|').toLowerCase()}`
   try {
     const salvo = sessionStorage.getItem(chave)
     if (salvo) return JSON.parse(salvo)
   } catch {
     /* sem armazenamento de sessão: segue consultando */
   }
+  // sem CEP digitado (ou com um CEP geral da cidade), descobre o do trecho pelo número
+  if (cep.length !== 8 || cep.endsWith('000')) {
+    const trecho = await cepDoTrecho({ logradouro: rua, numero, cidade, uf })
+    if (trecho) {
+      cep = trecho.cep
+      bairro ||= trecho.bairro
+    }
+  }
   const mesmoBairro = (x: Achado) => Boolean(bairro) && x.bairro.split('|').includes(semAcento(bairro))
+  const certo = (x: Achado) => (numero && x.numero === numero) || (cep.length === 8 && x.cep === cep) || mesmoBairro(x)
   const escolher = (lista: Achado[]) =>
     lista.find((x) => numero && x.numero === numero) ?? lista.find((x) => cep.length === 8 && x.cep === cep) ?? lista.find(mesmoBairro) ?? lista[0] ?? null
   try {
@@ -95,6 +146,11 @@ export async function localizarEndereco(e: EnderecoBusca, perto?: Ponto | null):
     let achado: Achado | null = escolher(await consultar({ street: comNumero, city: cidade, state: uf }, perto))
     // a cidade informada pode não ser a do endereço (cliente de cidade vizinha que não digitou o CEP)
     if (!achado && cidade && perto) achado = escolher(await consultar({ street: comNumero, state: uf }, perto))
+    // achou a rua, mas num trecho de outro bairro (avenida longa): procura de novo com o bairro e o CEP no texto
+    if ((!achado || !certo(achado)) && (bairro || cep.length === 8)) {
+      const outra = escolher(await consultar({ q: [rua, bairro, cidade, uf, cep.length === 8 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : '', 'Brasil'].filter(Boolean).join(', ') }, perto))
+      if (outra && (!achado || certo(outra))) achado = outra
+    }
     if (!achado) achado = escolher(await consultar({ q: [rua, bairro, cidade, uf, 'Brasil'].filter(Boolean).join(', ') }, perto))
     let aproximado: PontoAchado['aproximado']
     // a rua não está no mapa: tenta o nome sem "Travessa", "Rua"… (a avenida de mesmo nome costuma ser a vizinha)

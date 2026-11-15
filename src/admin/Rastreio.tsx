@@ -1,12 +1,12 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { MessageCircle, Phone } from 'lucide-react'
 import type { Marcador } from '../components/Mapa'
-import { Carregando, Erro, Modal, cx } from '../components/ui'
+import { Botao, Carregando, Erro, Modal, cx, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { enderecoTexto, haQuanto, soDigitos, telefone } from '../lib/formato'
-import { distanciaKm } from '../lib/geo'
+import { distanciaKm, type Ponto } from '../lib/geo'
 import { useLoja } from '../lib/loja'
-import { supabase } from '../lib/supabase'
+import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, StatusPedido } from '../lib/tipos'
 
 const Mapa = lazy(() => import('../components/Mapa'))
@@ -15,6 +15,7 @@ interface Rastreado {
   id: string
   numero: number
   status: StatusPedido
+  cliente_id: string | null
   cliente_nome: string
   endereco: Endereco | null
   lat: number | null
@@ -29,11 +30,14 @@ const quando = (iso: string) => (haQuanto(iso) === 'agora' ? 'agora há pouco' :
 /** Onde está o motoboy de uma entrega: loja, destino e a última posição enviada pelo celular dele, atualizada sozinha. */
 export function RastreioEntrega({ pedidoId, onFechar }: { pedidoId: string | null; onFechar: () => void }) {
   const { config } = useLoja()
+  const aviso = useAviso()
   const [, setRelogio] = useState(0)
+  const [novoDestino, setNovoDestino] = useState<Ponto | null>(null) // pino do cliente arrastado, ainda não salvo
+  const [salvando, setSalvando] = useState(false)
   const { dados, carregando, erro, recarregar } = useConsulta<Rastreado | null>(
     () =>
       pedidoId
-        ? supabase.from('pedidos').select('id, numero, status, cliente_nome, endereco, lat, lng, entregadores(nome, telefone, usuario_id, lat, lng, posicao_em)').eq('id', pedidoId).single()
+        ? supabase.from('pedidos').select('id, numero, status, cliente_id, cliente_nome, endereco, lat, lng, entregadores(nome, telefone, usuario_id, lat, lng, posicao_em)').eq('id', pedidoId).single()
         : Promise.resolve({ data: null, error: null }),
     [pedidoId],
   )
@@ -47,18 +51,35 @@ export function RastreioEntrega({ pedidoId, onFechar }: { pedidoId: string | nul
   }, [pedidoId, recarregar])
 
   if (!pedidoId) return null
+
+  /** Grava o local corrigido no pedido (é para onde o Waze do motoboy leva) e no endereço guardado do cliente. */
+  async function salvarDestino() {
+    if (!p || !novoDestino) return
+    setSalvando(true)
+    const ponto6 = { lat: Number(novoDestino.lat.toFixed(6)), lng: Number(novoDestino.lng.toFixed(6)) }
+    const { error } = await supabase.from('pedidos').update(ponto6).eq('id', p.id)
+    if (!error && p.cliente_id && p.endereco?.logradouro) {
+      await supabase.from('enderecos').update(ponto6).eq('cliente_id', p.cliente_id).eq('logradouro', p.endereco.logradouro).eq('numero', p.endereco.numero ?? '')
+    }
+    setSalvando(false)
+    if (error) return aviso.erro(mensagemErro(error))
+    aviso.sucesso('Local da entrega corrigido. O motoboy recebe o novo local ao atualizar o aplicativo.', 6000)
+    setNovoDestino(null)
+    recarregar()
+  }
   const p = dados?.id === pedidoId ? dados : null
   const m = p?.entregadores ?? null
   const ponto = (lat: unknown, lng: unknown) => (lat != null && lng != null ? { lat: Number(lat), lng: Number(lng) } : null)
   const loja = ponto(config?.loja_lat, config?.loja_lng)
-  const destino = ponto(p?.lat, p?.lng)
+  const destino = novoDestino ?? ponto(p?.lat, p?.lng)
+  const podeCorrigir = Boolean(p) && !['entregue', 'cancelado', 'reembolsado'].includes(p!.status)
   const posicao = m?.posicao_em ? ponto(m.lat, m.lng) : null
   const naRua = p?.status === 'saiu_entrega' || p?.status === 'problema_entrega'
   const semSinal = Boolean(posicao) && Date.now() - new Date(m!.posicao_em!).getTime() > SEM_SINAL_MS
   const falta = posicao && destino && naRua ? distanciaKm(posicao, destino) : null
   const marcadores: Marcador[] = [
     ...(loja ? [{ id: 'loja', ponto: loja, tipo: 'loja' as const, rotulo: config?.nome_loja }] : []),
-    ...(destino ? [{ id: 'cliente', ponto: destino, tipo: 'cliente' as const, rotulo: p?.cliente_nome }] : []),
+    ...(destino ? [{ id: 'cliente', ponto: destino, tipo: 'cliente' as const, rotulo: podeCorrigir ? 'Arraste se o local da entrega estiver errado' : p?.cliente_nome, ...(podeCorrigir ? { aoArrastar: setNovoDestino } : {}) }] : []),
     ...(posicao ? [{ id: 'motoboy', ponto: posicao, tipo: 'motoboy' as const, rotulo: m!.nome }] : []),
   ]
   const fone = soDigitos(m?.telefone)
@@ -122,6 +143,18 @@ export function RastreioEntrega({ pedidoId, onFechar }: { pedidoId: string | nul
                 <Mapa marcadores={marcadores} className="h-80" />
               </Suspense>
             )}
+            {novoDestino && (
+              <div role="status" className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+                <span className="flex-1">Novo local do cliente, ainda não salvo.</span>
+                <Botao variante="verde" tamanho="p" carregando={salvando} onClick={salvarDestino}>
+                  Salvar este local
+                </Botao>
+                <Botao variante="secundario" tamanho="p" onClick={() => setNovoDestino(null)}>
+                  Desfazer
+                </Botao>
+              </div>
+            )}
+            {podeCorrigir && destino && !novoDestino && <p className="text-xs text-stone-500">O 📍 do cliente está no lugar errado? Arraste até o certo e salve: o motoboy passa a ir para lá.</p>}
             <p className="text-stone-600">
               <b>Destino:</b> {p.cliente_nome} — {enderecoTexto(p.endereco)}
               {!destino && ' (este endereço não foi localizado no mapa)'}

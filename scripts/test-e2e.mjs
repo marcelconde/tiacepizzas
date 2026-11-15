@@ -707,7 +707,33 @@ await teste('entrega pronta sem motoboy fica sinalizada; rastrear entrega mostra
   await api('entregadores?nome=eq.Carlos%20Moto', { method: 'PATCH', body: JSON.stringify({ posicao_em: new Date(Date.now() - 10 * 60000).toISOString() }) })
   await dormir(11500)
   assert.match(await janela(), /Sem sinal há 10 min/)
+  // o 📍 do cliente no lugar errado: arrasta no mapa e salva; o pedido (para onde o motoboy vai) passa a ter o novo ponto
+  const antesDoPino = (await api('pedidos?select=lat,lng&id=eq.' + p.id))[0]
+  const caixa = await pc.evaluate(() => { const m = [...document.querySelectorAll('[role=dialog] .leaflet-marker-icon')].find((x) => x.innerText.includes('📍')); const r = m.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })
+  await pc.mouse.move(caixa.x, caixa.y); await pc.mouse.down(); await pc.mouse.move(caixa.x + 40, caixa.y + 30, { steps: 8 }); await pc.mouse.move(caixa.x + 80, caixa.y + 60, { steps: 8 }); await pc.mouse.up(); await dormir(600)
+  await clicar(pc, 'Salvar este local', '[role=dialog] button'); await dormir(1200)
+  const depoisDoPino = (await api('pedidos?select=lat,lng&id=eq.' + p.id))[0]
+  assert.ok(Number(depoisDoPino.lat) !== Number(antesDoPino.lat) || Number(depoisDoPino.lng) !== Number(antesDoPino.lng), JSON.stringify([antesDoPino, depoisDoPino]))
   await pc.keyboard.press('Escape'); await dormir(500)
+})
+
+await teste('ficha do cliente: editar um endereço guardado (e o pino só vale enquanto o endereço não muda)', async () => {
+  const end = (await api('enderecos?select=id,cliente_id,logradouro,numero,complemento,lat,lng&lat=not.is.null&order=criado_em.desc&limit=1'))[0]
+  const cli = (await api('clientes?select=id,nome&id=eq.' + end.cliente_id))[0]
+  await ir(pc, '/admin/clientes', 1500)
+  await preencher(pc, 'Buscar', cli.nome); await dormir(600)
+  await pc.evaluate((nome) => [...document.querySelectorAll('main tbody tr')].find((t) => t.innerText.includes(nome)).click(), cli.nome); await dormir(1500)
+  await pc.evaluate((rua) => [...document.querySelectorAll('[role=dialog] li')].find((l) => l.innerText.includes(rua)).querySelector('[aria-label="Editar endereço"]').click(), end.logradouro); await dormir(800)
+  // só o complemento muda: o pino continua valendo
+  await preencher(pc, 'Complemento', 'Bloco B, apto 22'); await clicar(pc, 'Guardar endereço', '[role=dialog] button[type=submit]'); await dormir(1200)
+  let agora = (await api('enderecos?select=complemento,lat,lng&id=eq.' + end.id))[0]
+  assert.deepEqual([agora.complemento, Number(agora.lat), Number(agora.lng)], ['Bloco B, apto 22', Number(end.lat), Number(end.lng)])
+  // mudou o número sem localizar de novo: o ponto antigo é apagado e o Novo pedido procura o endereço outra vez
+  await pc.evaluate((rua) => [...document.querySelectorAll('[role=dialog] li')].find((l) => l.innerText.includes(rua)).querySelector('[aria-label="Editar endereço"]').click(), end.logradouro); await dormir(800)
+  await preencher(pc, 'Número', String(end.numero) + 'A'); await clicar(pc, 'Guardar endereço', '[role=dialog] button[type=submit]'); await dormir(1200)
+  agora = (await api('enderecos?select=numero,lat,lng&id=eq.' + end.id))[0]
+  assert.deepEqual([agora.numero, agora.lat, agora.lng], [String(end.numero) + 'A', null, null])
+  await pc.keyboard.press('Escape'); await dormir(400)
 })
 
 await nav.close()

@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
-import { Download, MessageCircle, Plus, Search, Trash2 } from 'lucide-react'
+import { Download, MessageCircle, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Carregando, Entrada, Erro, Modal, Selecao, Tabela, Vazio, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { baixarCsv, brl, dataCurta, enderecoTexto, soDigitos, telefone } from '../lib/formato'
-import { consultarCep } from '../lib/geo'
+import { consultarCep, localizarEndereco, type Ponto, type PontoAchado } from '../lib/geo'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Cliente, Endereco } from '../lib/tipos'
 import { Pagina } from './AdminLayout'
 import { ComprasDoCliente } from './Analises'
 import { DetalhePedido } from './DetalhePedido'
+import { PinoDoEndereco } from './PinoDoEndereco'
 
 const DIA = 86_400_000
 const SEGMENTOS = {
@@ -86,12 +87,81 @@ function CamposEndereco({ valor, mudar }: { valor: EnderecoForm; mudar: Dispatch
   )
 }
 
+/**
+ * Endereço guardado do cliente, com o pino no mapa: é o ponto que o Novo pedido usa sem procurar de novo e que vai
+ * para o motoboy. Mudou a rua, o número ou o bairro depois de marcar o pino, o pino antigo deixa de valer.
+ */
+function FormEndereco({ inicial, pontoInicial, salvando, onCancelar, onGuardar }: {
+  inicial: EnderecoForm
+  pontoInicial: Ponto | null
+  salvando: boolean
+  onCancelar: () => void
+  onGuardar: (e: EnderecoForm, ponto: Ponto | null) => void
+}) {
+  const { config } = useLoja()
+  const [valor, setValor] = useState(inicial)
+  const [ponto, setPonto] = useState(pontoInicial)
+  const [aproximado, setAproximado] = useState<PontoAchado['aproximado']>()
+  const [localizando, setLocalizando] = useState(false)
+  const chaveLocal = [valor.logradouro, valor.numero, valor.bairro, valor.cidade].map((x) => x.trim().toLowerCase()).join('|')
+  const chaveDoPino = useRef(pontoInicial ? chaveLocal : '')
+  const pinoVale = ponto && chaveDoPino.current === chaveLocal ? ponto : null
+
+  async function localizar() {
+    if (!valor.logradouro.trim()) return
+    setLocalizando(true)
+    const loja = config?.loja_lat != null && config.loja_lng != null ? { lat: Number(config.loja_lat), lng: Number(config.loja_lng) } : null
+    const p = await localizarEndereco({ ...valor, cidade: valor.cidade || config?.cidade, uf: valor.uf || config?.uf }, loja)
+    setLocalizando(false)
+    setPonto(p)
+    setAproximado(p?.aproximado)
+    chaveDoPino.current = chaveLocal
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        onGuardar(valor, pinoVale)
+      }}
+      className="mt-3 space-y-3 rounded-xl border border-stone-200 p-3"
+    >
+      <CamposEndereco valor={valor} mudar={setValor} />
+      <PinoDoEndereco
+        ponto={pinoVale}
+        aproximado={aproximado}
+        onMudar={(p) => {
+          setPonto(p)
+          setAproximado(undefined)
+          chaveDoPino.current = chaveLocal
+        }}
+        onLocalizar={localizar}
+        localizando={localizando}
+      />
+      <div className="flex justify-end gap-2">
+        <Botao variante="secundario" onClick={onCancelar}>
+          Cancelar
+        </Botao>
+        <Botao type="submit" carregando={salvando}>
+          Guardar endereço
+        </Botao>
+      </div>
+    </form>
+  )
+}
+
+const paraForm = (e: Endereco): EnderecoForm => ({
+  cep: e.cep ?? '', logradouro: e.logradouro, numero: e.numero ?? '', complemento: e.complemento ?? '', bairro_id: e.bairro_id ?? '',
+  bairro: e.bairro ?? '', referencia: e.referencia ?? '', cidade: e.cidade ?? '', uf: e.uf ?? '',
+})
+
 function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente>; onFechar: () => void; onSalvo: () => void }) {
   const aviso = useAviso()
   const { config } = useLoja()
   const [c, setC] = useState(cliente)
   const [endereco, setEndereco] = useState(enderecoVazio) // endereço digitado junto com o cliente novo
   const [outroEndereco, setOutroEndereco] = useState<EnderecoForm | null>(null) // endereço a mais de quem já é cliente
+  const [editando, setEditando] = useState<Endereco | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null)
   const [versaoCompras, setVersaoCompras] = useState(0)
@@ -137,16 +207,30 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
     onFechar()
   }
 
-  async function salvarOutroEndereco(e: FormEvent) {
-    e.preventDefault()
-    const dados = paraGravar(outroEndereco!, cliente.id!)
+  const comPonto = (ponto: Ponto | null) => ({ lat: ponto ? Number(ponto.lat.toFixed(6)) : null, lng: ponto ? Number(ponto.lng.toFixed(6)) : null })
+
+  async function salvarOutroEndereco(form: EnderecoForm, ponto: Ponto | null) {
+    const dados = paraGravar(form, cliente.id!)
     if (typeof dados === 'string') return aviso.erro(dados)
     setSalvando(true)
-    const { error } = await supabase.from('enderecos').insert(dados)
+    const { error } = await supabase.from('enderecos').insert({ ...dados, ...comPonto(ponto) })
     setSalvando(false)
     if (error) return aviso.erro(mensagemErro(error))
     aviso.sucesso('Endereço guardado')
     setOutroEndereco(null)
+    recarregarEnderecos()
+  }
+
+  async function salvarEdicao(form: EnderecoForm, ponto: Ponto | null) {
+    const dados = paraGravar(form, cliente.id!)
+    if (typeof dados === 'string') return aviso.erro(dados)
+    setSalvando(true)
+    // sem pino conferido, o ponto fica vazio e o Novo pedido procura o endereço de novo
+    const { error } = await supabase.from('enderecos').update({ ...dados, ...comPonto(ponto) }).eq('id', editando!.id!)
+    setSalvando(false)
+    if (error) return aviso.erro(mensagemErro(error))
+    aviso.sucesso('Endereço atualizado')
+    setEditando(null)
     recarregarEnderecos()
   }
 
@@ -216,27 +300,34 @@ function FichaCliente({ cliente, onFechar, onSalvo }: { cliente: Partial<Cliente
                       {enderecoTexto(e)}
                       {e.referencia && <span className="block text-xs text-stone-500">Ref.: {e.referencia}</span>}
                     </span>
-                    <Botao variante="sutil" tamanho="p" aria-label="Remover endereço" onClick={() => removerEndereco(e.id!)}>
-                      <Trash2 className="size-4 text-red-600" />
-                    </Botao>
+                    <span className="flex shrink-0 gap-1">
+                      <Botao variante="sutil" tamanho="p" aria-label="Editar endereço" title="Editar endereço" onClick={() => { setOutroEndereco(null); setEditando(e) }}>
+                        <Pencil className="size-4" />
+                      </Botao>
+                      <Botao variante="sutil" tamanho="p" aria-label="Remover endereço" title="Remover endereço" onClick={() => removerEndereco(e.id!)}>
+                        <Trash2 className="size-4 text-red-600" />
+                      </Botao>
+                    </span>
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm text-stone-500">Nenhum endereço salvo. Eles são guardados automaticamente a cada entrega, ou você pode cadastrar um agora.</p>
             )}
-            {outroEndereco ? (
-              <form onSubmit={salvarOutroEndereco} className="mt-3 rounded-xl border border-stone-200 p-3">
-                <CamposEndereco valor={outroEndereco} mudar={setOutroEndereco as Dispatch<SetStateAction<EnderecoForm>>} />
-                <div className="mt-3 flex justify-end gap-2">
-                  <Botao variante="secundario" onClick={() => setOutroEndereco(null)}>
-                    Cancelar
-                  </Botao>
-                  <Botao type="submit" carregando={salvando}>
-                    Guardar endereço
-                  </Botao>
-                </div>
-              </form>
+            {editando ? (
+              <>
+                <p className="mt-3 text-sm font-semibold">Editando: {enderecoTexto(editando)}</p>
+                <FormEndereco
+                  key={editando.id}
+                  inicial={paraForm(editando)}
+                  pontoInicial={editando.lat != null && editando.lng != null ? { lat: Number(editando.lat), lng: Number(editando.lng) } : null}
+                  salvando={salvando}
+                  onCancelar={() => setEditando(null)}
+                  onGuardar={salvarEdicao}
+                />
+              </>
+            ) : outroEndereco ? (
+              <FormEndereco inicial={outroEndereco} pontoInicial={null} salvando={salvando} onCancelar={() => setOutroEndereco(null)} onGuardar={salvarOutroEndereco} />
             ) : (
               <Botao variante="secundario" tamanho="p" className="mt-3" onClick={() => setOutroEndereco(enderecoVazio)}>
                 <Plus className="size-4" /> Adicionar endereço

@@ -4,13 +4,14 @@ import { MontarItem } from '../components/MontarItem'
 import { Alternar, AreaTexto, Botao, Campo, Cartao, Contador, Entrada, Selecao, cx, useAviso } from '../components/ui'
 import { itensParaPedido, subtotalDe } from '../lib/carrinho'
 import { ORIGEM, PAGAMENTO, brl, haQuanto, soDigitos, telefone as formatarTelefone } from '../lib/formato'
-import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
+import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto, type PontoAchado } from '../lib/geo'
 import { combosDaSacola, itemDoCardapio, precoInicial, useLoja } from '../lib/loja'
 import { aposConfirmar } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, ItemCarrinho, OrigemPedido, Produto, TipoPedido } from '../lib/tipos'
 import { Pagina, useAdmin } from './AdminLayout'
 import { LerWhatsApp, type PedidoLido } from './LerWhatsApp'
+import { PinoDoEndereco } from './PinoDoEndereco'
 
 const enderecoVazio = { cep: '', logradouro: '', numero: '', complemento: '', bairro_id: '', bairro: '', referencia: '', cidade: '', uf: '' }
 
@@ -53,6 +54,8 @@ export default function Pdv() {
   // ponto do endereço no mapa e o trajeto pelas ruas até ele (vai junto com o pedido; o banco confere)
   const [ponto, setPonto] = useState<(Ponto & { rota_km: number | null }) | null>(null)
   const [distancia, setDistancia] = useState('')
+  const [aproximado, setAproximado] = useState<PontoAchado['aproximado']>() // o número não está no mapa
+  const enderecoSalvo = useRef<string | null>(null) // endereço guardado do cliente em uso: o pino corrigido vale para os próximos pedidos
   const [desconto, setDesconto] = useState('')
   const [pagamento, setPagamento] = useState<FormaPagamento>('dinheiro')
   const [troco, setTroco] = useState('')
@@ -79,22 +82,29 @@ export default function Pdv() {
     if (config?.modo_entrega !== 'distancia' || !e.logradouro.trim() || !e.numero.trim()) return
     setDistancia('Calculando…')
     const loja = config.loja_lat != null && config.loja_lng != null ? { lat: Number(config.loja_lat), lng: Number(config.loja_lng) } : null
-    const p = sabido ?? (await localizarEndereco({ logradouro: e.logradouro, numero: e.numero, bairro: e.bairro, cep: e.cep, cidade: e.cidade || config.cidade, uf: e.uf || config.uf }, loja))
+    const p: PontoAchado | null = sabido ?? (await localizarEndereco({ logradouro: e.logradouro, numero: e.numero, bairro: e.bairro, cep: e.cep, cidade: e.cidade || config.cidade, uf: e.uf || config.uf }, loja))
+    setAproximado(sabido ? undefined : p?.aproximado)
     if (!p) {
       setPonto(null)
       return setDistancia('Endereço não encontrado no mapa: escolha a distância.')
     }
     const km = loja ? await distanciaPelasRuas(loja, p) : null
+    // o pino fica no mapa mesmo fora da área: se a busca errou, a atendente arrasta para o lugar certo
+    setPonto({ lat: p.lat, lng: p.lng, rota_km: km })
     const { data, error } = await supabase.rpc('calcular_entrega', { p_lat: p.lat, p_lng: p.lng, p_rota_km: km })
-    if (error || !data?.dentro) {
-      setPonto(null)
-      return setDistancia(error ? mensagemErro(error) : (data?.mensagem ?? 'Fora da área de entrega.'))
-    }
-    setPonto({ ...p, rota_km: km })
+    if (error || !data?.dentro) return setDistancia(error ? mensagemErro(error) : (data?.mensagem ?? 'Fora da área de entrega.'))
     setTaxa(String(data.taxa))
     const quanto = `${data.por_rota ? '' : 'cerca de '}${String(data.distancia_km).replace('.', ',')} km da loja${data.por_rota ? ', pelas ruas' : ''}`
     // número que o mapa não tem: o ponto é o da rua ou o do bairro, e a atendente confere a faixa
     setDistancia('aproximado' in p && p.aproximado ? `Ponto aproximado (${p.aproximado === 'rua' ? 'pela rua, sem o número' : 'pelo bairro'}): ${quanto}. Confira a faixa.` : quanto)
+  }
+
+  /** A atendente arrastou o pino: recalcula a taxa e, se o endereço é um dos guardados do cliente, corrige o ponto dele. */
+  async function moverPino(p: Ponto) {
+    calcularEntrega(p)
+    if (!enderecoSalvo.current) return
+    const { error } = await supabase.from('enderecos').update({ lat: Number(p.lat.toFixed(6)), lng: Number(p.lng.toFixed(6)) }).eq('id', enderecoSalvo.current)
+    if (!error) aviso.sucesso('Local corrigido: vale também para os próximos pedidos deste endereço.', 5000)
   }
 
   function mudarTipo(t: TipoPedido) {
@@ -176,6 +186,7 @@ export default function Pdv() {
     setSalvos([])
     setSugerir(null)
     setEnd(enderecoVazio)
+    enderecoSalvo.current = null
     cepBuscado.current = ''
     setCepAviso('')
     setPonto(null)
@@ -223,6 +234,7 @@ export default function Pdv() {
 
   /** CEP completo: preenche rua e bairro. Se a rua mudou, número, complemento e referência eram de outro endereço. */
   async function mudarCep(valor: string) {
+    enderecoSalvo.current = null
     setEnd((v) => ({ ...v, cep: valor }))
     const cep = soDigitos(valor)
     if (cep.length !== 8 || cep === cepBuscado.current) return
@@ -254,6 +266,7 @@ export default function Pdv() {
       bairro_id: e.bairro_id ?? '', bairro: e.bairro ?? '', referencia: e.referencia ?? '', cidade: e.cidade ?? '', uf: e.uf ?? '',
     }
     cepBuscado.current = soDigitos(novo.cep)
+    enderecoSalvo.current = e.id ?? null
     setCepAviso('')
     setEnd(novo)
     setPonto(null)
@@ -269,6 +282,7 @@ export default function Pdv() {
     setClienteAchado(false)
     setSalvos([])
     setEnd(enderecoVazio)
+    enderecoSalvo.current = null
     cepBuscado.current = ''
     setCepAviso('')
     setPonto(null)
@@ -484,8 +498,8 @@ export default function Pdv() {
                 <p className="self-center text-xs text-stone-500">{cepAviso || 'Digite o CEP para preencher a rua.'}</p>
               </div>
               <div className="grid grid-cols-[1fr_5rem] gap-2">
-                <Entrada required aria-label="Rua" placeholder="Rua / avenida" autoComplete="off" value={end.logradouro} onChange={(e) => setEnd({ ...end, logradouro: e.target.value })} onBlur={() => calcularEntrega()} />
-                <Entrada ref={campoNumero} required aria-label="Número" placeholder="Nº" autoComplete="off" value={end.numero} onChange={(e) => setEnd({ ...end, numero: e.target.value })} onBlur={() => calcularEntrega()} />
+                <Entrada required aria-label="Rua" placeholder="Rua / avenida" autoComplete="off" value={end.logradouro} onChange={(e) => { enderecoSalvo.current = null; setEnd({ ...end, logradouro: e.target.value }) }} onBlur={() => calcularEntrega()} />
+                <Entrada ref={campoNumero} required aria-label="Número" placeholder="Nº" autoComplete="off" value={end.numero} onChange={(e) => { enderecoSalvo.current = null; setEnd({ ...end, numero: e.target.value }) }} onBlur={() => calcularEntrega()} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Entrada aria-label="Complemento" placeholder="Complemento" value={end.complemento} onChange={(e) => setEnd({ ...end, complemento: e.target.value })} />
@@ -516,6 +530,9 @@ export default function Pdv() {
               </div>
               {config?.modo_entrega === 'distancia' && (end.bairro || end.cidade) && <p className="text-xs text-stone-600">{[end.bairro, [end.cidade, end.uf].filter(Boolean).join('/')].filter(Boolean).join(' — ')}</p>}
               {config?.modo_entrega === 'distancia' && <p className="text-xs text-stone-600">{distancia || 'A taxa é calculada pela distância assim que a rua e o número são preenchidos.'}</p>}
+              {config?.modo_entrega === 'distancia' && end.logradouro.trim() && end.numero.trim() && (
+                <PinoDoEndereco ponto={ponto} aproximado={aproximado} onMudar={moverPino} onLocalizar={() => calcularEntrega(null)} localizando={distancia === 'Calculando…'} />
+              )}
             </div>
           )}
 
