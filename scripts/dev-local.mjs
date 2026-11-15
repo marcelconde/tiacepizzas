@@ -272,6 +272,24 @@ http.createServer(async (req, res) => {
          where p.id = $1 and p.tipo = 'entrega' and p.status = 'pronto'`, [corpo.pedido_id])
       return enviar(200, { avisados: rows[0].avisados })
     }
+    if (url.pathname === '/functions/v1/ler-pedido') {
+      // sem a IA no ambiente local: uma leitura simples por palavras faz o papel dela, e a conferência contra o
+      // cardápio é a mesma da função de verdade (montar.ts)
+      const pode = claims && (await db.query(`select 1 from perfis p where p.id = $1 and p.ativo and (p.papel = 'admin' or exists (select 1 from permissoes m where m.papel = p.papel and m.modulo = 'pedidos'))`, [claims.sub])).rows.length
+      if (!pode) return enviar(403, { erro: 'Só quem cuida dos pedidos pode usar a leitura do WhatsApp.' })
+      const texto = String(corpo?.texto ?? '').trim()
+      if (!texto && !corpo?.imagens?.length) return enviar(400, { erro: 'Cole a conversa ou uma print do pedido.' })
+      const { cardapioParaIA, montarPedido } = await import('../supabase/functions/ler-pedido/montar.ts')
+      const [categorias, tamanhos, produtos, adicionais] = await Promise.all([
+        db.query(`select id, nome, usa_tamanhos from categorias where ativo order by ordem`),
+        db.query(`select id, nome, max_sabores, aceita_borda from tamanhos where ativo order by ordem`),
+        db.query(`select p.id, p.categoria_id, p.nome, p.preco, coalesce((select json_agg(json_build_object('tamanho_id', pp.tamanho_id, 'preco', pp.preco)) from produto_precos pp where pp.produto_id = p.id), '[]') as produto_precos from produtos p where p.ativo and p.disponivel order by p.ordem`),
+        db.query(`select id, nome, tipo from adicionais where ativo order by ordem`),
+      ])
+      const cardapio = { categorias: categorias.rows, tamanhos: tamanhos.rows, produtos: produtos.rows, adicionais: adicionais.rows }
+      const mapa = cardapioParaIA(cardapio)
+      return enviar(200, montarPedido(lerPedidoSimulado(texto, cardapio, mapa), cardapio, mapa))
+    }
     if (url.pathname.startsWith('/functions/v1/')) return enviar(400, { erro: 'A emissão de nota fiscal não existe no ambiente local de teste.' })
 
     const executar = (fn) => db.transaction(async (tx) => {
@@ -360,3 +378,43 @@ http.createServer(async (req, res) => {
   process.on('SIGINT', () => vite.kill('SIGINT'))
   process.on('SIGTERM', () => vite.kill('SIGTERM'))
 })
+
+// Imita a leitura do pedido pela IA, só para o ambiente local e os testes: acha no texto os nomes do cardápio,
+// o telefone, o endereço e o pagamento. Devolve no mesmo formato da IA (códigos curtos), para a conferência de verdade.
+function lerPedidoSimulado(texto, cardapio, mapa) {
+  const norm = (s) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  // só as mensagens do cliente (as da pizzaria têm "pizza" no nome de quem escreve)
+  texto = texto.split('\n').filter((l) => !/^\[[^\]]+\]\s*[^:]*pizza[^:]*:/i.test(l)).join('\n')
+  const t = norm(texto)
+  const codigo = (m, id) => [...m.entries()].find(([, v]) => v === id)?.[0]
+  const pizzas = new Set(cardapio.categorias.filter((c) => c.usa_tamanhos).map((c) => c.id))
+  const tamanho = cardapio.tamanhos.find((x) => t.includes(norm(x.nome)))
+  const sabores = cardapio.produtos.filter((p) => pizzas.has(p.categoria_id) && t.includes(norm(p.nome)))
+  const outros = cardapio.produtos.filter((p) => !pizzas.has(p.categoria_id) && t.includes(norm(p.nome)))
+  const adicionais = cardapio.adicionais.filter((a) => t.includes(norm(a.nome).replace(/^borda (de )?/, '')))
+  const itens = []
+  const pizza = (lista) => ({ produto: codigo(mapa.produto, lista[0].id), tamanho: tamanho ? codigo(mapa.tamanho, tamanho.id) : null, sabores: lista.map((p) => codigo(mapa.produto, p.id)),
+    adicionais: adicionais.map((a) => codigo(mapa.adicional, a.id)), quantidade: 1, observacoes: /sem cebola/.test(t) ? 'sem cebola' : null, como_o_cliente_pediu: lista.map((p) => p.nome).join(' / ') })
+  if (sabores.length && /\bmeia\b|\bmetade\b/.test(t)) itens.push(pizza(sabores))
+  else sabores.forEach((p) => itens.push(pizza([p])))
+  for (const p of outros) {
+    const q = t.match(new RegExp(`(\\d+)\\s*x?\\s*${norm(p.nome).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
+    itens.push({ produto: codigo(mapa.produto, p.id), tamanho: null, sabores: [], adicionais: [], quantidade: q ? Number(q[1]) : 1, observacoes: null, como_o_cliente_pediu: p.nome })
+  }
+  for (const m of t.matchAll(/pizza de ([a-z ]+?)(?=[,.\n]| e |$)/g)) {
+    if (!cardapio.produtos.some((p) => norm(p.nome).includes(m[1].trim()))) itens.push({ produto: 'P999', tamanho: null, sabores: [], adicionais: [], quantidade: 1, observacoes: null, como_o_cliente_pediu: m[0] })
+  }
+  const end = texto.match(/((?:rua|avenida|av\.|travessa)\s+[^,\n]+),\s*(\d+[a-zA-Z]?)(?:\s*-\s*([^.\n]+))?/i)
+  const nome = texto.match(/^\[[^\]]+\]\s*([^:]+):/m)?.[1]?.trim() ?? texto.match(/nome:\s*(.+)/i)?.[1]?.trim() ?? null
+  const telefone = texto.match(/(?:\+?55\s*)?\(?\d{2}\)?\s*9?\s*\d{4}[-\s]?\d{4}/)?.[0] ?? null
+  return {
+    cliente: { nome, telefone },
+    tipo: end ? 'entrega' : /buscar|retirar/.test(t) ? 'retirada' : null,
+    endereco: { cep: null, logradouro: end?.[1]?.trim() ?? null, numero: end?.[2] ?? null, complemento: texto.match(/apto\.?\s*\d+[^,\n.]*/i)?.[0] ?? null, bairro: end?.[3]?.trim() ?? null, referencia: null },
+    itens,
+    forma_pagamento: /\bpix\b/.test(t) ? 'pix' : /dinheiro/.test(t) ? 'dinheiro' : /credito/.test(t) ? 'credito' : /debito/.test(t) ? 'debito' : null,
+    troco_para: Number(t.match(/troco para (\d+)/)?.[1]) || null,
+    observacoes: null,
+    duvidas: texto ? [] : ['O ambiente local de teste não lê imagens.'],
+  }
+}

@@ -630,6 +630,40 @@ await teste('novo pedido: busca o cliente pelo nome ou pelo telefone, puxa o end
   await at.close()
 })
 
+await teste('colar do WhatsApp: a conversa vira pedido no Novo pedido (itens, cliente, endereço, pagamento) e o que não foi entendido fica em destaque', async () => {
+  const at = await nova('desktop'); await entrar(at, '/admin', 'ana@teste.local')
+  await ir(at, '/admin/pdv', 1500)
+  await clicar(at, 'Colar do WhatsApp', 'main button')
+  const conversa = [
+    '[19:02, 14/11/2026] Maria Clara: Boa noite! Quero uma pizza grande meia calabresa meia mussarela com borda de catupiry, sem cebola',
+    '[19:03, 14/11/2026] Tia Cê Pizzas: Mais alguma coisa?',
+    '[19:03, 14/11/2026] Maria Clara: 2 coca-cola 2l e uma pizza de abacaxi',
+    '[19:04, 14/11/2026] Maria Clara: Entrega na Rua Augusta, 900 - Consolação. Meu número é (11) 97777-1234. Pago em dinheiro, troco para 150',
+  ].join('\n')
+  await preencher(at, 'Conversa do WhatsApp', conversa)
+  await clicar(at, 'Ler pedido', '[role=dialog] button'); await dormir(2500)
+  assert.ok(!(await at.evaluate(() => document.querySelector('[role=dialog]'))), 'a janela fecha depois de ler')
+  const formulario = await at.evaluate(() => document.querySelector('form').innerText)
+  const pedidoNaTela = formulario.slice(formulario.indexOf('Canal do pedido'))
+  assert.match(pedidoNaTela, /1\/2 (Calabresa \+ 1\/2 Mussarela|Mussarela \+ 1\/2 Calabresa) \(Grande\)/, pedidoNaTela.slice(0, 900).replace(/\n+/g, ' | '))
+  assert.match(pedidoNaTela, /Coca-Cola 2L/)
+  const destaque = await at.evaluate(() => document.querySelector('form [role=alert]')?.innerText ?? '')
+  assert.match(destaque, /Confira antes de lançar[\s\S]*Não achei no cardápio: "pizza de abacaxi"/)
+  const valor = (rotulo) => at.evaluate((rotulo) => (document.querySelector('form [aria-label="' + rotulo + '"]') ?? [...document.querySelectorAll('form label')].find((l) => l.innerText.trim().startsWith(rotulo))?.querySelector('input, select'))?.value, rotulo)
+  assert.deepEqual(
+    [await valor('Nome'), (await valor('Telefone')).replace(/\D/g, ''), await valor('Rua'), await valor('Número'), await valor('Pagamento'), await valor('Troco para')],
+    ['Maria Clara', '11977771234', 'Rua Augusta', '900', 'dinheiro', '150'],
+  )
+  // no modo por bairro, a atendente escolhe o bairro e lança
+  await preencher(at, 'Bairro', 'Centro')
+  await clicar(at, 'Lançar pedido', 'button[type=submit]'); await dormir(2500)
+  const ult = (await api('pedidos?select=origem,tipo,cliente_nome,cliente_telefone,forma_pagamento,troco_para,pedido_itens(nome,quantidade,observacoes,adicionais)&order=criado_em.desc&limit=1'))[0]
+  assert.deepEqual([ult.origem, ult.tipo, ult.cliente_nome, ult.cliente_telefone, ult.forma_pagamento, Number(ult.troco_para)], ['whatsapp', 'entrega', 'Maria Clara', '11977771234', 'dinheiro', 150])
+  const pizza = ult.pedido_itens.find((i) => i.nome.includes('Calabresa')), coca = ult.pedido_itens.find((i) => i.nome.includes('Coca'))
+  assert.deepEqual([pizza?.observacoes, pizza?.adicionais?.map((a) => a.nome), coca?.quantidade], ['sem cebola', ['Borda de catupiry'], 2], JSON.stringify(ult.pedido_itens))
+  await at.close()
+})
+
 await teste('ponto da loja: colar do Google Maps, conferir no mapa e só então salvar', async () => {
   const lido = async () => { const c = (await api('configuracoes?select=loja_lat,loja_lng&id=eq.1'))[0]; return [Number(c.loja_lat), Number(c.loja_lng)] }
   const antes = await lido()

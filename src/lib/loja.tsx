@@ -239,3 +239,33 @@ export function nomeItem(sabores: Produto[], tamanho?: Tamanho | null) {
   const base = sabores.length === 1 ? sabores[0].nome : sabores.map((s) => `1/${sabores.length} ${s.nome}`).join(' + ')
   return tamanho ? `${base} (${tamanho.nome})` : base
 }
+
+/**
+ * Item da sacola a partir das escolhas (produto, tamanho, sabores, adicionais), com o mesmo preço que a tela de
+ * montar a pizza mostraria. Usado quando o pedido vem pronto de fora (leitura do WhatsApp). Devolve null se o
+ * produto saiu do cardápio.
+ */
+export function itemDoCardapio(
+  c: Catalogo,
+  regra: 'maior' | 'media',
+  e: { produto_id: string; tamanho_id: string | null; sabores: string[]; adicionais: string[]; quantidade: number; observacoes?: string },
+): ItemCarrinho | null {
+  const produto = c.produtos.find((p) => p.id === e.produto_id)
+  if (!produto) return null
+  const tamanho = e.tamanho_id ? (c.tamanhos.find((t) => t.id === e.tamanho_id) ?? null) : null
+  const sabores = tamanho ? e.sabores.map((id) => c.produtos.find((p) => p.id === id)).filter((p): p is Produto => Boolean(p)) : []
+  if (tamanho && !sabores.length) return null
+  const adicionais = c.adicionais.filter((a) => e.adicionais.includes(a.id) && (a.tipo !== 'borda' || tamanho?.aceita_borda !== false))
+  const base = tamanho ? precoPizza(c, sabores, tamanho.id, regra) : precoComPromocao(c, produto.id, null, Number(produto.preco ?? 0))
+  return {
+    uid: crypto.randomUUID(),
+    produto_id: produto.id,
+    nome: tamanho ? nomeItem(sabores, tamanho) : produto.nome,
+    tamanho_id: tamanho?.id ?? null,
+    sabores: sabores.map((s) => s.id),
+    adicionais: adicionais.map((a) => ({ id: a.id, nome: a.nome })),
+    quantidade: Math.max(1, e.quantidade),
+    preco_unitario: base + adicionais.reduce((s, a) => s + precoAdicional(a, tamanho?.id ?? null), 0),
+    observacoes: (e.observacoes ?? '').trim(),
+  }
+}

@@ -43,3 +43,6 @@ verify_jwt = false
 
 [functions.avisar-entregador]
 verify_jwt = false
+
+[functions.ler-pedido]
+verify_jwt = false

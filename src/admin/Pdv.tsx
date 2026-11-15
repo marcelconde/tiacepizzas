@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Search, UserCheck } from 'lucide-react'
+import { AlertTriangle, MessageCircle, Search, UserCheck, X } from 'lucide-react'
 import { MontarItem } from '../components/MontarItem'
 import { Alternar, AreaTexto, Botao, Campo, Cartao, Contador, Entrada, Selecao, cx, useAviso } from '../components/ui'
 import { itensParaPedido, subtotalDe } from '../lib/carrinho'
 import { ORIGEM, PAGAMENTO, brl, haQuanto, soDigitos, telefone as formatarTelefone } from '../lib/formato'
 import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto } from '../lib/geo'
-import { combosDaSacola, precoInicial, useLoja } from '../lib/loja'
+import { combosDaSacola, itemDoCardapio, precoInicial, useLoja } from '../lib/loja'
 import { aposConfirmar } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Endereco, FormaPagamento, ItemCarrinho, OrigemPedido, Produto, TipoPedido } from '../lib/tipos'
 import { Pagina, useAdmin } from './AdminLayout'
+import { LerWhatsApp, type PedidoLido } from './LerWhatsApp'
 
 const enderecoVazio = { cep: '', logradouro: '', numero: '', complemento: '', bairro_id: '', bairro: '', referencia: '', cidade: '', uf: '' }
 
@@ -43,6 +44,8 @@ export default function Pdv() {
   const [sugerir, setSugerir] = useState<'telefone' | 'nome' | null>(null) // campo em que a atendente está digitando
   const [salvos, setSalvos] = useState<Endereco[]>([])
   const [cepAviso, setCepAviso] = useState('')
+  const [lerWhats, setLerWhats] = useState(false)
+  const [duvidas, setDuvidas] = useState<string[]>([]) // o que a leitura do WhatsApp não entendeu
   const cepBuscado = useRef('')
   const campoNumero = useRef<HTMLInputElement>(null)
   const [end, setEnd] = useState(enderecoVazio)
@@ -142,14 +145,70 @@ export default function Pdv() {
     if (trocarNome) setNome(c.nome)
     if (c.telefone) setTelefone(c.telefone)
     if (c.cpf && !cpfNota) setCpfNota(c.cpf)
+    const lista = await enderecosDe(c)
+    setSalvos(lista)
+    if (lista.length && (trocarEndereco || !end.logradouro)) usarEndereco(lista[0])
+  }
+
+  /** Endereços já usados pela pessoa, do mais novo para o mais antigo, sem repetir. */
+  async function enderecosDe(c: ClienteBusca) {
     const { data } = await supabase.from('enderecos').select('*').in('cliente_id', c.ids).order('criado_em', { ascending: false })
     const vistos = new Set<string>()
-    const lista = ((data ?? []) as Endereco[]).filter((e) => {
+    return ((data ?? []) as Endereco[]).filter((e) => {
       const chave = `${e.logradouro}|${e.numero ?? ''}`.toLowerCase()
       return vistos.has(chave) ? false : Boolean(vistos.add(chave))
     })
-    setSalvos(lista)
-    if (lista.length && (trocarEndereco || !end.logradouro)) usarEndereco(lista[0])
+  }
+
+  /** Pedido lido do WhatsApp: entra no formulário para a atendente conferir; o que a leitura não entendeu fica em destaque. */
+  async function aplicarLido(p: PedidoLido) {
+    const novos = p.itens.map((i) => itemDoCardapio(catalogo, config?.regra_preco_sabores ?? 'maior', i)).filter((i): i is ItemCarrinho => Boolean(i))
+    const avisos = [...p.duvidas]
+    if (novos.length < p.itens.length) avisos.push('Um item saiu do cardápio enquanto a leitura acontecia: confira os itens.')
+    if (!novos.length) avisos.push('Nenhum item foi reconhecido: adicione os produtos pelo cardápio ao lado.')
+    const t: TipoPedido = p.tipo ?? (p.endereco.logradouro ? 'entrega' : 'retirada')
+    setItens(novos)
+    mudarTipo(t)
+    setOrigem('whatsapp')
+    setNome(p.cliente.nome ?? '')
+    setTelefone(p.cliente.telefone ?? '')
+    setClienteAchado(false)
+    setSalvos([])
+    setSugerir(null)
+    setEnd(enderecoVazio)
+    cepBuscado.current = ''
+    setCepAviso('')
+    setPonto(null)
+    setDistancia('')
+    setTaxa('')
+    if (p.forma_pagamento) setPagamento(p.forma_pagamento)
+    setTroco(p.troco_para ? String(p.troco_para).replace('.', ',') : '')
+    setObservacoes(p.observacoes ?? '')
+    if (!p.cliente.telefone) avisos.push('A leitura não achou o telefone do cliente.')
+    if (t === 'entrega' && p.endereco.logradouro) {
+      const bairro = catalogo.bairros.find((b) => b.nome.toLowerCase() === (p.endereco.bairro ?? '').toLowerCase())
+      const novo = {
+        ...enderecoVazio, cep: p.endereco.cep ?? '', logradouro: p.endereco.logradouro, numero: p.endereco.numero ?? '', complemento: p.endereco.complemento ?? '',
+        bairro: p.endereco.bairro ?? '', bairro_id: bairro?.id ?? '', referencia: p.endereco.referencia ?? '',
+      }
+      cepBuscado.current = soDigitos(novo.cep)
+      setEnd(novo)
+      if (!novo.numero) avisos.push('Falta o número do endereço.')
+      if (config?.modo_entrega !== 'distancia' && !bairro) avisos.push('Escolha o bairro da entrega.')
+      calcularEntrega(null, novo)
+    } else if (t === 'entrega') avisos.push('A leitura não achou o endereço da entrega.')
+    setDuvidas(avisos)
+    aviso.sucesso(`Pedido lido: ${novos.length} item(ns). Confira tudo antes de lançar.`, 6000)
+    // já é cliente? marca como cadastrado e oferece os endereços guardados (sem trocar o que veio na conversa)
+    const conhecido = p.cliente.telefone ? clientes.find((c) => c.telefone === p.cliente.telefone) : undefined
+    if (conhecido) {
+      setClienteAchado(true)
+      if (!p.cliente.nome) setNome(conhecido.nome)
+      if (conhecido.cpf) setCpfNota((atual) => atual || conhecido.cpf!)
+      const lista = await enderecosDe(conhecido)
+      setSalvos(lista)
+      if (t === 'entrega' && !p.endereco.logradouro && lista.length) usarEndereco(lista[0])
+    }
   }
 
   /** Telefone digitado inteiro, sem tocar na sugestão: se for de alguém já cadastrado, puxa os dados do mesmo jeito. */
@@ -219,6 +278,7 @@ export default function Pdv() {
     setTroco('')
     setCpfNota('')
     setObservacoes('')
+    setDuvidas([])
   }
 
   async function lancar(e: FormEvent) {
@@ -268,7 +328,15 @@ export default function Pdv() {
     cx('rounded-full border px-3 py-1 text-sm font-semibold whitespace-nowrap', ativo ? 'border-molho-600 bg-molho-600 text-white' : 'border-stone-300 bg-white text-forno-700 hover:bg-stone-50')
 
   return (
-    <Pagina titulo="Novo pedido" descricao="Para vendas no balcão e pedidos por telefone ou WhatsApp.">
+    <Pagina
+      titulo="Novo pedido"
+      descricao="Para vendas no balcão e pedidos por telefone ou WhatsApp."
+      acoes={
+        <Botao variante="secundario" onClick={() => setLerWhats(true)}>
+          <MessageCircle className="size-4" /> Colar do WhatsApp
+        </Botao>
+      }
+    >
       <form onSubmit={lancar} className="grid gap-4 lg:grid-cols-[1fr_24rem]">
         <div>
           <div className="relative">
@@ -309,6 +377,21 @@ export default function Pdv() {
               </button>
             ))}
           </div>
+          {duvidas.length > 0 && (
+            <div role="alert" className="relative rounded-xl border border-amber-300 bg-amber-50 p-3 pr-9 text-sm text-amber-950">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="size-4 shrink-0" /> Confira antes de lançar
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {duvidas.map((d, i) => (
+                  <li key={i}>{d}</li>
+                ))}
+              </ul>
+              <button type="button" aria-label="Fechar os avisos da leitura" onClick={() => setDuvidas([])} className="absolute top-2 right-2 rounded p-1 hover:bg-amber-100">
+                <X className="size-4" />
+              </button>
+            </div>
+          )}
 
           <div className="relative" onKeyDown={(e) => e.key === 'Escape' && setSugerir(null)}>
             <div className="grid grid-cols-2 gap-3">
@@ -525,6 +608,7 @@ export default function Pdv() {
         </Cartao>
       </form>
 
+      <LerWhatsApp aberto={lerWhats} onFechar={() => setLerWhats(false)} onLido={aplicarLido} />
       <MontarItem produto={montando} onFechar={() => setMontando(null)} onAdicionar={(item) => setItens((l) => [...l, item])} />
     </Pagina>
   )
