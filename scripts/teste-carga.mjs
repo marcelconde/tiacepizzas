@@ -6,6 +6,8 @@
 //   --intenso                                                       cada pessoa age a cada 2 a 5 s (estresse, não uso real)
 //   --todos-pedem                                                   todas as pessoas fazem pedido e depois ficam navegando
 //                                                                   (acompanham o pedido e voltam ao cardápio) até o fim
+//   --variar                                                        pedidos variados (cada sabor em cada tamanho, meio a meio,
+//                                                                   bordas, adicionais, bebidas) conferidos com o preço do cardápio
 //   --navegadores 25                                                além das chamadas, 25 navegadores de verdade em rodízio
 //                                                                   abrindo o site, o cardápio, um produto e o acompanhamento:
 //                                                                   são as visitas que aparecem no Cloudflare Web Analytics
@@ -17,6 +19,7 @@
 // o banco recusa mais de 40 pedidos do site em 10 minutos (freio contra abuso) — com 100 pessoas, são 40 pedidos.
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { prepararPedidosVariados } from './carga-pedidos.mjs'
 
 const arg = (nome, padrao) => {
   const i = process.argv.indexOf(`--${nome}`)
@@ -28,6 +31,8 @@ const LOCAL = process.argv.includes('--local')
 const INTENSO = process.argv.includes('--intenso')
 const TODOS_PEDEM = process.argv.includes('--todos-pedem')
 const NAVEGADORES = Number(arg('navegadores', 0))
+const VARIAR = process.argv.includes('--variar')
+let variados = null
 const env = Object.fromEntries(readFileSync(new URL('../.env.production', import.meta.url), 'utf8').split('\n').filter((l) => l.includes('=')).map((l) => l.split('=').map((x) => x.trim())))
 const SITE = LOCAL ? 'http://localhost:5173' : 'https://tiacepizzas.com.br'
 const API = LOCAL ? 'http://localhost:54321' : env.VITE_SUPABASE_URL
@@ -120,12 +125,14 @@ async function acompanhar(codigo) {
 async function pedir(n) {
   await visita()
   await dormir(INTENSO ? entre(1_000, 3_000) : entre(5_000, 20_000)) // escolhendo
+  const v = variados?.montar()
   const p = {
     chave: randomUUID(),
     tipo: 'retirada',
     cliente: { nome: `Teste de carga ${String(n).padStart(2, '0')}`, telefone: `119${rodada}${String(n).padStart(5, '0')}` },
-    itens: itensValidos,
-    forma_pagamento: 'pix',
+    itens: v ? v.envio : itensValidos,
+    forma_pagamento: v ? v.forma : 'pix',
+    ...(v?.troco ? { troco_para: v.troco } : {}),
     cpf_nota: '',
     observacoes: 'TESTE DE CARGA — pode cancelar',
   }
@@ -138,10 +145,15 @@ async function pedir(n) {
   if (r instanceof Response && r.ok && corpo.codigo) {
     pedidos.feitos++
     codigos.push(corpo.codigo)
+    if (v) {
+      const acomp = await medir('banco: acompanhar pedido', () => rpc('acompanhar_pedido', { p_codigo: corpo.codigo }))
+      variados.conferir(v, corpo.total, acomp ? JSON.parse(acomp) : null)
+    }
     await (TODOS_PEDEM ? navegarDepois(corpo.codigo) : acompanhar(corpo.codigo))
   } else {
     m.erros++
     const motivo = corpo.message ?? `HTTP ${r.status}`
+    if (v && r instanceof Response) variados.recusado(v, motivo)
     pedidos.recusados.set(motivo, (pedidos.recusados.get(motivo) ?? 0) + 1)
   }
 }
@@ -222,7 +234,7 @@ const pct = (lista, p) => (lista.length ? lista.slice().sort((a, b) => a - b)[Ma
 const ms = (v) => `${Math.round(v)} ms`
 
 async function principal() {
-  console.log(`Teste de carga — ${PESSOAS} pessoas por ${MINUTOS} min em ${LOCAL ? 'ambiente local' : SITE}${INTENSO ? ' (ritmo intenso)' : ''}${TODOS_PEDEM ? ', todas fazendo pedido' : ''}${NAVEGADORES ? `, + ${NAVEGADORES} navegadores de verdade` : ''}`)
+  console.log(`Teste de carga — ${PESSOAS} pessoas por ${MINUTOS} min em ${LOCAL ? 'ambiente local' : SITE}${INTENSO ? ' (ritmo intenso)' : ''}${TODOS_PEDEM ? ', todas fazendo pedido' : ''}${VARIAR ? ', pedidos variados' : ''}${NAVEGADORES ? `, + ${NAVEGADORES} navegadores de verdade` : ''}`)
   const html = await (await fetch(`${SITE}/`)).text()
   arquivos = [...new Set([...html.matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]))]
   const aberta = await (await rpc('loja_aberta')).json()
@@ -237,6 +249,7 @@ async function principal() {
     ...(bebida ? [{ produto_id: bebida.id, tamanho_id: null, adicionais: [], quantidade: 1, observacoes: '' }] : []),
   ]
   if (!itensValidos.length) throw new Error('O cardápio não tem produto disponível para montar o pedido de teste.')
+  if (VARIAR) variados = await prepararPedidosVariados(banco, rpc)
 
   const tarefas = []
   const t0 = Date.now()
@@ -260,6 +273,7 @@ async function principal() {
   console.log(`\nResultado (${Math.round(duracao)} s): ${todas.length} chamadas (${(todas.length / duracao).toFixed(1)} por segundo), ${erros} com erro (${((erros / Math.max(1, todas.length)) * 100).toFixed(1)}%)`)
   if (NAVEGADORES) console.log(`Visitas de navegadores de verdade (as que o Cloudflare conta): ${visitasReais}`)
   console.log(`Pedidos: ${pedidos.feitos} feitos${pedidos.recusados.size ? `, recusados: ${[...pedidos.recusados].map(([m, n]) => `${n}× "${m}"`).join('; ')}` : ''}`)
+  if (variados) console.log(`\n${variados.relatorio()}`)
   console.log('\n' + ['o quê'.padEnd(28), 'chamadas', 'erros', 'mediana', '95% até', 'mais lenta'].join(' | '))
   for (const [rotulo, m] of [...medidas].sort((a, b) => a[0].localeCompare(b[0]))) {
     console.log([rotulo.padEnd(28), String(m.ms.length).padStart(8), String(m.erros).padStart(5), ms(pct(m.ms, 50)).padStart(7), ms(pct(m.ms, 95)).padStart(7), ms(Math.max(...m.ms)).padStart(10)].join(' | '))

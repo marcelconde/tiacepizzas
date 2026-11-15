@@ -180,7 +180,10 @@ quadro e devem ser cancelados depois. Antes: abrir a loja (Configurações → H
 do freio contra abuso: o banco recusa pedidos do site quando já há `configuracoes.limite_pedidos_site` (padrão 40)
 esperando aceite nos últimos 10 minutos — para um teste maior, subir o número no banco e voltar a 40 no fim.
 `--local` roda no ambiente de demonstração; `--intenso` faz cada pessoa agir a cada 2 a 5 s; `--todos-pedem` faz
-todas pedirem e depois navegarem (acompanhar o pedido, voltar ao cardápio) até o fim; `--navegadores 25` acrescenta
+todas pedirem e depois navegarem (acompanhar o pedido, voltar ao cardápio) até o fim; `--variar` monta pedidos
+variados que percorrem o cardápio (cada sabor em cada tamanho, meio a meio, bordas, adicionais, bebidas, formas de
+pagamento) e confere o que o banco cobrou com o preço do cardápio (`scripts/carga-pedidos.mjs`, mesmas regras de
+`src/lib/loja.tsx` — se mudar uma, mude a outra); `--navegadores 25` acrescenta
 25 Chrome sem janela em rodízio abrindo site, cardápio, um produto e o acompanhamento — só esses aparecem no
 Cloudflare Web Analytics, que conta visitas de navegador, não chamadas.
 
