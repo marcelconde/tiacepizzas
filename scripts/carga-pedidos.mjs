@@ -52,7 +52,8 @@ export async function prepararPedidosVariados(banco, rpc) {
     return melhor
   }
   const precoPizza = (sabores, t) => {
-    const precos = sabores.map((s) => precoComPromocao(s.id, t, precoNoTamanho(s, t) ?? 0))
+    // a promoção de um sabor vale só para a pizza inteira; no meio a meio, preço de tabela
+    const precos = sabores.map((s) => (sabores.length === 1 ? precoComPromocao(s.id, t, precoNoTamanho(s, t) ?? 0) : (precoNoTamanho(s, t) ?? 0)))
     return regra === 'media' ? centavos(precos.reduce((a, b) => a + b, 0) / precos.length) : Math.max(...precos)
   }
   const chave = (pid, t) => `${pid}|${t ?? ''}`

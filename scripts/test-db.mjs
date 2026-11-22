@@ -371,15 +371,19 @@ await teste('cupom: valida, aplica e respeita o mínimo', async () => {
   assert.equal((await um(`select usos from cupons where codigo = 'BEMVINDO10'`)).usos, 1)
 })
 
-await teste('promoção: preço cai no servidor, respeita dias e horário, e vale para meio a meio', async () => {
+await teste('promoção: preço cai no servidor, respeita dias e horário, e vale só para a pizza inteira', async () => {
   const cli = { nome: 'Pedro', telefone: '11933334444' }
   const so = (itens) => como('anon', null, () => criar({ tipo: 'retirada', cliente: cli, forma_pagamento: 'pix', itens }))
   // Semana da Calabresa (exemplo): 15% → Grande 58,00 vira 49,30
   assert.equal(Number((await so([{ produto_id: calabresa, tamanho_id: grande }])).total), 49.3)
   const vigentes = (await um(`select promocoes_vigentes() as r`)).r
   assert.deepEqual([vigentes.length, vigentes[0].produtos.length, vigentes[0].selo], [1, 1, '15% OFF'])
-  // meio a meio com Mussarela (58): vale o maior entre 49,30 e 58
+  // meio a meio com Mussarela (58): a promoção do sabor não vale — na média, (58 + 58) / 2 e não (49,30 + 58) / 2
+  await db.exec(`update configuracoes set regra_preco_sabores = 'media'`)
   assert.equal(Number((await so([{ produto_id: calabresa, tamanho_id: grande, sabores: [calabresa, mussarela] }])).total), 58)
+  await db.exec(`update configuracoes set regra_preco_sabores = 'maior'`)
+  assert.equal(Number((await so([{ produto_id: calabresa, tamanho_id: grande, sabores: [calabresa, mussarela] }])).total), 58)
+  await db.exec(`update pedidos set status = 'cancelado' where cliente_telefone = '11933334444'`)
   // fora do dia da semana ou da janela de horário a promoção não vale
   await db.exec(`update promocoes set dias_semana = array[(extract(dow from now() at time zone 'America/Sao_Paulo')::int + 1) % 7]`)
   assert.equal((await um(`select promocoes_vigentes() as r`)).r.length, 0)

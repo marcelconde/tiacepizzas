@@ -227,9 +227,15 @@ export function precoInicial(c: Catalogo, p: Produto, usaTamanhos: boolean) {
   return opcoes.reduce((a, b) => (b.promo < a.promo ? b : a))
 }
 
-/** Mesmo cálculo do servidor: maior preço entre os sabores (ou a média), já com as promoções de cada um. */
-export function precoPizza(c: Catalogo, sabores: Produto[], tamanhoId: string, regra: 'maior' | 'media') {
-  const precos = sabores.map((s) => precoComPromocao(c, s.id, tamanhoId, precoNoTamanho(s, tamanhoId) ?? 0))
+/**
+ * Mesmo cálculo do servidor: maior preço entre os sabores (ou a média). A promoção de um sabor vale só para a pizza
+ * inteira dele; no meio a meio cada sabor entra pelo preço de tabela.
+ */
+export function precoPizza(c: Catalogo, sabores: Produto[], tamanhoId: string, regra: 'maior' | 'media', inteira = sabores.length === 1) {
+  const precos = sabores.map((s) => {
+    const tabela = precoNoTamanho(s, tamanhoId) ?? 0
+    return inteira ? precoComPromocao(c, s.id, tamanhoId, tabela) : tabela
+  })
   if (!precos.length) return 0
   if (regra === 'media') return Math.round((precos.reduce((a, b) => a + b, 0) / precos.length) * 100) / 100
   return Math.max(...precos)

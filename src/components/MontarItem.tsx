@@ -85,7 +85,8 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
   const promocoes = promocoesDo(catalogo, produto.id)
 
   const precoBase = pizza
-    ? precoPizza(catalogo, saboresEscolhidos, tamanhoId, config?.regra_preco_sabores ?? 'maior')
+    ? // com "2 sabores" marcado, a promoção já não vale mesmo antes de escolher o segundo
+      precoPizza(catalogo, saboresEscolhidos, tamanhoId, config?.regra_preco_sabores ?? 'maior', Math.min(sabores.length, maxSabores) === 1)
     : precoComPromocao(catalogo, produto.id, null, Number(produto.preco ?? 0))
   // borda e adicionais valem o preço do tamanho escolhido (o servidor refaz esta conta ao receber o pedido)
   const precoUnitario = precoBase + adicionais.reduce((s, a) => s + precoAdicional(a, tamanhoId), 0)
@@ -137,6 +138,9 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
           <span>
             {pr.selo} — {pr.nome}
             {pr.descricao && <span className="block font-normal">{pr.descricao}</span>}
+            {pizza && pr.tipo !== 'combo' && Math.min(sabores.length, maxSabores) > 1 && (
+              <span className="block font-normal">Vale só para a pizza inteira; no meio a meio, cada sabor sai pelo preço normal.</span>
+            )}
           </span>
         </p>
       ))}
@@ -160,7 +164,8 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
                     {t.nome}
                     {t.descricao && <span className="block text-xs font-normal text-stone-500">{t.descricao}</span>}
                   </span>
-                  <Preco empilhado tabela={tabela} promo={precoComPromocao(catalogo, produto.id, t.id, tabela)} />
+                  {/* meio a meio não tem a promoção do sabor: mostra o preço normal */}
+                  <Preco empilhado tabela={tabela} promo={sabores.length > 1 && t.max_sabores > 1 ? tabela : precoComPromocao(catalogo, produto.id, t.id, tabela)} />
                 </button>
               )
             })}
@@ -182,7 +187,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
                     <option value="">Escolha o {i + 1}º sabor…</option>
                     {opcoesSabor.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.nome} — {brl(precoComPromocao(catalogo, p.id, tamanhoId, precoNoTamanho(p, tamanhoId) ?? 0))}
+                        {p.nome} — {brl(precoNoTamanho(p, tamanhoId) ?? 0)}
                       </option>
                     ))}
                   </Selecao>
