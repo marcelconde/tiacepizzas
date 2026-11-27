@@ -261,9 +261,12 @@ function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanho_id: s
   })
 }
 
-/** As opções de um brinde prontas para entrar na sacola (só as que estão à venda). */
+/** As opções de um brinde prontas para entrar na sacola (só as que estão à venda e têm preço nesse tamanho). */
 export const opcoesDoBrinde = (c: Catalogo, brinde: Promocao): ItemCarrinho[] =>
-  itensDoCombo(c, { ...brinde, itens: (brinde.itens ?? []).map((i) => ({ ...i, quantidade: 1 })) }).filter((i) => c.produtos.find((p) => p.id === i.produto_id)?.disponivel)
+  itensDoCombo(c, { ...brinde, itens: (brinde.itens ?? []).map((i) => ({ ...i, quantidade: 1 })) }).filter((i) => {
+    const p = c.produtos.find((x) => x.id === i.produto_id)
+    return p?.disponivel && (i.tamanho_id ? precoNoTamanho(p, i.tamanho_id) != null : p.preco != null)
+  })
 
 /** Menor preço do produto ("a partir de"), de tabela e com promoção. */
 export function precoInicial(c: Catalogo, p: Produto, usaTamanhos: boolean) {
