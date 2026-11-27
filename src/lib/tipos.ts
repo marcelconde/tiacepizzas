@@ -55,6 +55,8 @@ export interface Configuracoes {
   alertas_pedido: { atencao: number; atrasado: number; critico: number }
   metas: Record<string, Meta>
   categorias_despesa: string[]
+  /** Texto da mensagem para o cliente; vazio = MENSAGEM_CLIENTE_PADRAO (src/lib/mensagem.ts). */
+  mensagem_cliente: string | null
 }
 
 export interface Nutricional {
@@ -77,11 +79,19 @@ export interface Promocao {
   id: string
   nome: string
   descricao: string | null
-  tipo: 'percentual' | 'valor' | 'preco' | 'combo'
+  tipo: 'percentual' | 'valor' | 'preco' | 'combo' | 'brinde'
+  /** No brinde: quantos brindes a pessoa ganha a cada vez que cumpre a condição. */
   valor: number
+  /** No brinde: o tamanho exigido na compra (nulo = qualquer). */
   tamanho_id: string | null
-  /** Só no combo: os produtos (e tamanhos) que, juntos, saem pelo preço em `valor`. */
+  /**
+   * No combo: os produtos (e tamanhos) que, juntos, saem pelo preço em `valor`.
+   * No brinde: as opções de brinde (o cliente leva qualquer uma).
+   */
   itens?: ItemCombo[]
+  /** Só no brinde: a compra que dá direito — tantas unidades desta categoria (nula = qualquer produto). */
+  compra_categoria_id?: string | null
+  compra_quantidade?: number | null
   selo: string
   destaque: boolean
   imagem_url: string | null

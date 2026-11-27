@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Check, Copy, MessageCircle } from 'lucide-react'
 import { Botao, Carregando, Entrada, Erro, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
+import { copiarTexto } from '../lib/copiar'
 import { PAGAMENTO, brl, cnpj, dataHora, haQuanto, hora, soDigitos } from '../lib/formato'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
@@ -222,12 +223,11 @@ export default function Acompanhar() {
             <code className="rounded-lg bg-white px-3 py-2 text-base font-semibold break-all">{pixEhCnpj ? cnpj(pix) : pix}</code>
             <Botao
               variante="secundario"
-              onClick={() =>
-                navigator.clipboard.writeText(pix).then(() => {
-                  setCopiado(true)
-                  setTimeout(() => setCopiado(false), 2500)
-                })
-              }
+              onClick={async () => {
+                if (!(await copiarTexto(pix))) return
+                setCopiado(true)
+                setTimeout(() => setCopiado(false), 2500)
+              }}
             >
               {copiado ? <Check className="size-4" /> : <Copy className="size-4" />} {copiado ? 'Copiada' : 'Copiar chave'}
             </Botao>

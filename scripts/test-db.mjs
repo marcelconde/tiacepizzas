@@ -163,17 +163,22 @@ await teste('visitante lê cardápio, promoções e banners, mas nada da operaç
     await falha(q(`select minhas_entregas()`), 'permission denied')
     // da loja o visitante lê o que o site mostra, não o que é interno
     assert.ok((await q(`select nome_loja, horarios, pedido_minimo, chave_pix from configuracoes`)).length === 1)
-    for (const c of ['metas', 'categorias_despesa', 'alertas_pedido', 'impressao', 'auto_aceitar', '*']) await falha(q(`select ${c} from configuracoes`), 'permission denied')
+    for (const c of ['metas', 'categorias_despesa', 'alertas_pedido', 'impressao', 'auto_aceitar', 'mensagem_cliente', '*']) await falha(q(`select ${c} from configuracoes`), 'permission denied')
     await falha(q(`select config_interna()`), 'permission denied')
   })
   // cliente com conta não é equipe: a função responde vazio; a equipe recebe as configurações internas
   assert.equal(await como('authenticated', cliente, async () => (await q(`select config_interna() as c`))[0].c), null)
   await como('authenticated', cliente, () => falha(q(`select metas from configuracoes`), 'permission denied'))
   const interna = await como('authenticated', cozinha, async () => (await q(`select config_interna() as c`))[0].c)
-  assert.deepEqual(Object.keys(interna).sort(), ['alertas_pedido', 'auto_aceitar', 'categorias_despesa', 'impressao', 'metas'])
+  assert.deepEqual(Object.keys(interna).sort(), ['alertas_pedido', 'auto_aceitar', 'categorias_despesa', 'impressao', 'mensagem_cliente', 'metas'])
   // e a administradora continua conseguindo gravar
   const atual = await um(`select metas, auto_aceitar from configuracoes`)
   await como('authenticated', admin, () => db.query(`update configuracoes set metas = $1::jsonb, auto_aceitar = $2 where id = 1`, [JSON.stringify(atual.metas), atual.auto_aceitar]))
+  // o texto da mensagem para o cliente: a administradora grava, a equipe lê pela função
+  await como('authenticated', admin, () => q(`update configuracoes set mensagem_cliente = 'Oi {nome}, pedido #{número}: {link}' where id = 1`))
+  assert.equal((await como('authenticated', cozinha, async () => (await q(`select config_interna() as c`))[0].c)).mensagem_cliente, 'Oi {nome}, pedido #{número}: {link}')
+  await falha(q(`update configuracoes set mensagem_cliente = repeat('x', 1001) where id = 1`), 'check')
+  await q(`update configuracoes set mensagem_cliente = null where id = 1`)
 })
 
 await teste('cada papel só alcança os módulos liberados para ele', async () => {
@@ -289,6 +294,40 @@ await teste('combo: vários produtos por um preço só, com o desconto calculado
   await falha(db.query(`insert into promocao_itens (promocao_id, produto_id, quantidade) values ($1, $2, 0)`, [combo, coca]), 'check')
   await db.query(`delete from promocoes where id = $1`, [combo])
   assert.equal((await q(`select 1 from promocao_itens where promocao_id = $1`, [combo])).length, 0)
+})
+
+await teste('brinde: na compra de 2 pizzas grandes de qualquer sabor, ganha um refrigerante ou uma broto', async () => {
+  const pizzas = (await um(`select categoria_id from produtos where id = $1`, [calabresa])).categoria_id
+  const refri = Number((await um(`select preco_com_promocao(id, null, preco) as p from produtos where id = $1`, [coca])).p)
+  const precoBroto = async (produto) => Number((await um(`select preco_com_promocao(produto_id, tamanho_id, preco) as p from produto_precos where produto_id = $1 and tamanho_id = $2`, [produto, broto])).p)
+  const refriGratis = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categoria_id, compra_quantidade) values ('Guaraná de brinde', 'brinde', 1, 'Brinde', $1, $2, 2) returning id`, [grande, pizzas])).id
+  await db.query(`insert into promocao_itens (promocao_id, produto_id) values ($1, $2)`, [refriGratis, coca])
+  const G = { produto_id: calabresa, tamanho_id: grande, quantidade: 1 }
+  const pedir = async (itens) => {
+    let r
+    await como('anon', null, async () => { r = await criar({ ...pedidoSite, chave: undefined, tipo: 'retirada', endereco: null, cliente: { nome: 'Teste Brinde', telefone: '11955550003' }, itens }) })
+    const p = await um(`select desconto, combo from pedidos where id = $1`, [r.id])
+    await db.query(`update pedidos set status = 'cancelado', motivo_cancelamento = 'teste' where id = $1`, [r.id])
+    return [Number(p.desconto), p.combo]
+  }
+  const C = { produto_id: coca, quantidade: 1 }
+  assert.deepEqual(await pedir([G, { ...G, produto_id: mussarela }, C]), [refri, 'Guaraná de brinde'], 'duas grandes de sabores diferentes')
+  assert.deepEqual(await pedir([G, { ...G, sabores: [calabresa, mussarela] }, C]), [refri, 'Guaraná de brinde'], 'meio a meio conta como uma pizza')
+  assert.deepEqual(await pedir([G, C]), [0, null], 'uma pizza só não ganha')
+  assert.deepEqual(await pedir([G, { ...G, tamanho_id: broto }, C]), [0, null], 'pizza de outro tamanho não conta')
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }]), [0, null], 'sem o brinde na sacola não há desconto')
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { ...C, quantidade: 3 }]), [refri, 'Guaraná de brinde'], 'só um sai de graça')
+  assert.deepEqual(await pedir([{ ...G, quantidade: 4 }, { ...C, quantidade: 3 }]), [2 * refri, '2x Guaraná de brinde'], '4 grandes, 2 brindes')
+  // a broto de brinde: o cliente escolhe um dos sabores; a broto não conta como compra
+  const broto2 = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categoria_id, compra_quantidade) values ('Broto de brinde', 'brinde', 1, 'Brinde', $1, $2, 2) returning id`, [grande, pizzas])).id
+  await db.query(`insert into promocao_itens (promocao_id, produto_id, tamanho_id) values ($1, $2, $4), ($1, $3, $4)`, [broto2, calabresa, mussarela, broto])
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { produto_id: mussarela, tamanho_id: broto, quantidade: 1 }]), [await precoBroto(mussarela), 'Broto de brinde'])
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { produto_id: mussarela, tamanho_id: broto, quantidade: 1 }, C]), [(await precoBroto(mussarela)) + refri, 'Guaraná de brinde + Broto de brinde'], 'as duas promoções juntas')
+  await como('anon', null, async () => {
+    const v = (await um(`select promocoes_vigentes() as r`)).r.find((x) => x.id === broto2)
+    assert.deepEqual([v.tipo, v.itens.length, v.compra_quantidade, v.compra_categoria_id, v.tamanho_id], ['brinde', 2, 2, pizzas, grande])
+  })
+  await db.query(`delete from promocoes where id in ($1, $2)`, [refriGratis, broto2])
 })
 
 await teste('recusa: loja fechada, sabores demais, bairro inválido, produto indisponível', async () => {

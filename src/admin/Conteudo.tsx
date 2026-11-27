@@ -248,12 +248,13 @@ function Aparencia({ so }: { so: 'inicio' | 'produto' }) {
 }
 
 // ------------------------------------------------------------------ promoções
-type Rascunho = Omit<Promocao, 'id' | 'produtos' | 'valor' | 'itens'> & { id?: string; valor: string; produtos: string[]; itens: ItemCombo[] }
+type Rascunho = Omit<Promocao, 'id' | 'produtos' | 'valor' | 'itens'> & { id?: string; valor: string; produtos: string[]; itens: ItemCombo[]; tamanho_brinde?: string | null }
 type PromocaoSalva = Promocao & { promocao_produtos: { produto_id: string }[]; promocao_itens: ItemCombo[]; ativo: boolean }
 
 const novaPromocao: Rascunho = {
   nome: '', descricao: '', tipo: 'percentual', valor: '', tamanho_id: null, selo: 'Em promoção', destaque: true, imagem_url: null,
   data_inicio: null, data_fim: null, hora_inicio: null, hora_fim: null, dias_semana: null, ativo: true, produtos: [], itens: [],
+  compra_categoria_id: null, compra_quantidade: 2, tamanho_brinde: null,
 }
 const itemDeComboVazio: ItemCombo = { produto_id: '', tamanho_id: null, quantidade: 1 }
 
@@ -274,6 +275,7 @@ function Promocoes() {
   const { dados, carregando, erro, recarregar } = useConsulta<PromocaoSalva[]>(() => supabase.from('promocoes').select('*, promocao_produtos(produto_id), promocao_itens(produto_id, tamanho_id, quantidade)').order('criado_em', { ascending: false }), [])
   const { dados: produtos } = useConsulta<(Produto & { categorias: Categoria })[]>(() => supabase.from('produtos').select('*, categorias(nome, usa_tamanhos), produto_precos(tamanho_id, preco)').eq('ativo', true).order('nome'), [])
   const { dados: tamanhos } = useConsulta<Tamanho[]>(() => supabase.from('tamanhos').select('*').eq('ativo', true).order('ordem'), [])
+  const { dados: categorias } = useConsulta<Categoria[]>(() => supabase.from('categorias').select('*').eq('ativo', true).order('ordem'), [])
   const vigentes = new Set(catalogo.promocoes.map((p) => p.id))
   const mudou = () => {
     recarregar()
@@ -284,10 +286,15 @@ function Promocoes() {
     e.preventDefault()
     if (!editando) return
     const combo = editando.tipo === 'combo'
+    const brinde = editando.tipo === 'brinde'
     if (combo) {
       if (editando.itens.reduce((s, i) => s + i.quantidade, 0) < 2) return aviso.erro('Um combo precisa de pelo menos dois itens.')
       if (editando.itens.some((i) => !i.produto_id)) return aviso.erro('Escolha o produto de cada item do combo.')
       if (editando.itens.some((i) => ehPizza(i.produto_id) && !i.tamanho_id)) return aviso.erro('Escolha o tamanho de cada pizza do combo.')
+    } else if (brinde) {
+      if (!editando.itens.length) return aviso.erro('Escolha ao menos um produto para o brinde.')
+      if (editando.itens.some((i) => ehPizza(i.produto_id)) && !editando.tamanho_brinde) return aviso.erro('Escolha o tamanho da pizza do brinde.')
+      if (!editando.compra_quantidade || editando.compra_quantidade < 1) return aviso.erro('Diga quantos itens o cliente precisa comprar.')
     } else if (!editando.produtos.length) return aviso.erro('Escolha ao menos um produto para a promoção.')
     setSalvando(true)
     const { id, produtos: escolhidos } = editando
@@ -296,6 +303,8 @@ function Promocoes() {
       valor: Number(String(editando.valor).replace(',', '.')), descricao: editando.descricao?.trim() || null, tamanho_id: combo ? null : editando.tamanho_id || null,
       data_inicio: editando.data_inicio || null, data_fim: editando.data_fim || null, hora_inicio: editando.hora_inicio || null, hora_fim: editando.hora_fim || null,
       dias_semana: editando.dias_semana?.length ? editando.dias_semana : null,
+      compra_categoria_id: brinde ? editando.compra_categoria_id || null : null,
+      compra_quantidade: brinde ? Number(editando.compra_quantidade) : null,
     }
     const r = id ? await supabase.from('promocoes').update(valores).eq('id', id).select('id').single() : await supabase.from('promocoes').insert(valores).select('id').single()
     let falha = r.error
@@ -305,7 +314,8 @@ function Promocoes() {
       falha = (await supabase.from('promocao_produtos').delete().eq('promocao_id', pid)).error
       if (!falha) falha = (await supabase.from('promocao_itens').delete().eq('promocao_id', pid)).error
       if (!falha && combo) falha = (await supabase.from('promocao_itens').insert(editando.itens.map((i) => ({ promocao_id: pid, produto_id: i.produto_id, tamanho_id: ehPizza(i.produto_id) ? i.tamanho_id : null, quantidade: i.quantidade })))).error
-      if (!falha && !combo) falha = (await supabase.from('promocao_produtos').insert(escolhidos.map((produto_id) => ({ promocao_id: pid, produto_id })))).error
+      if (!falha && brinde) falha = (await supabase.from('promocao_itens').insert(editando.itens.map((i) => ({ promocao_id: pid, produto_id: i.produto_id, tamanho_id: ehPizza(i.produto_id) ? editando.tamanho_brinde : null, quantidade: 1 })))).error
+      if (!falha && !combo && !brinde) falha = (await supabase.from('promocao_produtos').insert(escolhidos.map((produto_id) => ({ promocao_id: pid, produto_id })))).error
     }
     setSalvando(false)
     if (falha) return aviso.erro(mensagemErro(falha))
@@ -328,7 +338,7 @@ function Promocoes() {
 
   const marcar = (produtoId: string) => setEditando((v) => v && { ...v, produtos: v.produtos.includes(produtoId) ? v.produtos.filter((x) => x !== produtoId) : [...v.produtos, produtoId] })
   const dia = (d: number) => setEditando((v) => v && { ...v, dias_semana: (v.dias_semana ?? []).includes(d) ? (v.dias_semana ?? []).filter((x) => x !== d) : [...(v.dias_semana ?? []), d].sort() })
-  const desconto = (p: Promocao) => (p.tipo === 'percentual' ? `${Number(p.valor)}% de desconto` : p.tipo === 'valor' ? `${brl(p.valor)} de desconto` : p.tipo === 'combo' ? `Combo por ${brl(p.valor)}` : `Por ${brl(p.valor)}`)
+  const desconto = (p: Promocao) => (p.tipo === 'percentual' ? `${Number(p.valor)}% de desconto` : p.tipo === 'valor' ? `${brl(p.valor)} de desconto` : p.tipo === 'combo' ? `Combo por ${brl(p.valor)}` : p.tipo === 'brinde' ? `Brinde${Number(p.valor) > 1 ? ` (${Number(p.valor)} por vez)` : ''}` : `Por ${brl(p.valor)}`)
 
   // combo: itens com produto, tamanho (nas pizzas) e quantidade
   const ehPizza = (produtoId: string) => Boolean(produtos?.find((p) => p.id === produtoId)?.categorias?.usa_tamanhos)
@@ -366,6 +376,11 @@ function Promocoes() {
               <td className="max-w-56">
                 {p.tipo === 'combo' ? (
                   <span className="block text-xs">{textoItens(p.promocao_itens)}</span>
+                ) : p.tipo === 'brinde' ? (
+                  <span className="block text-xs">
+                    Na compra de {p.compra_quantidade} {categorias?.find((c) => c.id === p.compra_categoria_id)?.nome ?? 'itens'}
+                    {p.tamanho_id ? ` (${tamanhos?.find((t) => t.id === p.tamanho_id)?.nome})` : ''}, ganha: {textoItens(p.promocao_itens).replace(/(^|\+ )1 /g, '$1').replaceAll(' + ', ' ou ')}
+                  </span>
                 ) : (
                   <>
                     {p.promocao_produtos.length} produto(s)
@@ -379,7 +394,7 @@ function Promocoes() {
               </td>
               <td className="text-right whitespace-nowrap">
                 <Alternar ativo={p.ativo} onChange={() => alternar(p)} rotulo="" />
-                <Botao variante="sutil" tamanho="p" aria-label="Editar" onClick={() => setEditando({ ...p, valor: String(p.valor), produtos: p.promocao_produtos.map((x) => x.produto_id), itens: p.promocao_itens.map((i) => ({ ...i })) })}>
+                <Botao variante="sutil" tamanho="p" aria-label="Editar" onClick={() => setEditando({ ...p, valor: String(p.valor), produtos: p.promocao_produtos.map((x) => x.produto_id), itens: p.promocao_itens.map((i) => ({ ...i })), tamanho_brinde: p.promocao_itens.find((i) => i.tamanho_id)?.tamanho_id ?? null })}>
                   <Pencil className="size-4" />
                 </Botao>
                 <Botao variante="sutil" tamanho="p" aria-label="Excluir" onClick={() => excluir(p)}>
@@ -409,15 +424,40 @@ function Promocoes() {
                 <option value="valor">Valor em reais de desconto</option>
                 <option value="preco">Preço promocional fixo</option>
                 <option value="combo">Combo: vários produtos por um preço só</option>
+                <option value="brinde">Brinde: compre tantos e ganhe um produto</option>
               </Selecao>
             </Campo>
-            <Campo rotulo={editando.tipo === 'percentual' ? 'Desconto (%)' : editando.tipo === 'valor' ? 'Desconto (R$)' : editando.tipo === 'combo' ? 'Preço do combo (R$)' : 'Preço promocional (R$)'}>
-              <Entrada required type="number" step="0.01" min="0.01" value={editando.valor} onChange={(e) => setEditando({ ...editando, valor: e.target.value })} />
+            <Campo rotulo={editando.tipo === 'percentual' ? 'Desconto (%)' : editando.tipo === 'valor' ? 'Desconto (R$)' : editando.tipo === 'combo' ? 'Preço do combo (R$)' : editando.tipo === 'brinde' ? 'Quantos brindes ganha' : 'Preço promocional (R$)'}>
+              {editando.tipo === 'brinde' ? (
+                <Entrada required type="number" step="1" min="1" max="20" value={editando.valor} onChange={(e) => setEditando({ ...editando, valor: e.target.value })} />
+              ) : (
+                <Entrada required type="number" step="0.01" min="0.01" value={editando.valor} onChange={(e) => setEditando({ ...editando, valor: e.target.value })} />
+              )}
             </Campo>
+            {editando.tipo === 'brinde' && (
+              <>
+                <Campo rotulo="Na compra de quantos?">
+                  <Entrada required type="number" step="1" min="1" max="20" value={editando.compra_quantidade ?? ''} onChange={(e) => setEditando({ ...editando, compra_quantidade: Number(e.target.value) || null })} />
+                </Campo>
+                <Campo rotulo="De qual categoria?" dica="Com um tamanho escolhido ao lado, “Qualquer categoria” conta toda pizza desse tamanho (salgada ou doce). Meio a meio conta como uma pizza.">
+                  <Selecao value={editando.compra_categoria_id ?? ''} onChange={(e) => setEditando({ ...editando, compra_categoria_id: e.target.value || null })}>
+                    <option value="">Qualquer categoria</option>
+                    {categorias?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </Selecao>
+                </Campo>
+              </>
+            )}
             {editando.tipo !== 'combo' && (
-              <Campo rotulo="Vale para qual tamanho de pizza?" dica="Preço fixo normalmente vale para um tamanho só.">
+              <Campo
+                rotulo={editando.tipo === 'brinde' ? 'Em qual tamanho?' : 'Vale para qual tamanho de pizza?'}
+                dica={editando.tipo === 'brinde' ? 'Ex.: Grande. Vale para a compra, não para o brinde.' : 'Preço fixo normalmente vale para um tamanho só.'}
+              >
                 <Selecao value={editando.tamanho_id ?? ''} onChange={(e) => setEditando({ ...editando, tamanho_id: e.target.value || null })}>
-                  <option value="">Todos os tamanhos</option>
+                  <option value="">{editando.tipo === 'brinde' ? 'Qualquer tamanho' : 'Todos os tamanhos'}</option>
                   {tamanhos?.map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.nome}
@@ -473,6 +513,43 @@ function Promocoes() {
                       Comprados separados: <b className="tabular-nums">{brl(editando.itens.reduce((s, i) => s + precoDoItem(i), 0))}</b>
                     </span>
                   )}
+                </div>
+              </fieldset>
+            ) : editando.tipo === 'brinde' ? (
+              <fieldset className="sm:col-span-2">
+                <legend className="mb-1 text-sm font-medium text-forno-800">O brinde — marque um ou mais; o cliente escolhe um ({editando.itens.length})</legend>
+                <p className="mb-2 text-xs text-stone-500">
+                  No site, quem cumprir a compra vê um aviso na sacola para pôr o brinde, que sai de graça. Borda e adicionais no brinde são cobrados.
+                </p>
+                {editando.itens.some((i) => ehPizza(i.produto_id)) && (
+                  <Campo rotulo="Tamanho da pizza do brinde" className="mb-2 max-w-56">
+                    <Selecao value={editando.tamanho_brinde ?? ''} onChange={(e) => setEditando({ ...editando, tamanho_brinde: e.target.value || null })}>
+                      <option value="">Escolha…</option>
+                      {tamanhos?.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </Selecao>
+                  </Campo>
+                )}
+                <div className="grid max-h-44 gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 sm:grid-cols-2">
+                  {produtos?.map((p) => {
+                    const marcado = editando.itens.some((i) => i.produto_id === p.id)
+                    return (
+                      <label key={p.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-stone-50">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-molho-600"
+                          checked={marcado}
+                          onChange={() =>
+                            setEditando({ ...editando, itens: marcado ? editando.itens.filter((i) => i.produto_id !== p.id) : [...editando.itens, { produto_id: p.id, tamanho_id: null, quantidade: 1 }] })
+                          }
+                        />
+                        {p.nome} <span className="text-xs text-stone-400">{p.categorias?.nome}</span>
+                      </label>
+                    )
+                  })}
                 </div>
               </fieldset>
             ) : (

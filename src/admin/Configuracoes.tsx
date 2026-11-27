@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Check, Download, Plus, Printer, Trash2, Volume2 } from 'lucide-react'
 import { Abas, Alternar, AreaTexto, Botao, Campo, Carregando, Cartao, Entrada, Erro, Modal, Selecao, Tabela, cx, useAviso } from '../components/ui'
 import { useAuth } from '../lib/auth'
@@ -8,6 +9,7 @@ import { consultarCep } from '../lib/geo'
 import { imprimirPedido } from '../lib/impressao'
 import { useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
+import { CAMPOS_MENSAGEM, MENSAGEM_CLIENTE_PADRAO, mensagemCliente } from '../lib/mensagem'
 import { metaDefinida } from '../lib/metas'
 import type { Configuracoes as TConfig, Meta, Papel, Pedido, Perfil } from '../lib/tipos'
 import { MODULOS, NOME_DO_SOM, Pagina, tocarAlerta, useAdmin, type Modulo, type Som } from './AdminLayout'
@@ -319,12 +321,55 @@ function Sistema() {
 const comMetasEmBranco = (cfg: TConfig | null): TConfig | null =>
   cfg && { ...cfg, metas: Object.fromEntries(Object.entries(cfg.metas ?? {}).map(([k, m]) => [k, metaDefinida(m) ? m : { ...(m as Meta), ruim: null, bom: null }])) }
 
+/** Texto do botão "Copiar mensagem para o cliente" do pedido, com botões que inserem os campos e um exemplo ao vivo. */
+function MensagemCliente({ valor, onChange, loja }: { valor: string | null; onChange: (v: string) => void; loja: string }) {
+  const texto = valor ?? MENSAGEM_CLIENTE_PADRAO
+  function inserir(campo: string) {
+    const area = document.getElementById('mensagem-cliente') as HTMLTextAreaElement | null
+    const ini = area?.selectionStart ?? texto.length
+    const fim = area?.selectionEnd ?? texto.length
+    onChange(texto.slice(0, ini) + campo + texto.slice(fim))
+    requestAnimationFrame(() => {
+      area?.focus()
+      area?.setSelectionRange(ini + campo.length, ini + campo.length)
+    })
+  }
+  const exemplo = mensagemCliente(texto, { numero: 1284, status: 'em_preparo', tipo: 'entrega', cliente_nome: 'Rafael Andrade' }, `${location.origin}/pedido?c=…`, loja)
+  return (
+    <div className="space-y-2 sm:col-span-2">
+      <h2 className="mt-2 font-display text-lg font-semibold">Mensagem para o cliente</h2>
+      <p className="text-sm text-stone-600">
+        É o texto que o botão <b>Copiar mensagem para o cliente</b>, no pedido, copia para você colar no WhatsApp. As palavras entre chaves são trocadas pelos dados de cada pedido; para
+        colocar uma, clique no botão dela.
+      </p>
+      <AreaTexto id="mensagem-cliente" rows={4} maxLength={1000} value={texto} onChange={(e) => onChange(e.target.value)} />
+      <div className="flex flex-wrap gap-2">
+        {CAMPOS_MENSAGEM.map((m) => (
+          <Botao key={m.campo} variante="secundario" tamanho="p" onClick={() => inserir(m.campo)}>
+            <Plus className="size-4" /> {m.rotulo}
+          </Botao>
+        ))}
+        {texto !== MENSAGEM_CLIENTE_PADRAO && (
+          <Botao variante="sutil" tamanho="p" onClick={() => onChange(MENSAGEM_CLIENTE_PADRAO)}>
+            Voltar ao texto padrão
+          </Botao>
+        )}
+      </div>
+      <div className="rounded-lg bg-stone-100 p-3 text-sm">
+        <p className="text-xs font-semibold tracking-wide text-stone-500 uppercase">Exemplo (pedido em preparo)</p>
+        <p className="mt-1 whitespace-pre-wrap">{exemplo}</p>
+      </div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------ página
 export default function Configuracoes() {
   const { config, recarregar } = useLoja()
   const { ehAdmin } = useAdmin()
   const aviso = useAviso()
-  const [aba, setAba] = useState<Aba>('loja')
+  const [busca] = useSearchParams()
+  const [aba, setAba] = useState<Aba>(() => (busca.get('aba') === 'pedidos' ? 'pedidos' : 'loja'))
   const [c, setC] = useState<TConfig | null>(() => comMetasEmBranco(config))
   const [categorias, setCategorias] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -365,6 +410,8 @@ export default function Configuracoes() {
     const limite = (v: unknown) => (v == null || String(v).trim() === '' ? null : numero(v))
     valores.metas = Object.fromEntries(Object.entries(c!.metas).map(([k, m]) => [k, { ...m, ruim: limite(m.ruim), bom: limite(m.bom) }]))
     valores.categorias_despesa = [...new Set(categorias.split('\n').map((x) => x.trim()).filter(Boolean))]
+    // igual ao padrão fica vazio, para acompanhar se o texto padrão mudar
+    if (valores.mensagem_cliente === MENSAGEM_CLIENTE_PADRAO) valores.mensagem_cliente = null
     const { error } = await supabase.from('configuracoes').update(valores).eq('id', 1)
     setSalvando(false)
     if (error) return aviso.erro(mensagemErro(error))
@@ -527,6 +574,8 @@ export default function Configuracoes() {
             <Campo rotulo="Tempo de entrega (min)" dica="Somado ao preparo na previsão mostrada ao cliente.">
               <Entrada type="number" min="0" {...texto('tempo_entrega_min')} />
             </Campo>
+
+            <MensagemCliente valor={c.mensagem_cliente} onChange={(v) => setC({ ...c, mensagem_cliente: v })} loja={c.nome_loja} />
 
             <h2 className="mt-2 font-display text-lg font-semibold sm:col-span-2">Alertas de pedido parado</h2>
             <p className="-mt-2 text-sm text-stone-600 sm:col-span-2">

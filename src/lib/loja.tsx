@@ -35,12 +35,13 @@ const INTERVALO = 120_000
 // que só responde à equipe; para os demais valem estes padrões, que o site não usa.
 const CONFIG_PUBLICA =
   'id, nome_loja, slogan, telefone, whatsapp, instagram, cep, logradouro, numero, bairro, cidade, uf, fuso_horario, horarios, loja_aberta_manual, aceita_pedidos_online, pedido_minimo, tempo_preparo_min, tempo_entrega_min, regra_preco_sabores, chave_pix, mensagem_aviso, modo_entrega, loja_lat, loja_lng, rastreio_motoboy, exigir_login, login_google, login_facebook, login_email, cnpj'
-const CONFIG_INTERNA_PADRAO: Pick<Configuracoes, 'auto_aceitar' | 'impressao' | 'alertas_pedido' | 'metas' | 'categorias_despesa'> = {
+const CONFIG_INTERNA_PADRAO: Pick<Configuracoes, 'auto_aceitar' | 'impressao' | 'alertas_pedido' | 'metas' | 'categorias_despesa' | 'mensagem_cliente'> = {
   auto_aceitar: false,
   impressao: { largura: 80, auto: false, via_cozinha: true },
   alertas_pedido: { atencao: 15, atrasado: 25, critico: 40 },
   metas: {},
   categorias_despesa: ['Outros'],
+  mensagem_cliente: null,
 }
 
 export function LojaProvider({ children }: { children: ReactNode }) {
@@ -213,8 +214,49 @@ export function combosDaSacola(c: Catalogo, itens: { produto_id: string; tamanho
     for (const [k, q] of pedidos) livres.set(k, (livres.get(k) ?? 0) - vezes * q)
     aplicados.push({ id: combo.id, nome: combo.nome, vezes, desconto: Math.round(vezes * (cheio - Number(combo.valor)) * 100) / 100 })
   }
+  for (const b of brindesNaSacola(c, itens)) {
+    if (!b.gratis.length) continue
+    const desconto = Math.round(b.gratis.reduce((s, x) => s + x, 0) * 100) / 100
+    if (desconto > 0) aplicados.push({ id: b.promocao.id, nome: b.promocao.nome, vezes: b.gratis.length, desconto })
+  }
   return { aplicados, desconto: Math.round(aplicados.reduce((s, a) => s + a.desconto, 0) * 100) / 100 }
 }
+
+/** Promoções de brinde valendo agora (compre X, ganhe um dos produtos). */
+export const brindesVigentes = (c: Catalogo) => c.promocoes.filter((pr) => pr.tipo === 'brinde' && (pr.itens?.length ?? 0) > 0)
+
+/**
+ * Mesmo cálculo do servidor (combos_do_pedido) para os brindes: quantos a sacola dá direito, o preço dos que já
+ * estão nela e saem de graça (os mais caros primeiro) e quantos ainda faltam pôr. Pizza meio a meio conta como uma;
+ * as unidades que são opção de brinde não contam para a condição.
+ */
+export function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanho_id: string | null; sabores: string[]; quantidade: number }[]) {
+  return brindesVigentes(c).map((promocao) => {
+    const ehBrinde = (i: (typeof itens)[number]) => i.sabores.length <= 1 && promocao.itens!.some((b) => b.produto_id === i.produto_id && (b.tamanho_id ?? null) === (i.tamanho_id ?? null))
+    const compra = itens
+      .filter((i) => !ehBrinde(i))
+      .filter((i) => !promocao.compra_categoria_id || c.produtos.find((p) => p.id === i.produto_id)?.categoria_id === promocao.compra_categoria_id)
+      .filter((i) => !promocao.tamanho_id || i.tamanho_id === promocao.tamanho_id)
+      .reduce((s, i) => s + i.quantidade, 0)
+    const porVez = Math.max(promocao.compra_quantidade ?? 1, 1)
+    const direito = Math.floor(compra / porVez) * Math.max(Math.floor(Number(promocao.valor)), 1)
+    const precos = itens
+      .filter(ehBrinde)
+      .flatMap((i) => {
+        const p = c.produtos.find((x) => x.id === i.produto_id)
+        const tabela = !p ? 0 : i.tamanho_id ? (precoNoTamanho(p, i.tamanho_id) ?? 0) : Number(p.preco ?? 0)
+        return Array<number>(i.quantidade).fill(precoComPromocao(c, i.produto_id, i.tamanho_id, tabela))
+      })
+      .sort((a, b) => b - a)
+    const gratis = precos.slice(0, direito)
+    // faltamComprar: quantas unidades a mais dão direito ao próximo brinde
+    return { promocao, direito, gratis, faltam: Math.max(direito - precos.length, 0), faltamComprar: porVez - (compra % porVez) }
+  })
+}
+
+/** As opções de um brinde prontas para entrar na sacola (só as que estão à venda). */
+export const opcoesDoBrinde = (c: Catalogo, brinde: Promocao): ItemCarrinho[] =>
+  itensDoCombo(c, { ...brinde, itens: (brinde.itens ?? []).map((i) => ({ ...i, quantidade: 1 })) }).filter((i) => c.produtos.find((p) => p.id === i.produto_id)?.disponivel)
 
 /** Menor preço do produto ("a partir de"), de tabela e com promoção. */
 export function precoInicial(c: Catalogo, p: Produto, usaTamanhos: boolean) {

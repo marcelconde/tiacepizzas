@@ -12,6 +12,7 @@ import type { Endereco, FormaPagamento } from '../lib/tipos'
 import { registrarEvento } from '../lib/analise'
 import { BotoesSociais, useLoginSocial } from './Entrar'
 import { linkWhatsApp } from './SiteLayout'
+import { AvisoBrindes } from './Brindes'
 
 const Mapa = lazy(() => import('../components/Mapa'))
 const CHAVE_CLIENTE = 'tiace.cliente'
@@ -503,6 +504,7 @@ export default function Checkout() {
       <aside className="lg:sticky lg:top-24 lg:self-start">
         <section className={secao}>
           <h2 className={titulo}>Resumo</h2>
+          <AvisoBrindes />
           <ul className="space-y-3 text-sm">
             {itens.map((i) => (
               <li key={i.uid} className="flex justify-between gap-3">

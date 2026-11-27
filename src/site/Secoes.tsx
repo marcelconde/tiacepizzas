@@ -5,10 +5,11 @@ import { Banners } from '../components/Banners'
 import { PizzaIlustrada } from '../components/Logo'
 import { Preco } from '../components/MontarItem'
 import { cx } from '../components/ui'
-import { bannersEm, combosVigentes, precoInicial, useLoja } from '../lib/loja'
+import { bannersEm, brindesVigentes, combosVigentes, precoInicial, useLoja } from '../lib/loja'
 import type { Produto, SecaoId, SiteConteudo, Tamanho3 } from '../lib/tipos'
 import { Combos } from './Combos'
 import { CORES_INSTAGRAM, IconeInstagram, linkInstagram } from './SiteLayout'
+import { CartoesBrindes } from './Brindes'
 
 const botao = 'inline-flex h-12 items-center justify-center rounded-lg px-6 font-semibold transition-colors'
 const ICONES = [MousePointerClick, ChefHat, Bike]
@@ -53,10 +54,12 @@ export function Secao({ id, tamanho, conteudo, aoAbrir, todosOsBanners }: { id: 
       const promos = catalogo.promocoes.filter((p) => p.destaque)
       const produtos = promos.flatMap((pr) => pr.produtos.map((pid) => ({ pr, p: catalogo.produtos.find((x) => x.id === pid && x.disponivel) }))).filter((x) => x.p)
       const temCombo = combosVigentes(catalogo).some((c) => c.destaque)
-      if (!produtos.length && !temCombo) return null
+      const temBrinde = brindesVigentes(catalogo).some((c) => c.destaque)
+      if (!produtos.length && !temCombo && !temBrinde) return null
       return (
         <section className="mx-auto max-w-6xl px-4 py-10">
           <h2 className="font-display text-3xl font-bold">{conteudo.promocoes_titulo}</h2>
+          <CartoesBrindes className="mt-6" />
           <Combos soDestaque className="mt-6" />
           <div className={cx('mt-6 grid gap-4 sm:grid-cols-2', tamanho === 'grande' ? 'lg:grid-cols-2' : tamanho === 'pequeno' ? 'lg:grid-cols-4' : 'lg:grid-cols-3')}>
             {produtos.slice(0, tamanho === 'pequeno' ? 4 : 6).map(({ pr, p }) => cartao(p!, pr.selo))}

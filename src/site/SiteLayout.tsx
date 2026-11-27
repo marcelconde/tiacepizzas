@@ -9,6 +9,7 @@ import { useCarrinho } from '../lib/carrinho'
 import { DIAS_SEMANA, brl, cnpj, soDigitos, telefone } from '../lib/formato'
 import { combosDaSacola, useLoja } from '../lib/loja'
 import type { Configuracoes } from '../lib/tipos'
+import { AvisoBrindes } from './Brindes'
 
 export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
   numero ? `https://wa.me/55${soDigitos(numero)}${texto ? `?text=${encodeURIComponent(texto)}` : ''}` : null
@@ -102,6 +103,7 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
       rodape={
         itens.length > 0 && (
           <div className="w-full">
+            <AvisoBrindes />
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-sm text-stone-600">Subtotal</span>
               <span className="text-lg font-bold tabular-nums">{brl(subtotal)}</span>
@@ -114,7 +116,7 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
             ))}
             {combos.desconto > 0 && (
               <div className="mb-3 flex items-baseline justify-between border-t border-stone-200 pt-2">
-                <span className="text-sm text-stone-600">Com o combo</span>
+                <span className="text-sm text-stone-600">Com o desconto</span>
                 <span className="text-lg font-bold tabular-nums">{brl(subtotal - combos.desconto)}</span>
               </div>
             )}

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Ban, ChefHat, Copy, ExternalLink, FileText, MapPin, MessageCircle, Printer, Undo2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, Ban, ChefHat, Copy, ExternalLink, FileText, MapPin, MessageCircle, Pencil, Printer, Undo2 } from 'lucide-react'
 import { AreaTexto, Botao, Campo, Carregando, Erro, Modal, Selecao, Selo, useAviso } from '../components/ui'
 import { useConsulta } from '../lib/dados'
 import { ORIGEM, PAGAMENTO, STATUS, TIPO, brl, cpf, dataHora, enderecoTexto, hora, soDigitos, telefone } from '../lib/formato'
 import { imprimirPedido } from '../lib/impressao'
 import { useLoja } from '../lib/loja'
+import { copiarTexto } from '../lib/copiar'
+import { mensagemCliente } from '../lib/mensagem'
 import { SELECT_PEDIDO, aceitarPedido, atualizarPedido, emitirNota, mudarStatus, notaAutorizada, proximoPasso } from '../lib/pedidos'
 import { mensagemErro, supabase } from '../lib/supabase'
 import type { Entregador, FormaPagamento, Pedido, StatusPedido } from '../lib/tipos'
@@ -101,9 +104,10 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
   const semVolta = !p || p.status === 'cancelado' || p.status === 'reembolsado'
   const atraso = p && !encerrado ? nivelAtraso(p.status_em, config) : null
   const linkAcompanhar = p ? `${location.origin}/pedido?c=${p.codigo}` : ''
-  const whats = p?.cliente_telefone
-    ? `https://wa.me/55${soDigitos(p.cliente_telefone)}?text=${encodeURIComponent(`Olá, ${p.cliente_nome.split(' ')[0]}! Aqui é da ${config?.nome_loja}. Seu pedido #${p.numero} está ${STATUS[p.status].rotulo.toLowerCase()}. Acompanhe: ${linkAcompanhar}`)}`
-    : null
+  const mensagem = p ? mensagemCliente(config?.mensagem_cliente, p, linkAcompanhar, config?.nome_loja ?? '') : ''
+  const whats = p?.cliente_telefone ? `https://wa.me/55${soDigitos(p.cliente_telefone)}?text=${encodeURIComponent(mensagem)}` : null
+  const copiar = async (texto: string, sucesso: string) =>
+    (await copiarTexto(texto)) ? aviso.sucesso(sucesso) : aviso.erro('Não foi possível copiar. Tente de novo.')
   const nomeEntregador = (id: unknown) => entregadores?.find((e) => e.id === id)?.nome ?? (id ? 'outro entregador' : 'ninguém')
 
   // traduz cada alteração registrada na auditoria para uma frase
@@ -197,15 +201,23 @@ export function DetalhePedido({ pedidoId, onFechar, onMudou }: { pedidoId: strin
                   <p className="font-semibold">{p.cliente_nome}</p>
                   {p.cliente_telefone && <p>{telefone(p.cliente_telefone)}</p>}
                   {p.cpf_nota && <p className="text-stone-600">CPF na nota: {cpf(p.cpf_nota)}</p>}
-                  <div className="mt-1 flex flex-wrap gap-3">
+                  <Botao variante="secundario" tamanho="p" className="mt-2" title={mensagem} onClick={() => copiar(mensagem, 'Mensagem copiada. Agora é só colar na conversa do cliente no WhatsApp.')}>
+                    <Copy className="size-4" /> Copiar mensagem para o cliente
+                  </Botao>
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                     {whats && (
                       <a href={whats} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-manjericao-700 hover:underline">
-                        <MessageCircle className="size-4" /> Avisar no WhatsApp
+                        <MessageCircle className="size-4" /> Abrir no WhatsApp
                       </a>
                     )}
-                    <button type="button" className="inline-flex items-center gap-1 font-semibold text-forno-600 hover:underline" onClick={() => navigator.clipboard.writeText(linkAcompanhar).then(() => aviso.sucesso('Link de acompanhamento copiado'))}>
-                      <Copy className="size-4" /> Link de acompanhamento
+                    <button type="button" className="inline-flex items-center gap-1 font-semibold text-forno-600 hover:underline" onClick={() => copiar(linkAcompanhar, 'Link de acompanhamento copiado')}>
+                      <Copy className="size-4" /> Copiar só o link
                     </button>
+                    {pode('configuracoes') && (
+                      <Link to="/admin/configuracoes?aba=pedidos" className="inline-flex items-center gap-1 font-semibold text-stone-500 hover:underline">
+                        <Pencil className="size-4" /> Mudar o texto
+                      </Link>
+                    )}
                   </div>
                 </div>
                 <div>
