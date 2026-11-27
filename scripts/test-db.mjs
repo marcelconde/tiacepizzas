@@ -300,7 +300,7 @@ await teste('brinde: na compra de 2 pizzas grandes de qualquer sabor, ganha um r
   const pizzas = (await um(`select categoria_id from produtos where id = $1`, [calabresa])).categoria_id
   const refri = Number((await um(`select preco_com_promocao(id, null, preco) as p from produtos where id = $1`, [coca])).p)
   const precoBroto = async (produto) => Number((await um(`select preco_com_promocao(produto_id, tamanho_id, preco) as p from produto_precos where produto_id = $1 and tamanho_id = $2`, [produto, broto])).p)
-  const refriGratis = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categoria_id, compra_quantidade) values ('Guaraná de brinde', 'brinde', 1, 'Brinde', $1, $2, 2) returning id`, [grande, pizzas])).id
+  const refriGratis = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categorias, compra_quantidade) values ('Guaraná de brinde', 'brinde', 1, 'Brinde', $1, array[$2::uuid], 2) returning id`, [grande, pizzas])).id
   await db.query(`insert into promocao_itens (promocao_id, produto_id) values ($1, $2)`, [refriGratis, coca])
   const G = { produto_id: calabresa, tamanho_id: grande, quantidade: 1 }
   const pedir = async (itens) => {
@@ -319,13 +319,13 @@ await teste('brinde: na compra de 2 pizzas grandes de qualquer sabor, ganha um r
   assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { ...C, quantidade: 3 }]), [refri, 'Guaraná de brinde'], 'só um sai de graça')
   assert.deepEqual(await pedir([{ ...G, quantidade: 4 }, { ...C, quantidade: 3 }]), [2 * refri, '2x Guaraná de brinde'], '4 grandes, 2 brindes')
   // a broto de brinde: o cliente escolhe um dos sabores; a broto não conta como compra
-  const broto2 = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categoria_id, compra_quantidade) values ('Broto de brinde', 'brinde', 1, 'Brinde', $1, $2, 2) returning id`, [grande, pizzas])).id
+  const broto2 = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categorias, compra_quantidade) values ('Broto de brinde', 'brinde', 1, 'Brinde', $1, array[$2::uuid, (select id from categorias where nome ilike '%doce%' limit 1)], 2) returning id`, [grande, pizzas])).id
   await db.query(`insert into promocao_itens (promocao_id, produto_id, tamanho_id) values ($1, $2, $4), ($1, $3, $4)`, [broto2, calabresa, mussarela, broto])
   assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { produto_id: mussarela, tamanho_id: broto, quantidade: 1 }]), [await precoBroto(mussarela), 'Broto de brinde'])
   assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { produto_id: mussarela, tamanho_id: broto, quantidade: 1 }, C]), [(await precoBroto(mussarela)) + refri, 'Guaraná de brinde + Broto de brinde'], 'as duas promoções juntas')
   await como('anon', null, async () => {
     const v = (await um(`select promocoes_vigentes() as r`)).r.find((x) => x.id === broto2)
-    assert.deepEqual([v.tipo, v.itens.length, v.compra_quantidade, v.compra_categoria_id, v.tamanho_id], ['brinde', 2, 2, pizzas, grande])
+    assert.deepEqual([v.tipo, v.itens.length, v.compra_quantidade, v.compra_categorias, v.tamanho_id], ['brinde', 2, 2, v.compra_categorias.includes(pizzas) && v.compra_categorias.length === 2 ? v.compra_categorias : null, grande])
   })
   await db.query(`delete from promocoes where id in ($1, $2)`, [refriGratis, broto2])
 })

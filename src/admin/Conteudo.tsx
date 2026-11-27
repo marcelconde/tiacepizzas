@@ -254,7 +254,7 @@ type PromocaoSalva = Promocao & { promocao_produtos: { produto_id: string }[]; p
 const novaPromocao: Rascunho = {
   nome: '', descricao: '', tipo: 'percentual', valor: '', tamanho_id: null, selo: 'Em promoção', destaque: true, imagem_url: null,
   data_inicio: null, data_fim: null, hora_inicio: null, hora_fim: null, dias_semana: null, ativo: true, produtos: [], itens: [],
-  compra_categoria_id: null, compra_quantidade: 2, tamanho_brinde: null,
+  compra_categorias: [], compra_quantidade: 2, tamanho_brinde: null,
 }
 const itemDeComboVazio: ItemCombo = { produto_id: '', tamanho_id: null, quantidade: 1 }
 
@@ -303,7 +303,7 @@ function Promocoes() {
       valor: Number(String(editando.valor).replace(',', '.')), descricao: editando.descricao?.trim() || null, tamanho_id: combo ? null : editando.tamanho_id || null,
       data_inicio: editando.data_inicio || null, data_fim: editando.data_fim || null, hora_inicio: editando.hora_inicio || null, hora_fim: editando.hora_fim || null,
       dias_semana: editando.dias_semana?.length ? editando.dias_semana : null,
-      compra_categoria_id: brinde ? editando.compra_categoria_id || null : null,
+      compra_categorias: brinde && editando.compra_categorias?.length ? editando.compra_categorias : null,
       compra_quantidade: brinde ? Number(editando.compra_quantidade) : null,
     }
     const r = id ? await supabase.from('promocoes').update(valores).eq('id', id).select('id').single() : await supabase.from('promocoes').insert(valores).select('id').single()
@@ -378,7 +378,7 @@ function Promocoes() {
                   <span className="block text-xs">{textoItens(p.promocao_itens)}</span>
                 ) : p.tipo === 'brinde' ? (
                   <span className="block text-xs">
-                    Na compra de {p.compra_quantidade} {categorias?.find((c) => c.id === p.compra_categoria_id)?.nome ?? 'itens'}
+                    Na compra de {p.compra_quantidade} {(p.compra_categorias ?? []).map((id) => categorias?.find((c) => c.id === id)?.nome).filter(Boolean).join(' ou ') || 'itens'}
                     {p.tamanho_id ? ` (${tamanhos?.find((t) => t.id === p.tamanho_id)?.nome})` : ''}, ganha: {textoItens(p.promocao_itens).replace(/(^|\+ )1 /g, '$1').replaceAll(' + ', ' ou ')}
                   </span>
                 ) : (
@@ -439,16 +439,28 @@ function Promocoes() {
                 <Campo rotulo="Na compra de quantos?">
                   <Entrada required type="number" step="1" min="1" max="20" value={editando.compra_quantidade ?? ''} onChange={(e) => setEditando({ ...editando, compra_quantidade: Number(e.target.value) || null })} />
                 </Campo>
-                <Campo rotulo="De qual categoria?" dica="Com um tamanho escolhido ao lado, “Qualquer categoria” conta toda pizza desse tamanho (salgada ou doce). Meio a meio conta como uma pizza.">
-                  <Selecao value={editando.compra_categoria_id ?? ''} onChange={(e) => setEditando({ ...editando, compra_categoria_id: e.target.value || null })}>
-                    <option value="">Qualquer categoria</option>
-                    {categorias?.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome}
-                      </option>
-                    ))}
-                  </Selecao>
-                </Campo>
+                <fieldset>
+                  <legend className="mb-1 text-sm font-medium text-forno-800">De quais categorias?</legend>
+                  <div className="space-y-1">
+                    {categorias?.map((c) => {
+                      const marcada = (editando.compra_categorias ?? []).includes(c.id)
+                      return (
+                        <label key={c.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-molho-600"
+                            checked={marcada}
+                            onChange={() =>
+                              setEditando({ ...editando, compra_categorias: marcada ? (editando.compra_categorias ?? []).filter((x) => x !== c.id) : [...(editando.compra_categorias ?? []), c.id] })
+                            }
+                          />
+                          {c.nome}
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <span className="mt-1 block text-xs text-stone-500">Nenhuma marcada = qualquer categoria. Qualquer sabor conta; meio a meio conta como uma pizza.</span>
+                </fieldset>
               </>
             )}
             {editando.tipo !== 'combo' && (

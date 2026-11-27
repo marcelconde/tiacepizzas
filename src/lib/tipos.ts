@@ -89,8 +89,8 @@ export interface Promocao {
    * No brinde: as opções de brinde (o cliente leva qualquer uma).
    */
   itens?: ItemCombo[]
-  /** Só no brinde: a compra que dá direito — tantas unidades desta categoria (nula = qualquer produto). */
-  compra_categoria_id?: string | null
+  /** Só no brinde: a compra que dá direito — tantas unidades destas categorias (vazia = qualquer uma). */
+  compra_categorias?: string[] | null
   compra_quantidade?: number | null
   selo: string
   destaque: boolean

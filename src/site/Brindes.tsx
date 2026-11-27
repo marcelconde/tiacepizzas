@@ -39,7 +39,7 @@ export function AvisoBrindes() {
           return (
             <p key={promocao.id} className="mb-3 flex items-center gap-1.5 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-900">
               <Gift className="size-4 shrink-0" /> Peça mais {faltamComprar}{' '}
-              {[catalogo.categorias.find((x) => x.id === promocao.compra_categoria_id)?.nome, catalogo.tamanhos.find((x) => x.id === promocao.tamanho_id)?.nome].filter(Boolean).join(' · ') || 'item'} e
+              {[nomesDasCategorias(catalogo, promocao.compra_categorias), catalogo.tamanhos.find((x) => x.id === promocao.tamanho_id)?.nome].filter(Boolean).join(' · ') || 'item'} e
               ganhe o brinde: {promocao.nome}
             </p>
           )
@@ -49,9 +49,13 @@ export function AvisoBrindes() {
   )
 }
 
+/** "Pizzas Salgadas ou Pizzas Doces"; vazio quando vale qualquer categoria. */
+const nomesDasCategorias = (c: ReturnType<typeof useLoja>['catalogo'], ids?: string[] | null) =>
+  (ids ?? []).map((id) => c.categorias.find((x) => x.id === id)?.nome).filter(Boolean).join(' ou ')
+
 /** Texto da condição: "Na compra de 2 Pizzas (Grande), ganhe: Guaraná 1L ou Calabresa (Broto)". */
 export function textoDoBrinde(c: ReturnType<typeof useLoja>['catalogo'], b: Parameters<typeof opcoesDoBrinde>[1]) {
-  const categoria = c.categorias.find((x) => x.id === b.compra_categoria_id)?.nome ?? 'itens'
+  const categoria = nomesDasCategorias(c, b.compra_categorias) || 'itens'
   const tamanho = c.tamanhos.find((x) => x.id === b.tamanho_id)?.nome
   const opcoes = opcoesDoBrinde(c, b).map((o) => o.nome)
   return `Na compra de ${b.compra_quantidade ?? 1} ${categoria}${tamanho ? ` (${tamanho})` : ''}, ganhe: ${opcoes.join(' ou ')}`

@@ -235,7 +235,7 @@ export function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanh
     const ehBrinde = (i: (typeof itens)[number]) => i.sabores.length <= 1 && promocao.itens!.some((b) => b.produto_id === i.produto_id && (b.tamanho_id ?? null) === (i.tamanho_id ?? null))
     const compra = itens
       .filter((i) => !ehBrinde(i))
-      .filter((i) => !promocao.compra_categoria_id || c.produtos.find((p) => p.id === i.produto_id)?.categoria_id === promocao.compra_categoria_id)
+      .filter((i) => !promocao.compra_categorias?.length || promocao.compra_categorias.includes(c.produtos.find((p) => p.id === i.produto_id)?.categoria_id ?? ''))
       .filter((i) => !promocao.tamanho_id || i.tamanho_id === promocao.tamanho_id)
       .reduce((s, i) => s + i.quantidade, 0)
     const porVez = Math.max(promocao.compra_quantidade ?? 1, 1)
