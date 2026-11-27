@@ -35,7 +35,11 @@ export function Preco({ tabela, promo, className, empilhado }: { tabela: number;
  * foto, ingredientes, informações nutricionais, tamanho, sabores (meio a meio), borda, adicionais e observação.
  * O que aparece é escolhido no painel, em Conteúdo → Tela do produto.
  */
-export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produto | null; onFechar: () => void; onAdicionar: (item: ItemCarrinho) => void }) {
+/**
+ * Monta um item para a sacola. Com `item`, edita um que já está na sacola: abre com as escolhas dele e devolve o
+ * item com o mesmo `uid` (quem chama troca o antigo pelo novo).
+ */
+export function MontarItem({ produto, item, onFechar, onAdicionar }: { produto: Produto | null; item?: ItemCarrinho | null; onFechar: () => void; onAdicionar: (item: ItemCarrinho) => void }) {
   const { catalogo, config, conteudo } = useLoja()
   const categoria = catalogo.categorias.find((c) => c.id === produto?.categoria_id)
   const pizza = Boolean(categoria?.usa_tamanhos)
@@ -55,15 +59,17 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
 
   useEffect(() => {
     if (!produto) return
-    setTamanhoId(tamanhos[Math.min(2, tamanhos.length - 1)]?.id ?? '')
-    setSabores([produto.id])
-    setBordaId('')
-    setExtras([])
-    setQuantidade(1)
-    setObservacoes('')
-    // só ao trocar de produto: o cardápio se atualiza sozinho em segundo plano e não deve apagar as escolhas
+    const padrao = tamanhos[Math.min(2, tamanhos.length - 1)]?.id ?? ''
+    const ids = item?.adicionais.map((a) => a.id) ?? []
+    setTamanhoId(item?.tamanho_id && tamanhos.some((t) => t.id === item.tamanho_id) ? item.tamanho_id : padrao)
+    setSabores(item?.sabores.length ? item.sabores : [produto.id])
+    setBordaId(catalogo.adicionais.find((a) => a.tipo === 'borda' && ids.includes(a.id))?.id ?? '')
+    setExtras(catalogo.adicionais.filter((a) => a.tipo === 'extra' && ids.includes(a.id)).map((a) => a.id))
+    setQuantidade(item?.quantidade ?? 1)
+    setObservacoes(item?.observacoes ?? '')
+    // só ao trocar de produto (ou de item editado): o cardápio se atualiza sozinho em segundo plano e não deve apagar as escolhas
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produto?.id])
+  }, [produto?.id, item?.uid])
 
   if (!produto) return null
 
@@ -104,7 +110,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
 
   function adicionar() {
     onAdicionar({
-      uid: crypto.randomUUID(),
+      uid: item?.uid ?? crypto.randomUUID(),
       produto_id: produto!.id,
       nome: pizza ? nomeItem(saboresEscolhidos, tamanho) : produto!.nome,
       tamanho_id: pizza ? tamanhoId : null,
@@ -126,7 +132,7 @@ export function MontarItem({ produto, onFechar, onAdicionar }: { produto: Produt
         <>
           <Contador valor={quantidade} onChange={setQuantidade} min={1} />
           <Botao className="flex-1" tamanho="g" disabled={!completo} onClick={adicionar}>
-            Adicionar · {brl(precoUnitario * quantidade)}
+            {item ? 'Salvar alterações' : 'Adicionar'} · {brl(precoUnitario * quantidade)}
           </Botao>
         </>
       }

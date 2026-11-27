@@ -8,11 +8,12 @@ import { PAGAMENTO, brl, enderecoTexto, soDigitos } from '../lib/formato'
 import { consultarCep, distanciaPelasRuas, localizarEndereco, type Ponto, type PontoAchado } from '../lib/geo'
 import { combosDaSacola, useLoja } from '../lib/loja'
 import { mensagemErro, supabase } from '../lib/supabase'
-import type { Endereco, FormaPagamento } from '../lib/tipos'
+import type { Endereco, FormaPagamento, ItemCarrinho } from '../lib/tipos'
 import { registrarEvento } from '../lib/analise'
 import { BotoesSociais, useLoginSocial } from './Entrar'
 import { linkWhatsApp } from './SiteLayout'
 import { AvisoBrindes } from './Brindes'
+import { MontarItem } from '../components/MontarItem'
 
 const Mapa = lazy(() => import('../components/Mapa'))
 const CHAVE_CLIENTE = 'tiace.cliente'
@@ -59,7 +60,8 @@ const formas: FormaPagamento[] = ['pix', 'credito', 'debito', 'dinheiro']
 const chaveEndereco = (x: typeof inicial) => [x.logradouro.trim(), x.numero.trim(), x.cidade, x.uf].join('|').toLowerCase()
 
 export default function Checkout() {
-  const { itens, subtotal, limpar } = useCarrinho()
+  const { itens, subtotal, substituir, limpar } = useCarrinho()
+  const [editando, setEditando] = useState<ItemCarrinho | null>(null)
   const { config, catalogo, aberta } = useLoja()
   const { conta, logado } = useConta()
   const navegar = useNavigate()
@@ -505,12 +507,18 @@ export default function Checkout() {
         <section className={secao}>
           <h2 className={titulo}>Resumo</h2>
           <AvisoBrindes />
+          <MontarItem produto={catalogo.produtos.find((p) => p.id === editando?.produto_id) ?? null} item={editando} onFechar={() => setEditando(null)} onAdicionar={substituir} />
           <ul className="space-y-3 text-sm">
             {itens.map((i) => (
               <li key={i.uid} className="flex justify-between gap-3">
                 <span>
                   <b>{i.quantidade}x</b> {i.nome}
                   {i.adicionais.length > 0 && <span className="block text-stone-500">+ {i.adicionais.map((a) => a.nome).join(', ')}</span>}
+                  {catalogo.produtos.some((p) => p.id === i.produto_id) && (
+                    <button type="button" onClick={() => setEditando(i)} className="block text-xs font-semibold text-molho-700 hover:underline">
+                      Editar
+                    </button>
+                  )}
                 </span>
                 <span className="tabular-nums">{brl(i.preco_unitario * i.quantidade)}</span>
               </li>

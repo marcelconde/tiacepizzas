@@ -7,11 +7,13 @@ interface Carrinho {
   subtotal: number
   adicionar: (item: ItemCarrinho) => void
   alterarQuantidade: (uid: string, quantidade: number) => void
+  /** Troca um item da sacola pela versão editada (mesmo uid), no mesmo lugar da lista. */
+  substituir: (item: ItemCarrinho) => void
   limpar: () => void
 }
 
 const CHAVE = 'tiace.carrinho'
-const Contexto = createContext<Carrinho>({ itens: [], quantidade: 0, subtotal: 0, adicionar: () => {}, alterarQuantidade: () => {}, limpar: () => {} })
+const Contexto = createContext<Carrinho>({ itens: [], quantidade: 0, subtotal: 0, adicionar: () => {}, alterarQuantidade: () => {}, substituir: () => {}, limpar: () => {} })
 
 function ler(): ItemCarrinho[] {
   try {
@@ -52,6 +54,7 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
       setItens((l) => (quantidade <= 0 ? l.filter((i) => i.uid !== uid) : l.map((i) => (i.uid === uid ? { ...i, quantidade } : i)))),
     [],
   )
+  const substituir = useCallback((item: ItemCarrinho) => setItens((l) => l.map((i) => (i.uid === item.uid ? item : i))), [])
   const limpar = useCallback(() => setItens([]), [])
 
   const valor = useMemo(
@@ -61,9 +64,10 @@ export function CarrinhoProvider({ children }: { children: ReactNode }) {
       subtotal: subtotalDe(itens),
       adicionar,
       alterarQuantidade,
+      substituir,
       limpar,
     }),
-    [itens, adicionar, alterarQuantidade, limpar],
+    [itens, adicionar, alterarQuantidade, substituir, limpar],
   )
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>
 }

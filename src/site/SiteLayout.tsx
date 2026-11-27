@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Clock, MapPin, MessageCircle, Phone, ShoppingBag, Trash2, UserRound } from 'lucide-react'
+import { Clock, MapPin, MessageCircle, Pencil, Phone, ShoppingBag, Trash2, UserRound } from 'lucide-react'
 import { Logo } from '../components/Logo'
+import { MontarItem } from '../components/MontarItem'
 import { Botao, Contador, Erro, Modal, cx } from '../components/ui'
 import { useAuth } from '../lib/auth'
 import { iniciarAnalise, precisaPerguntarCookies, responderCookies } from '../lib/analise'
 import { useCarrinho } from '../lib/carrinho'
 import { DIAS_SEMANA, brl, cnpj, soDigitos, telefone } from '../lib/formato'
 import { combosDaSacola, useLoja } from '../lib/loja'
-import type { Configuracoes } from '../lib/tipos'
+import type { Configuracoes, ItemCarrinho } from '../lib/tipos'
 import { AvisoBrindes } from './Brindes'
 
 export const linkWhatsApp = (numero: string | null | undefined, texto = '') =>
@@ -88,7 +89,8 @@ function FaixaAberta() {
 }
 
 function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
-  const { itens, subtotal, alterarQuantidade, limpar } = useCarrinho()
+  const { itens, subtotal, alterarQuantidade, substituir, limpar } = useCarrinho()
+  const [editando, setEditando] = useState<ItemCarrinho | null>(null)
   const { config, aberta: lojaAberta, catalogo } = useLoja()
   const navegar = useNavigate()
   const falta = Math.max(0, Number(config?.pedido_minimo ?? 0) - subtotal)
@@ -147,7 +149,14 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
                 <p className="font-semibold text-forno-900">{i.nome}</p>
                 {i.adicionais.length > 0 && <p className="text-sm text-stone-600">+ {i.adicionais.map((a) => a.nome).join(', ')}</p>}
                 {i.observacoes && <p className="text-sm text-stone-500 italic">“{i.observacoes}”</p>}
-                <p className="mt-1 text-sm font-semibold tabular-nums">{brl(i.preco_unitario * i.quantidade)}</p>
+                <p className="mt-1 flex items-center gap-3 text-sm">
+                  <span className="font-semibold tabular-nums">{brl(i.preco_unitario * i.quantidade)}</span>
+                  {catalogo.produtos.some((p) => p.id === i.produto_id) && (
+                    <button type="button" onClick={() => setEditando(i)} className="inline-flex items-center gap-1 font-semibold text-molho-700 hover:underline">
+                      <Pencil className="size-3.5" /> Editar
+                    </button>
+                  )}
+                </p>
               </div>
               <Contador valor={i.quantidade} onChange={(q) => alterarQuantidade(i.uid, q)} />
             </li>
@@ -164,6 +173,7 @@ function Sacola({ aberta, onFechar }: { aberta: boolean; onFechar: () => void })
           </li>
         </ul>
       )}
+      <MontarItem produto={catalogo.produtos.find((p) => p.id === editando?.produto_id) ?? null} item={editando} onFechar={() => setEditando(null)} onAdicionar={substituir} />
     </Modal>
   )
 }
