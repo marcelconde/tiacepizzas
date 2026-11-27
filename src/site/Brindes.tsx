@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Botao, cx } from '../components/ui'
 import { useCarrinho } from '../lib/carrinho'
 import { brl } from '../lib/formato'
-import { brindesNaSacola, brindesVigentes, opcoesDoBrinde, useLoja } from '../lib/loja'
+import { brindesVigentes, combosDaSacola, opcoesDoBrinde, useLoja } from '../lib/loja'
 
 /**
  * Na sacola e no checkout: avisa o brinde que o cliente já ganhou e põe na sacola com um clique (o desconto vem
@@ -12,7 +12,7 @@ import { brindesNaSacola, brindesVigentes, opcoesDoBrinde, useLoja } from '../li
 export function AvisoBrindes() {
   const { itens, adicionar } = useCarrinho()
   const { catalogo } = useLoja()
-  const brindes = brindesNaSacola(catalogo, itens)
+  const { brindes } = combosDaSacola(catalogo, itens)
   if (!itens.length || !brindes.length) return null
   return (
     <>

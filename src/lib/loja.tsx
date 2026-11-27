@@ -214,12 +214,13 @@ export function combosDaSacola(c: Catalogo, itens: { produto_id: string; tamanho
     for (const [k, q] of pedidos) livres.set(k, (livres.get(k) ?? 0) - vezes * q)
     aplicados.push({ id: combo.id, nome: combo.nome, vezes, desconto: Math.round(vezes * (cheio - Number(combo.valor)) * 100) / 100 })
   }
-  for (const b of brindesNaSacola(c, itens)) {
+  const brindes = brindesNaSacola(c, itens, livres)
+  for (const b of brindes) {
     if (!b.gratis.length) continue
     const desconto = Math.round(b.gratis.reduce((s, x) => s + x, 0) * 100) / 100
     if (desconto > 0) aplicados.push({ id: b.promocao.id, nome: b.promocao.nome, vezes: b.gratis.length, desconto })
   }
-  return { aplicados, desconto: Math.round(aplicados.reduce((s, a) => s + a.desconto, 0) * 100) / 100 }
+  return { aplicados, brindes, desconto: Math.round(aplicados.reduce((s, a) => s + a.desconto, 0) * 100) / 100 }
 }
 
 /** Promoções de brinde valendo agora (compre X, ganhe um dos produtos). */
@@ -230,7 +231,7 @@ export const brindesVigentes = (c: Catalogo) => c.promocoes.filter((pr) => pr.ti
  * estão nela e saem de graça (os mais caros primeiro) e quantos ainda faltam pôr. Pizza meio a meio conta como uma;
  * as unidades que são opção de brinde não contam para a condição.
  */
-export function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanho_id: string | null; sabores: string[]; quantidade: number }[]) {
+function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanho_id: string | null; sabores: string[]; quantidade: number }[], livres: Map<string, number>) {
   return brindesVigentes(c).map((promocao) => {
     const ehBrinde = (i: (typeof itens)[number]) => i.sabores.length <= 1 && promocao.itens!.some((b) => b.produto_id === i.produto_id && (b.tamanho_id ?? null) === (i.tamanho_id ?? null))
     const compra = itens
@@ -240,15 +241,21 @@ export function brindesNaSacola(c: Catalogo, itens: { produto_id: string; tamanh
       .reduce((s, i) => s + i.quantidade, 0)
     const porVez = Math.max(promocao.compra_quantidade ?? 1, 1)
     const direito = Math.floor(compra / porVez) * Math.max(Math.floor(Number(promocao.valor)), 1)
-    const precos = itens
-      .filter(ehBrinde)
-      .flatMap((i) => {
-        const p = c.produtos.find((x) => x.id === i.produto_id)
-        const tabela = !p ? 0 : i.tamanho_id ? (precoNoTamanho(p, i.tamanho_id) ?? 0) : Number(p.preco ?? 0)
-        return Array<number>(i.quantidade).fill(precoComPromocao(c, i.produto_id, i.tamanho_id, tabela))
-      })
-      .sort((a, b) => b - a)
-    const gratis = precos.slice(0, direito)
+    // só as unidades que nenhum combo (nem brinde anterior) usou
+    const porChave = new Map<string, { preco: number; qtd: number }>()
+    for (const i of itens.filter(ehBrinde)) {
+      const k = chaveCombo(i.produto_id, i.tamanho_id)
+      const p = c.produtos.find((x) => x.id === i.produto_id)
+      const tabela = !p ? 0 : i.tamanho_id ? (precoNoTamanho(p, i.tamanho_id) ?? 0) : Number(p.preco ?? 0)
+      porChave.set(k, { preco: precoComPromocao(c, i.produto_id, i.tamanho_id, tabela), qtd: (porChave.get(k)?.qtd ?? 0) + i.quantidade })
+    }
+    const unidades = [...porChave]
+      .flatMap(([k, v]) => Array.from({ length: Math.min(v.qtd, livres.get(k) ?? 0) }, () => ({ k, preco: v.preco })))
+      .sort((a, b) => b.preco - a.preco)
+    const usados = unidades.slice(0, direito)
+    for (const u of usados) livres.set(u.k, (livres.get(u.k) ?? 0) - 1)
+    const gratis = usados.map((u) => u.preco)
+    const precos = unidades
     // faltamComprar: quantas unidades a mais dão direito ao próximo brinde
     return { promocao, direito, gratis, faltam: Math.max(direito - precos.length, 0), faltamComprar: porVez - (compra % porVez) }
   })

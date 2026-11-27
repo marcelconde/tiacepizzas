@@ -318,6 +318,13 @@ await teste('brinde: na compra de 2 pizzas grandes de qualquer sabor, ganha um r
   assert.deepEqual(await pedir([{ ...G, quantidade: 2 }]), [0, null], 'sem o brinde na sacola não há desconto')
   assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, { ...C, quantidade: 3 }]), [refri, 'Guaraná de brinde'], 'só um sai de graça')
   assert.deepEqual(await pedir([{ ...G, quantidade: 4 }, { ...C, quantidade: 3 }]), [2 * refri, '2x Guaraná de brinde'], '4 grandes, 2 brindes')
+  // combo "Calabresa grande + refrigerante": o mesmo refrigerante não sai também de brinde
+  const precoG = Number((await um(`select preco_com_promocao(produto_id, tamanho_id, preco) as p from produto_precos where produto_id = $1 and tamanho_id = $2`, [calabresa, grande])).p)
+  const comboRefri = (await um(`insert into promocoes (nome, tipo, valor, selo) values ('Combo refri', 'combo', $1, 'Combo') returning id`, [precoG + refri - 5])).id
+  await db.query(`insert into promocao_itens (promocao_id, produto_id, tamanho_id) values ($1, $2, $3), ($1, $4, null)`, [comboRefri, calabresa, grande, coca])
+  assert.deepEqual(await pedir([{ ...G, quantidade: 2 }, C]), [5, 'Combo refri'], 'um refrigerante só: entra no combo, não no brinde')
+  assert.deepEqual(await pedir([G, { ...G, produto_id: mussarela }, { ...C, quantidade: 2 }]), [5 + refri, 'Combo refri + Guaraná de brinde'], 'o segundo sai de brinde')
+  await db.query(`delete from promocoes where id = $1`, [comboRefri])
   // a broto de brinde: o cliente escolhe um dos sabores; a broto não conta como compra
   const broto2 = (await um(`insert into promocoes (nome, tipo, valor, selo, tamanho_id, compra_categorias, compra_quantidade) values ('Broto de brinde', 'brinde', 1, 'Brinde', $1, array[$2::uuid, (select id from categorias where nome ilike '%doce%' limit 1)], 2) returning id`, [grande, pizzas])).id
   await db.query(`insert into promocao_itens (promocao_id, produto_id, tamanho_id) values ($1, $2, $4), ($1, $3, $4)`, [broto2, calabresa, mussarela, broto])
